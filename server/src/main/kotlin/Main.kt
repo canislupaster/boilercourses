@@ -5,6 +5,7 @@ import com.boilerclasses.Schema.Subject
 import com.boilerclasses.Schema.Term
 import io.jooby.*
 import io.jooby.exception.NotFoundException
+import io.jooby.kt.HandlerContext
 import io.jooby.kt.runApp
 import io.jooby.netty.NettyServer
 import kotlinx.coroutines.coroutineScope
@@ -14,23 +15,29 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import java.io.File
 
+const val SESSION_MAXAGE = (3600*24*7).toLong()
+const val NONCE_MAXAGE = (60*5).toLong()
+
 val json = Json {
     classDiscriminatorMode= ClassDiscriminatorMode.NONE
     encodeDefaults=true
+    decodeEnumsCaseInsensitive = true
 }
 
 enum class APIErrTy {
     NotFound,
     Unauthorized,
+    Banned,
     BadRequest,
     Loading,
     RateLimited,
     LoginErr,
+    SessionExpire,
     Other;
 
     fun code() = when(this) {
         NotFound -> StatusCode.NOT_FOUND
-        LoginErr, Unauthorized -> StatusCode.UNAUTHORIZED
+        SessionExpire, LoginErr, Unauthorized, Banned -> StatusCode.UNAUTHORIZED
         BadRequest -> StatusCode.BAD_REQUEST
         RateLimited -> StatusCode.TOO_MANY_REQUESTS
         Other,Loading -> StatusCode.SERVER_ERROR
@@ -39,7 +46,9 @@ enum class APIErrTy {
     fun str() = when(this) {
         NotFound -> "notFound"
         Unauthorized -> "unauthorized"
+        Banned -> "banned"
         LoginErr -> "loginErr"
+        SessionExpire -> "sessionExpire"
         BadRequest -> "badRequest"
         Loading -> "loading"
         RateLimited -> "rateLimited"
@@ -83,6 +92,7 @@ suspend fun main(args: Array<String>) = coroutineScope {
 
     runApp(args) {
         val db = DB(environment)
+        val auth = Auth(db,log,environment)
         val courses = Courses(environment, log, db)
 
         launch { courses.runScraper() }
@@ -92,10 +102,6 @@ suspend fun main(args: Array<String>) = coroutineScope {
                 ctx.header("X-Forwarded-For").valueOrNull()?.let {
                     ctx.remoteAddress=it.split(",").last().trim()
                 }
-
-            ctx.header("Authorization").valueOrNull()?.let {
-                it.split(" ")
-            }
         }
 
         install(NettyServer())
@@ -159,6 +165,39 @@ suspend fun main(args: Array<String>) = coroutineScope {
             post("/rmp") {
                 ctx.resp(db.getRMPs(ctx.json<List<String>>()))
             }
+
+            post("/login") {
+                val mk = db.makeSession()
+                val nonce = db.genKey()
+                ctx.resp(buildJsonObject {
+                    put("id", mk.sdb.sesId)
+                    put("key", mk.key)
+                    put("nonce", nonce)
+                    put("redirect", auth.redir(mk.sdb.state, nonce))
+                })
+            }
+
+            @Serializable
+            data class AuthRequest(val code: String, val state: String, val nonce: String)
+            post("/auth", auth.withSession {
+                val authReq = ctx.json<AuthRequest>()
+                auth.auth(authReq.code, it, authReq.nonce, authReq.state)
+                ctx.resp(Unit)
+            })
+
+            post("/logout", auth.withSession { it.remove() })
+
+            posts(auth, db)
+
+            @Serializable
+            data class SetAdmin(val email: String, val admin: Boolean)
+            post("/setadmin", auth.withUser(admin=true) {
+                if (it.email!=db.adminEmail)
+                    throw APIErrTy.Unauthorized.err("Only the admin specified in the environment can manage others")
+                val who = ctx.json<SetAdmin>()
+                db.setAdminByEmail(who.email, who.admin)
+                ctx.resp(Unit)
+            })
 
             get("/data") { courses.download() }
         }

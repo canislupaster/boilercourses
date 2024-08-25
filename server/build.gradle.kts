@@ -34,15 +34,15 @@ dependencies {
     implementation("org.apache.lucene:lucene-queries:9.11.1")
 //    implementation("org.apache.lucene:lucene-suggest:9.11.1")
 
-//    implementation("io.ktor:ktor-client-core:2.3.9")
-//    implementation("io.ktor:ktor-client-cio:2.3.9")
-//    implementation("io.ktor:ktor-client-content-negotiation:2.3.9")
-//    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.9")
+    implementation("io.ktor:ktor-client-core:2.3.9")
+    implementation("io.ktor:ktor-client-cio:2.3.9")
+    implementation("io.ktor:ktor-client-content-negotiation:2.3.9")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.9")
 
 //    implementation("org.zeromq:jeromq:0.6.0")
     implementation("org.xerial:sqlite-jdbc:3.46.0.1")
 
-//    implementation("com.microsoft.azure:msal4j:1.14.2")
+    implementation("com.microsoft.azure:msal4j:1.14.2")
 }
 
 kotlin {

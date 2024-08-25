@@ -138,7 +138,7 @@ export function logArray<T, R>(x: T[], y: (x:T) => Promise<R>, name: (x:T,i:numb
 	return Promise.allSettled(x.map((p,i) => y(p).finally(() => {
 		bar.increment(1,{ last: name(p,i) });
 	}).catch((reason) => {
-		console.log(`object ${name(p,i)} failed: ${reason}`);
+		console.error(`object ${name(p,i)} failed: ${reason}`);
 		throw reason;
 	}))).then((x) => {
 		console.log("done");

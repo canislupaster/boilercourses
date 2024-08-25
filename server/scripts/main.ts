@@ -112,7 +112,7 @@ if (values.after!==undefined) {
 	const terms = termList.slice(0,i+1).map(v=>{
 		const p = v[0].split(/\s+/g).slice(0,2);
 		return `${p[0].toLowerCase()}${p[1]}`;
-	});
+	}).reverse();
 
 	console.log(`found ${terms.join(",")} at/after ${values.after}`);
 	for (const x of terms) await scrape(x as Term);

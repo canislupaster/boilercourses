@@ -1,5 +1,6 @@
 package com.boilerclasses
 
+import com.boilerclasses.DB.CoursePost.references
 import io.jooby.Environment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.KSerializer
@@ -10,6 +11,7 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.javatime.timestamp
 import org.jetbrains.exposed.sql.json.jsonb
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
@@ -17,8 +19,13 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.File
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.time.Duration
 import java.time.Instant
 import java.util.*
+import kotlin.time.Duration.Companion.days
+import kotlin.time.toJavaDuration
+
+val SESSION_EXPIRE = 7.days.toJavaDuration()
 
 fun ByteArray.base64(): String = Base64.getEncoder().encodeToString(this)
 fun String.base64(): ByteArray = Base64.getDecoder().decode(this)
@@ -33,6 +40,7 @@ class DB(env: Environment) {
     val dbFile = File("./data/db.sqlite")
     val db = Database.connect("jdbc:sqlite:${dbFile.path.toString()}?foreign_keys=on", "org.sqlite.JDBC")
     val rng = SecureRandom()
+    val adminEmail = env.getProperty("adminEmail")
 
     fun genKey(): String {
         val key = ByteArray(32)
@@ -65,29 +73,39 @@ class DB(env: Environment) {
         val data = jsonb<Schema.Course>("data", json)
     }
 
-//    object User: Table("user") {
-//        val id = integer("id")
-//        val email = text("email")
-//        val admin = bool("admin")
-//    }
-//
-//    object Session: Table("session") {
-//        val id = text("id")
-//        val user = integer("user").references(User.id).nullable()
-//        val key = binary("key")
-//    }
-//
-//    object CourseContribution: Table("course_contribution") {
-//        val id = integer("id")
-//        val course = integer("course").references(Course.id)
-//        val pending = bool("pending")
-//        val user = integer("user").references(User.id)
-//        val tag = text("tag")
-//
-//        val text = text("text_content").nullable()
-//        val file = blob("file").nullable()
-//        val filename = text("filename").nullable()
-//    }
+    object User: Table("user") {
+        val id = integer("id")
+        val email = text("email")
+        val admin = bool("admin")
+        val name = text("name")
+        val banned = bool("banned")
+    }
+
+    object Session: Table("session") {
+        val id = text("id")
+        val user = integer("user").references(User.id).nullable()
+        val key = binary("key")
+        val created = timestamp("created")
+    }
+
+    object CoursePost: Table("course_post") {
+        val id = integer("id")
+        val course = integer("course").references(Course.id)
+        val rating = integer("rating").nullable()
+        val new = bool("new")
+        val showName = bool("showName")
+        val user = integer("user").references(User.id)
+
+        val text = text("text")
+        val submitted = timestamp("submitted")
+    }
+
+    object PostReport: Table("post_report") {
+        val id = integer("id")
+        val user = integer("user").references(User.id)
+        val post = integer("post").references(CoursePost.id)
+        val submitted = timestamp("submitted")
+    }
 
     object Instructor: Table("instructor") {
         val id = integer("id")
@@ -122,7 +140,7 @@ class DB(env: Environment) {
         val name = text("name")
     }
 
-    private suspend fun<T> query(block: suspend Transaction.() -> T): T =
+    suspend fun<T> query(block: suspend Transaction.() -> T): T =
         newSuspendedTransaction<T>(Dispatchers.IO,db,statement=block)
 
     //this could be considered sucky, by some
@@ -187,26 +205,55 @@ class DB(env: Environment) {
             .where {Instructor.id eq id}.firstOrNull()?.let { toInstructorId(it) }
     }
 
-//    suspend fun auth(id: String, key: String) = query {
-//        val ses = (Session leftJoin User)
-//            .select(Session.key, Session.user, User.admin, User.email)
-//            .where { Session.id eq id }
-//            .firstOrNull() ?: throw APIErrTy.Unauthorized.err("Session not found")
-//
-//        val khash = hash(key)
-//        if (!MessageDigest.isEqual(khash, ses[Session.key]))
-//            throw APIErrTy.Unauthorized.err("invalid session key")
-//
-//        SessionDB(id, khash.base64(), ses[Session.user], ses[User.email], ses[User.admin] ?: false)
-//    }
-//
-//    inner class SessionDB(val sesId: String, val state: String,
-//                          val id: Int?, val email: String?, val admin: Boolean?) {
-//
-//        suspend fun withEmail(email: String) {
-//        }
-//
-//        suspend fun remove() = query { Session.deleteWhere { id eq sesId } }
-//
-//    }
+    suspend fun setAdminByEmail(email: String, newAdmin: Boolean) {
+        if (User.update({User.email eq email}) {it[admin]=newAdmin}==0)
+            throw APIErrTy.NotFound.err("User to promote not found")
+    }
+
+    data class UserData(val id: Int, val email: String, val admin: Boolean, val banned: Boolean)
+
+    suspend fun auth(id: String, key: String) = query {
+        val ses = (Session leftJoin User)
+            .select(Session.key, Session.user, User.admin, User.email, User.banned)
+            .where { Session.id eq id }
+            .firstOrNull() ?: throw APIErrTy.Unauthorized.err("Session not found")
+
+        if (Duration.between(ses[Session.created], Instant.now())>=SESSION_EXPIRE)
+            return@query null
+
+        val khash = hash(key)
+        if (!MessageDigest.isEqual(khash, ses[Session.key]))
+            throw APIErrTy.Unauthorized.err("invalid session key")
+
+        SessionDB(id, khash.base64(), ses[Session.user]?.let { uid->
+            UserData(uid, ses[User.email], ses[User.admin] ?: false, ses[User.banned])
+        })
+    }
+
+    data class MakeSession(val sdb: SessionDB, val key: String)
+    suspend fun makeSession(): MakeSession {
+        val skey = genKey()
+        val skeyHash = hash(skey)
+        val sid = Session.insertReturning(returning=listOf(Session.id)) {
+            it[Session.created] = Instant.now()
+            it[Session.key] = skeyHash
+        }.first()[Session.id]
+
+        return MakeSession(SessionDB(sid, skeyHash.base64(), null), skey)
+    }
+
+    inner class SessionDB(val sesId: String, val state: String, val user: UserData?) {
+        suspend fun withEmail(newEmail: String, newName: String): SessionDB {
+            val u = User.upsertReturning(User.email, returning=listOf(User.id,User.admin, User.banned)) {
+                it[email]=newEmail
+                it[name]=newName
+                //sketchy!!! :)
+                if (newEmail==adminEmail) it[admin]=true
+            }.first()
+
+            return SessionDB(sesId, state, UserData(u[User.id], newEmail, u[User.admin], u[User.banned]))
+        }
+
+        suspend fun remove() = query { Session.deleteWhere { id eq sesId } }
+    }
 }

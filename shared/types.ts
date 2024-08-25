@@ -192,15 +192,6 @@ export function normalizeName(name: string) {
   return n.toSpliced(1, n.length-2).join(" ");
 }
 
-// export function compareName(x: string, y: string) {
-//   if (x==y) return true;
-//   const s = new Set(x.split(" "));
-//   let cnt=0;
-//   for (const z of y.split(" "))
-//     if (s.has(z)) if (++cnt >= 2) return true;
-//   return false;
-// }
-
 export const gradeGPA: Partial<Record<Grade, number>> = {
   ...Object.fromEntries([
     "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A"
@@ -259,6 +250,7 @@ export type ServerSearch = {
 };
 
 //pls don't store anything using this
+//purdue term string identifiers are guaranteed to be good, this is just for ordering
 export function termIdx(t: Term) {
   const i = termPre.findIndex((v) => t.startsWith(v));
   return Number.parseInt(t.slice(termPre[i].length))*termPre.length + i;

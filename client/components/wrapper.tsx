@@ -14,6 +14,12 @@ export type AppModal = {
 	type: "other", name?: string, onClose?: () => void, modal: React.ReactNode
 };
 
+export type Auth = {sessionId: string, sessionKey: string};
+
+export function setAuth(x: Auth) {
+	window.localStorage.setItem("auth", JSON.stringify(x));
+}
+
 export type AppCtx = {
 	open: (m: AppModal) => void,
 	tooltipCount: number, incTooltipCount: ()=>void,
@@ -48,10 +54,10 @@ export function setAPI<R,T extends any=null>(endpoint: string, {data,method,resu
 	cache[`${method ?? "POST"} ${endpoint}\n${JSON.stringify(data)}`] = Promise.resolve(r);
 }
 
-export function useAPI<R,T extends any=null>(endpoint: string, {data, method, handleErr, defer}: {
+export function useAPI<R,T extends any=null>(endpoint: string, {data, method, handleErr, defer, auth, noCache}: {
 	data?: T, method?: string,
 	handleErr?: (e: ServerResponse<R>&{status:"error"}) => R|undefined,
-	defer?: boolean
+	defer?: boolean, auth?: boolean, noCache?: boolean
 }={}) {
 	const c = useContext(AppCtx);
 
@@ -62,8 +68,8 @@ export function useAPI<R,T extends any=null>(endpoint: string, {data, method, ha
 		try {
 			const k = `${method ?? "POST"} ${endpoint}\n${body}`;
 
-			let cacheBad = cache[k]==undefined;
-			while (true) {
+			let cacheBad = cache[k]==undefined || noCache;
+			while (!cacheBad) {
 				try {
 					const t = cache[k];
 					const r=await t;
@@ -76,9 +82,20 @@ export function useAPI<R,T extends any=null>(endpoint: string, {data, method, ha
 				break;
 			}
 
+			let headers: Record<string,string>={};
+			if (auth) {
+				const x = window.localStorage.getItem("auth");
+				if (x!=null) {
+					const v = JSON.parse(x) as Auth;
+					headers["Authorization"] = `Basic ${v.sessionId} ${v.sessionKey}`;
+				}
+			}
+
 			if (cacheBad) {
 				cache[k] = fetch(`/api/${endpoint}`, {
-					method: method ?? "POST", body: data==undefined ? undefined : body,
+					method: method ?? "POST",
+					body: data==undefined ? undefined : body,
+					headers
 				}).then(x=>x.json());
 			}
 
