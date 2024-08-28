@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { courseById, getInfo } from "@/app/server";
 import { CourseDetailApp } from "./course";
 import { notFound } from "next/navigation";
+import { latestTerm } from "../../../../shared/types";
 
 export async function generateMetadata(
   { params }: {params: {id: string}},
@@ -16,6 +17,9 @@ export async function generateMetadata(
   return {
     title: title,
 		description: course.description,
+		authors: [...new Set(course.sections[latestTerm(course)!]
+			.flatMap(x=>x.instructors)
+			.filter(x=>x.primary).map(x=>({name:x.name})))],
 		openGraph: {
 			url: `/course/${id}`,
 			type: "website", title, description: course.description,

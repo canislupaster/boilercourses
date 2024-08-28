@@ -13,6 +13,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.io.File
 import java.security.MessageDigest
+import kotlin.time.Duration.Companion.seconds
 
 const val SESSION_MAXAGE = (3600*24*7).toLong()
 const val NONCE_MAXAGE = (60*5).toLong()
@@ -91,14 +92,22 @@ suspend fun main(args: Array<String>) = coroutineScope {
         val db = DB(environment)
         val auth = Auth(db,log,environment)
         val courses = Courses(environment, log, db)
+        val searchRateLimit = RateLimiter(10, 1.seconds)
+        val dataRateLimit = RateLimiter(1, 5.seconds)
+        val loginRateLimit = RateLimiter(3, 3.seconds)
+        val allRateLimit = RateLimiter(25, 2.seconds)
 
         launch { courses.runScraper() }
 
         before {
             if (ctx.remoteAddress=="127.0.0.1")
                 ctx.header("X-Forwarded-For").valueOrNull()?.let {
-                    ctx.remoteAddress=it.split(",").last().trim()
+                    val idx = it.lastIndexOf(',')
+                    if (idx!=-1) ctx.remoteAddress=it.drop(idx)
+                    log.info("stripped address to ${ctx.remoteAddress}")
                 }
+
+            allRateLimit.check(ctx.remoteAddress)
         }
 
         install(NettyServer())
@@ -130,6 +139,8 @@ suspend fun main(args: Array<String>) = coroutineScope {
             }
 
             post("/search") {
+                searchRateLimit.check(ctx.remoteAddress)
+
                 val req = ctx.json<Courses.SearchReq>()
                 ctx.resp(courses.searchCourses(req))
             }
@@ -148,6 +159,8 @@ suspend fun main(args: Array<String>) = coroutineScope {
             }
 
             post("/similar") {
+                searchRateLimit.check(ctx.remoteAddress)
+
                 ctx.json<Int>().let { ctx.resp(courses.similarCourses(it)) }
             }
 
@@ -164,6 +177,8 @@ suspend fun main(args: Array<String>) = coroutineScope {
             }
 
             post("/login") {
+                loginRateLimit.check(ctx.remoteAddress)
+
                 val accessToken = ctx.json<String>()
 
                 val mk = db.makeSession()
@@ -214,7 +229,10 @@ suspend fun main(args: Array<String>) = coroutineScope {
                 ctx.resp(Unit)
             })
 
-            get("/data") { courses.download() }
+            get("/data") {
+                dataRateLimit.check(ctx.remoteAddress)
+                courses.download()
+            }
         }
 
         error { ctx, cause, code ->

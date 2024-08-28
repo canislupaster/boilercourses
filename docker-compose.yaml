@@ -24,7 +24,7 @@ services:
       dockerfile: ./client/Dockerfile
       args: # nextjs uses at build time. these are public (in a sense)!
         - NEXT_PUBLIC_ROOT_URL=${ROOT_URL?ROOT_URL is required}
-        - NEXT_PUBLIC_GTM_ID=${GTM_ID-}
+        - NEXT_PUBLIC_GOAT_COUNTER=${GOAT_COUNTER-}
         - NEXT_PUBLIC_MSAL_CLIENT_ID=${MSAL_CLIENT_ID?MSAL client id required}
         - NEXT_PUBLIC_MSAL_TENANT=${MSAL_TENANT?MSAL tenant required}
     ports:

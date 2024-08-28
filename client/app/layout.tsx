@@ -1,6 +1,5 @@
 import React from "react";
 import { Chivo, Inter } from 'next/font/google';
-import { GoogleTagManager } from '@next/third-parties/google';
 import { Metadata } from "next";
 import banner from "../public/banner.png";
 import "./style.css";
@@ -12,8 +11,8 @@ const desc = "BoilerCourses - Purdue's unofficial course catalog with thousands 
 const title="BoilerCourses - Purdue Course Catalog";
 const url = process.env.NEXT_PUBLIC_ROOT_URL!;
 const domain = new URL(url).host;
-const gtmId = process.env.NEXT_PUBLIC_GTM_ID!==undefined && process.env.NEXT_PUBLIC_GTM_ID.length>0
-  ? process.env.NEXT_PUBLIC_GTM_ID : null;
+const goatCounter = process.env.NEXT_PUBLIC_GOAT_COUNTER!==undefined && process.env.NEXT_PUBLIC_GOAT_COUNTER.length>0
+  ? process.env.NEXT_PUBLIC_GOAT_COUNTER : null;
 
 export const metadata: Metadata = {
   metadataBase: new URL(url),
@@ -49,7 +48,8 @@ export default function RootLayout({ children, }: { children: React.ReactNode })
 
         <link rel="canonical" href={url} />
 
-        {gtmId!=null && <GoogleTagManager gtmId={gtmId} />}
+        {goatCounter!=null &&
+          <script data-goatcounter={`https://${goatCounter}.goatcounter.com/count`} async src="https://gc.zgo.at/count.js"></script>}
       </head>
       <body>
         {children}

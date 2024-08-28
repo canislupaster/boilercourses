@@ -39,6 +39,7 @@ import kotlin.math.min
 import kotlin.time.Duration.Companion.minutes
 
 val termTypes = listOf("fall", "summer", "spring", "winter")
+const val SEARCH_LIMIT = 50
 
 fun parseTerm(term: String): Pair<Int,Int> {
     for ((i,x) in termTypes.withIndex())
@@ -451,18 +452,21 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
         }
     }
 
-    suspend fun similarCourses(id: Int): List<SearchResult> = lock.read {
-        if (searcher==null) throw APIErrTy.Loading.err("courses not indexed yet")
-        val doc = searcher!!.search(IntField.newExactQuery("id", id), 1).scoreDocs[0]
+    suspend fun similarCourses(id: Int): List<SearchResult> = withContext(Dispatchers.IO) {
+        lock.read {
+            if (searcher==null) throw APIErrTy.Loading.err("courses not indexed yet")
+            val doc = searcher!!.search(IntField.newExactQuery("id", id), 1).scoreDocs[0]
 
-        searcher!!.search(moreLike!!.like(doc.doc), 10).scoreDocs.filter {
-            it.doc!=doc.doc && it.score>4
-        }.let { scoreDocsToCourses(it) }
+            searcher!!.search(moreLike!!.like(doc.doc), 10).scoreDocs.filter {
+                it.doc!=doc.doc && it.score>4
+            }.let { scoreDocsToCourses(it) }
+        }
     }
 
     suspend fun searchCourses(req: SearchReq): SearchOutput = lock.read {
         if (searcher==null) throw APIErrTy.Loading.err("courses not indexed yet")
         if (req.page<0) throw APIErrTy.BadRequest.err("page is negative")
+        if (req.query.length > SEARCH_LIMIT) throw APIErrTy.BadRequest.err("Search query is too long!")
 
         if (req.isEmpty()) {
             val (f,t) = req.page*numResults to min(sortedCourses.size,(req.page+1)*numResults)
@@ -533,9 +537,11 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
 
         val q = bq.build()
         val cnt = min(maxResults, (req.page+1)*numResults)
-        val res = searcher!!.search(q, cnt,
-            if (trimQuery.isNotEmpty()) Sort.RELEVANCE
-            else Sort(SortField("subjectSort", SortField.Type.STRING), SortField("courseSort", SortField.Type.STRING)))
+        val res = withContext(Dispatchers.IO) {
+            searcher!!.search(q, cnt,
+                if (trimQuery.isNotEmpty()) Sort.RELEVANCE
+                else Sort(SortField("subjectSort", SortField.Type.STRING), SortField("courseSort", SortField.Type.STRING)))
+        }
 //        println(searcher!!.explain(q, res.scoreDocs[0].doc).toString())
 
         val intHits = res.totalHits.value.toInt()
@@ -553,9 +559,11 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
         smallCourseByCourseId[id]?.firstOrNull()
     }
 
-    suspend fun download() = lock.read {
-        val json = Json.encodeToString(sortedCourses)
-        FileDownload(FileDownload.Mode.INLINE, json.toByteArray(), "courses.json")
+    suspend fun download() = withContext(Dispatchers.IO) {
+        lock.read {
+            val json = Json.encodeToString(sortedCourses)
+            FileDownload(FileDownload.Mode.INLINE, json.toByteArray(), "courses.json")
+        }
     }
 
     suspend fun runScraper() {

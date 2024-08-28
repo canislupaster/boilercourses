@@ -15,7 +15,7 @@ class RateLimiter(val reqs: Long, val dur: Duration, val message: String?=null) 
     var lastClean = Instant.now().epochSecond
     val lock = ReentrantReadWriteLock()
 
-    fun checkSync(addr: String) = lock.read {
+    fun check(addr: String) = lock.read {
         val now = Instant.now().epochSecond
         if (now-lastClean>=durS) lock.write {
             if (now-lastClean>=durS) {
@@ -30,6 +30,4 @@ class RateLimiter(val reqs: Long, val dur: Duration, val message: String?=null) 
             x+1
         }
     }
-
-    suspend fun check(addr: String) = withContext(Dispatchers.IO) {checkSync(addr)}
 }

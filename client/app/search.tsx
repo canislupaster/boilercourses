@@ -156,6 +156,7 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 		{/* Search Bar */}
 		<div className="mb-3" ref={includeLogo ? undefined : searchBarRef} >
 			<input
+				maxLength={50}
 				autoFocus={autoFocus} id="search" type="text"
 				placeholder="Search for courses..."
 				value={searchState.query}
