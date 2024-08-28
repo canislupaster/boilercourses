@@ -3,21 +3,23 @@
 import { useRouter } from "next/navigation";
 import { ServerResponse } from "../../../shared/types";
 
-import { MsalAuthenticationTemplate, MsalProvider, useMsal } from "@azure/msal-react";
+import { MsalProvider, useMsal } from "@azure/msal-react";
 import { AppCtx, setAuth, useAPI } from "@/components/wrapper";
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Button, Loading } from "@/components/util";
-import { Alert, msalApplication, msalClientId } from "@/components/clientutil";
+import { Alert, BackButton, msalApplication, msalClientId } from "@/components/clientutil";
 
 import icon from "../../public/icon.png";
-import Image from "next/image"
+import Image from "next/image";
 import { BrowserAuthError, BrowserAuthErrorCodes } from "@azure/msal-browser";
 
 type AuthErr = ServerResponse<unknown>&{status: "error", error: "unauthorized"|"sessionExpire"};
 
 export function redirectToSignIn() {
 	const router = useRouter();
+	const app = useContext(AppCtx);
 	return (err?: AuthErr) => {
+		app.forward();
 		window.localStorage.setItem("signIn", JSON.stringify({err, redirect: window.location.href}));
 		router.push("/signin");
 	};
@@ -48,7 +50,9 @@ function SignInMSAL({loggedIn, err}: {loggedIn: ()=>void, err?: AuthErr}) {
 	if (tok!=null)
 		return <SignedIn tok={tok} loggedIn={loggedIn} />;
 
-	return <div className="flex flex-col gap-2 max-w-96 border-zinc-700 border-1 p-5 rounded-lg" >
+	return <div className="flex flex-col gap-2 max-w-96 border-zinc-700 border-1 p-5 px-10 rounded-lg" >
+		<BackButton noOffset />
+
 		<div className="flex flex-col w-full items-center" >
 			<Image src={icon} alt="logo" className='max-h-36 w-auto' />
 		</div>

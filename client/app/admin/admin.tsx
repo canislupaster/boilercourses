@@ -35,7 +35,8 @@ function AdminPosts() {
 	const posts = postsAPI.current?.res;
 
 	const reindex = callAPI("reindex", true);
-	const admins = useAPI<UserData[]>("admins", {auth: true})
+	const admins = callAPI<UserData[]>("admins", true)
+	useEffect(()=>admins.run(), []);
 
 	const [adminInp, setAdminInp] = useState("");
 	const setAdmin = callAPI<{}, {email: string, admin: boolean}>("setadmin", true);
@@ -43,6 +44,9 @@ function AdminPosts() {
 	const del = callAPI<{}, number>("posts/delete", true);
 	const dismiss = callAPI<{}, number[]>("posts/admin/dismissreports", true);
 	const markRead = callAPI<{}, number[]>("posts/admin/markread", true);
+
+	const runSetAdmin = (x: boolean) =>
+		setAdmin.run({data: {email: adminInp, admin: x}, refresh() { admins.run(); }});
 
 	if (posts==null) return <Loading/>;
 
@@ -52,15 +56,15 @@ function AdminPosts() {
 		</Button>
 
 		<div>
-			{admins==null ? <Loading/> : <div className="flex flex-col gap-2" >
-				{admins.res.map(v => <div className="p-3 rounded-md bg-gray-600" >
+			{admins.current==null ? <Loading/> : <div className="flex flex-col gap-2" >
+				{admins.current.res.map(v => <div className="p-3 rounded-md bg-gray-600" >
 					<PostCardAdminUser user={v} />
 				</div>)}
 			</div>}
 			<div className="flex flex-row gap-2 justify-evenly items-center mt-3" >
 				<Input value={adminInp} onChange={(e)=>setAdminInp(e.target.value)} />
-				<Button disabled={setAdmin.loading} onClick={()=>setAdmin.run({data: {email: adminInp, admin: true}})} >Promote</Button>
-				<Button disabled={setAdmin.loading} onClick={()=>setAdmin.run({data: {email: adminInp, admin: false}})} >Demote</Button>
+				<Button disabled={setAdmin.loading} onClick={()=>runSetAdmin(true)} >Promote</Button>
+				<Button disabled={setAdmin.loading} onClick={()=>runSetAdmin(false)} >Demote</Button>
 			</div>
 		</div>
 

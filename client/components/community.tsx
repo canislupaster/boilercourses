@@ -1,17 +1,17 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AppCtx, callAPI, isAuthSet, ModalAction, ModalActions, ModalCtx, ModalCtxType, setAuth, useAPI } from "./wrapper";
 import { Anchor, Button, Chip, IconButton, Loading, Textarea } from "./util";
-import { Icon, IconArrowsSort, IconDotsVertical, IconEdit, IconFlag2, IconFlag2Filled, IconPaperclip, IconPhoto, IconStar, IconStarFilled, IconThumbUp, IconThumbUpFilled, IconTrash, IconUserCircle } from "@tabler/icons-react";
+import { Icon, IconArrowsSort, IconDotsVertical, IconEdit, IconFlag2, IconFlag2Filled, IconPaperclip, IconPhoto, IconPhotoOff, IconStar, IconStarFilled, IconThumbUp, IconThumbUpFilled, IconTrash, IconUserCircle } from "@tabler/icons-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/popover";
 import { redirectToSignIn } from "@/app/signin/signin";
 import { AddPost, AdminPost, Post, PostData, UserData } from "../../shared/posts";
-import Markdown, { MarkdownToJSX } from "markdown-to-jsx";
 import { useRouter } from "next/navigation";
 import { Alert, AppTooltip, Dropdown, DropdownPart } from "./clientutil";
 import { Checkbox } from "@nextui-org/checkbox";
 import React from "react";
 import { SmallCourse } from "../../shared/types";
 import { CourseLink } from "./card";
+import Markdown, { Components } from "react-markdown";
 
 type PostSortBy = "ratingAsc" | "ratingDesc" | "newest" | "mostHelpful";
 
@@ -50,7 +50,7 @@ export function Stars({rating, setStar, sz}: {rating: number, setStar?: (x: numb
 	</div></div>;
 }
 
-export function SafeLink({title, href, icon}: {title: string, href: string, icon?: React.ReactNode}) {
+function SafeLink({href, icon, children}: any) {
 	const app = useContext(AppCtx);
 
 	return <Anchor onClick={() => {
@@ -58,16 +58,20 @@ export function SafeLink({title, href, icon}: {title: string, href: string, icon
 			<p>This link hasn't been checked by BoilerCourses and <b>may be unsafe</b>.</p>
 			<p>Continue to <Anchor target="_blank" href={href} >{href}</Anchor>?</p>
 		</>});
-	}} className="items-start" >{icon}{title ?? href}</Anchor>;
+	}} className="items-start" >{icon}{children}</Anchor>;
 }
 
-export function SafeImageLink({title, alt, src}: {title: string, alt?: string, src: string}) {
+function SafeImageLink({alt, src}: any) {
 	return <p className="flex flex-row gap-2" >
-		<SafeLink icon={<IconPhoto/>} title={title ?? alt} href={src} />
+		<SafeLink icon={<IconPhoto/>} href={src} >{alt}</SafeLink>
 	</p>;
 }
 
-export function WrapTitle({ord, children}: {ord: number, children?: React.ReactNode}) {
+function Blockquote({children}: any) {
+	return <blockquote className="pl-4 border-l-3 border-l-zinc-400 py-2 [&>p]:whitespace-pre-wrap" >{children}</blockquote>;
+}
+
+const titleComponent = (ord: number) => ({children}: any) => {
 	switch (ord) {
 		case 1: return <h1 className="font-extrabold text-2xl" >{children}</h1>;
 		case 2: return <h2 className="font-extrabold text-xl" >{children}</h2>;
@@ -76,11 +80,7 @@ export function WrapTitle({ord, children}: {ord: number, children?: React.ReactN
 	}
 }
 
-const titleComponents = Object.fromEntries([1,2,3,4,5,6].map(x =>
-	[`h${x}`, {
-		component: WrapTitle, props: {ord: x}
-	}]
-)) as Partial<MarkdownToJSX.Overrides>;
+const titleComponents = Object.fromEntries([1,2,3,4,5,6].map(x => [`h${x}`, titleComponent(x)])) as Partial<Components>;
 
 export function TimeSince({t}: {t: string}) {
 	const ts = Math.floor((Date.now()-Date.parse(t))/1000);
@@ -188,7 +188,7 @@ function createPost(x: AddPost) {
 	};
 }
 
-export function PostEditButton({post, course, postLimit}: {
+function PostEditButton({post, course, postLimit}: {
 	post: Post, course: number, postLimit: number
 }) {
 	const edit = createPost({
@@ -303,16 +303,19 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 			</Button>}
 		</>} bad ></Alert>}
 
-		<Markdown options={{
-			forceWrapper: true,
-			overrides: {
-				a: {component: SafeLink},
-				img: {component: SafeImageLink},
-				...titleComponents
-			}
-		}} >
+		{adminPost ? <pre className="p-3 rounded-md max-h-52 overflow-y-scroll bg-zinc-800 whitespace-pre-wrap" >
 			{post.text}
-		</Markdown>
+		</pre> : <Markdown components={{
+			a: SafeLink, img: SafeImageLink,
+			blockquote: Blockquote,
+			...titleComponents
+		}} allowedElements={[
+			"h1", "h2", "h3", "h4", "h5", "h6",
+			"p", "a", "img", "ul", "ol", "li",
+			"strong", "em", "blockquote", "br"
+		]} >
+			{post.text}
+		</Markdown>}
 
 		<div className="flex flex-row justify-between w-full items-center flex-wrap gap-2" >
 			<p className="text-sm text-gray-400" >
@@ -412,7 +415,7 @@ export function Community({course}: {course: SmallCourse}) {
 						name: "Delete everything", status: "bad",
 						act(c) {
 							c.setLoading();
-							deleteUser.run({refresh() { c.closeModal(); }});
+							deleteUser.run({refresh() { c.closeModal(); refresh(); }});
 							return false;
 						}
 					}
@@ -422,7 +425,7 @@ export function Community({course}: {course: SmallCourse}) {
 	});
 
 	return <div className="flex items-stretch flex-col gap-2 border-zinc-600 bg-zinc-800 border-1 p-5 rounded-lg" ><PostRefreshHook.Provider value={refresh} >
-		<div className="flex flex-row justify-between flex-wrap" >
+		<div className="flex flex-col items-center gap-3 md:flex-row justify-between" >
 			<div className="flex flex-row gap-2 items-center flex-wrap" >
 				<h2 className="font-extrabold font-display text-2xl" >Community</h2>
 

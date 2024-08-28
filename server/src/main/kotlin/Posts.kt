@@ -53,7 +53,7 @@ data class AdminCoursePost(
 )
 
 fun Kooby.posts(auth: Auth, db: DB, courses: Courses) = path("/posts") {
-    val postRatelimit = RateLimiter(1, 10.seconds)
+    val postRatelimit = RateLimiter(10, 100.seconds)
 
     coroutine {
         post("/submit", auth.withUser { u->
@@ -212,23 +212,29 @@ fun Kooby.posts(auth: Auth, db: DB, courses: Courses) = path("/posts") {
             post("/list", auth.withUser(admin=true) {
                 val req = ctx.json<ListRequest>()
 
+                val nreports = (Count(intLiteral(1)) as Expression<Long?>).alias("count")
+                var where: Op<Boolean> = Op.TRUE
+                if (req.new) where = where and DB.CoursePost.new
+                val nreportQuery = DB.PostReport.select(nreports, DB.PostReport.post)
+                    .groupBy(DB.PostReport.post)
+                    .alias("nreportQuery")
+
+                if (req.reported) where = where and GreaterOp(nreportQuery[nreports], longLiteral(0))
+
                 val npage = db.query {
                     val x = intLiteral(1).count().alias("count")
-                    (DB.CoursePost.select(x).first()[x]+ADMIN_PAGE_POSTS-1)/ADMIN_PAGE_POSTS
+
+                    val count = DB.CoursePost.join(nreportQuery, JoinType.LEFT,
+                        DB.CoursePost.id, nreportQuery[DB.PostReport.post])
+                        .select(x).where {where}.first()[x]
+
+                    (count+ADMIN_PAGE_POSTS-1)/ADMIN_PAGE_POSTS
                 }
 
                 val posts = db.query {
-                    //if needed can make a nreport column
-                    val nreports = (Count(intLiteral(1)) as Expression<Long?>).alias("count")
-                    var where: Op<Boolean> = Op.TRUE
-                    if (req.new) where = where and DB.CoursePost.new
-                    val nreportQuery = DB.PostReport.select(nreports, DB.PostReport.post)
-                        .groupBy(DB.PostReport.post)
-                        .alias("nreportQuery")
                     val cols: List<Expression<*>> = DB.CoursePost.columns +
                             listOf(nreportQuery[nreports]) + db.udataCols
-
-                    if (req.reported) where = where and GreaterOp(nreportQuery[nreports], longLiteral(0))
+                    //if needed can make a nreport column
                     (DB.CoursePost leftJoin DB.User).join(nreportQuery, JoinType.LEFT,
                             DB.CoursePost.id, nreportQuery[DB.PostReport.post])
                         .select(cols)

@@ -129,16 +129,17 @@ export function AppLink(props: LinkProps&HTMLAttributes<HTMLAnchorElement>) {
 	</Link>
 }
 
-export const BackButton = ({children}: {children: React.ReactNode}) =>
+export const BackButton = ({children, noOffset}: {children?: React.ReactNode, noOffset?: boolean}) =>
 	<div className='flex flex-row gap-3 align-middle'>
-		<Anchor className='lg:mt-1 mr-1 h-fit hover:-translate-x-0.5 transition lg:absolute lg:-left-10'
+		<Anchor className={`lg:mt-1 mr-1 h-fit hover:-translate-x-0.5 transition ${
+			noOffset ? "" : "lg:absolute lg:-left-10"}`}
 			onClick={useContext(AppCtx).back} >
 			<IconArrowLeft className="self-center" size={30} />
 		</Anchor>
 
-		<div className="md:text-3xl text-2xl font-bold mb-6 font-display flex flex-col items-start">
+		{children && <div className="md:text-3xl text-2xl font-bold mb-6 font-display flex flex-col items-start">
 			{children}
-		</div>
+		</div>}
 	</div>;
 
 export function searchState<T>(start: T, init: (params: URLSearchParams) => T|undefined|null, change: (x:T)=>URLSearchParams|undefined|null): [T, (newX: T)=>void] {

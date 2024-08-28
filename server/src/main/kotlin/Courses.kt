@@ -464,15 +464,17 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
         if (searcher==null) throw APIErrTy.Loading.err("courses not indexed yet")
         if (req.page<0) throw APIErrTy.BadRequest.err("page is negative")
 
-        if (req.isEmpty())
-            return@read sortedCourses.subList(req.page*numResults,
-                min(sortedCourses.size,(req.page+1)*numResults)).map {
+        if (req.isEmpty()) {
+            val (f,t) = req.page*numResults to min(sortedCourses.size,(req.page+1)*numResults)
+            if (f>t) throw APIErrTy.NotFound.err("Page doesn't exist")
 
+            return@read sortedCourses.subList(f,t).map {
                 SearchResult(0.0f, it.toSmall(null))
             }.let {
                 SearchOutput(it, sortedCourses.size,
                     (sortedCourses.size+numResults-1)/numResults, 0.0)
             }
+        }
 
         val startTime = Instant.now()
         val trimQuery = req.query.trim()

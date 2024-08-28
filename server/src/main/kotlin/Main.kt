@@ -12,6 +12,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.io.File
+import java.security.MessageDigest
 
 const val SESSION_MAXAGE = (3600*24*7).toLong()
 const val NONCE_MAXAGE = (60*5).toLong()
@@ -217,8 +218,6 @@ suspend fun main(args: Array<String>) = coroutineScope {
         }
 
         error { ctx, cause, code ->
-            log.error("Request error", cause)
-
             when (cause) {
                 is APIError -> {
                     ctx.setResponseCode(cause.ty.code())
@@ -229,8 +228,15 @@ suspend fun main(args: Array<String>) = coroutineScope {
                     ctx.resp(APIErrTy.NotFound.err())
                 }
                 else -> {
+                    val hash = MessageDigest.getInstance("MD5").run {
+                        update(cause.toString().toByteArray())
+                        digest().sliceArray(0..5).base64()
+                    }
+
+                    log.error("Exception thrown, hash: $hash", cause)
+
                     ctx.setResponseCode(code)
-                    ctx.resp(APIErrTy.Other.err(cause.message))
+                    ctx.resp(APIErrTy.Other.err("An internal server error occurred.\nHash: $hash"))
                 }
             }
         }
