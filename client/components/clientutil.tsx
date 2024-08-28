@@ -308,8 +308,8 @@ export const msalApplication = new PublicClientApplication({
 	 }
 });
 
-export const Alert = ({title, txt, bad}: {title?: React.ReactNode, txt: React.ReactNode, bad?: boolean}) =>
-	<div className={`border border-zinc-700 ${bad ? "bg-red-900" : "bg-zinc-900"} p-2 px-4 rounded-md flex flex-row gap-2`} >
+export const Alert = ({title, txt, bad, className}: {title?: React.ReactNode, txt: React.ReactNode, bad?: boolean, className?: string}) =>
+	<div className={twMerge(`border ${bad ? "border-red-500 bg-red-900" : "border-zinc-700 bg-zinc-900"} p-2 px-4 rounded-md flex flex-row gap-2`, className)} >
 		<div className="flex-shrink-0 mt-1" >
 			{bad ? <IconInfoTriangleFilled/> : <IconInfoCircle/>}
 		</div>

@@ -36,7 +36,13 @@ function AdminPosts() {
 
 	const reindex = callAPI("reindex", true);
 	const admins = callAPI<UserData[]>("admins", true)
-	useEffect(()=>admins.run(), []);
+
+	//pretty bad way to chain requests
+	//(only fetch once posts has succeeded)
+	//i need an actual state management solution...
+	useEffect(()=>{
+		if (postsAPI.current!=null) admins.run()
+	}, [postsAPI.current!=null]);
 
 	const [adminInp, setAdminInp] = useState("");
 	const setAdmin = callAPI<{}, {email: string, admin: boolean}>("setadmin", true);
@@ -56,6 +62,7 @@ function AdminPosts() {
 		</Button>
 
 		<div>
+			<h2 className="font-display text-2xl font-bold mb-2" >Admins</h2>
 			{admins.current==null ? <Loading/> : <div className="flex flex-col gap-2" >
 				{admins.current.res.map(v => <div className="p-3 rounded-md bg-gray-600" >
 					<PostCardAdminUser user={v} />
@@ -69,7 +76,7 @@ function AdminPosts() {
 		</div>
 
 		<div className="w-full flex flex-row items-center justify-between" >
-			<h3 className="font-bold font-display text-xl" >Posts</h3>
+			<h3 className="font-bold font-display text-2xl" >Posts</h3>
 			<ButtonPopover title="Filter" >
 				<div className="flex flex-col items-start" >
 					<Checkbox isSelected={req.reported} onChange={(v)=>setReq({...req, reported: v.target.checked})} >Reported</Checkbox>
