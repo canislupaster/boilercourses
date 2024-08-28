@@ -6,11 +6,13 @@ import { Tooltip, TooltipPlacement } from "@nextui-org/tooltip";
 import { twMerge } from "tailwind-merge";
 import { AppCtx, useInfo } from "./wrapper";
 import Link, { LinkProps } from "next/link";
-import { Anchor, gpaColor, selectProps } from "./util";
-import { IconArrowLeft } from "@tabler/icons-react";
+import { Anchor, Button, gpaColor, selectProps } from "./util";
+import { IconArrowLeft, IconInfoCircle, IconInfoTriangleFilled } from "@tabler/icons-react";
 import { Progress } from "@nextui-org/progress";
 import { TabsProps } from "@nextui-org/tabs";
 import { default as Select, SingleValue } from "react-select";
+import { PublicClientApplication } from "@azure/msal-browser";
+import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/popover";
 
 export type SelectionContext = {
 	section: Section|null,
@@ -296,3 +298,53 @@ export const TermSelect = ({term, terms, setTerm, name}: {term: Term, terms: Ter
 
 // used for client side filtering (e.g. instructors in prof tabs)
 export const simp = (x: string) => x.toLowerCase().replace(/[^a-z]/g, "");
+
+export const msalClientId = process.env.NEXT_PUBLIC_MSAL_CLIENT_ID;
+export const msalApplication = new PublicClientApplication({
+	auth: {
+		clientId: msalClientId!,
+		authority: `https://login.microsoftonline.com/${process.env.NEXT_PUBLIC_MSAL_TENANT!}`
+	 }
+});
+
+export const Alert = ({title, txt, bad}: {title?: React.ReactNode, txt: React.ReactNode, bad?: boolean}) =>
+	<div className={`border border-zinc-700 ${bad ? "bg-red-900" : "bg-zinc-900"} p-2 px-4 rounded-md flex flex-row gap-2`} >
+		<div className="flex-shrink-0 mt-1" >
+			{bad ? <IconInfoTriangleFilled/> : <IconInfoCircle/>}
+		</div>
+		<div>
+			{title && <h2 className="font-bold font-display text-lg" >{title}</h2>}
+			<div>{txt}</div>
+		</div>
+	</div>;
+
+export type DropdownPart = {type: "txt", txt?: React.ReactNode}
+	| { type: "act", name?: React.ReactNode, act: ()=>void,
+			disabled?: boolean, active?: boolean };
+
+export function Dropdown({parts, trigger}: {trigger?: React.ReactNode, parts: DropdownPart[]}) {
+	const [open, setOpen] = useState(false);
+	return <Popover placement="bottom" showArrow isOpen={open} onOpenChange={setOpen} triggerScaleOnOpen={false} >
+		<PopoverTrigger><div>{trigger}</div></PopoverTrigger>
+		<PopoverContent className="rounded-md bg-zinc-900 border-gray-800 flex flex-col gap-2 items-stretch px-0 py-0 max-w-44" >
+			<div className="" >
+				{parts.map((x,i) => {
+					//copy pasting is encouraged by tailwind!
+					if (x.type=="act")
+						return <Button key={i} disabled={x.disabled}
+							className={`m-0 border-zinc-700 border-t-0 first:border-t rounded-none first:rounded-t-md last:rounded-b-md hover:bg-zinc-700 w-full active:border-1 ${
+								x.active ? "bg-zinc-950" : ""
+							}`}
+							onClick={() => {
+								x.act();
+								setOpen(false);
+							}} >{x.name}</Button>;
+					else return <div key={i}
+						className="flex flex-row justify-center gap-4 px-4 py-1.5 bg-zinc-900 items-center border m-0 border-zinc-700 border-t-0 first:border-t rounded-none first:rounded-t-md last:rounded-b-md w-full" >
+							{x.txt}
+						</div>
+				})}
+			</div>
+		</PopoverContent>
+	</Popover>;
+}

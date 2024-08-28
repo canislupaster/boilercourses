@@ -20,7 +20,7 @@ export const api = <T,>(endpoint: string, data?: any): Promise<T> =>
 			return res.result;
 		});
 
-export const courseById = (id: number): Promise<Course> => api("course", id)
+export const courseById = (id: number): Promise<CourseId> => api("course", id)
 export const profById = (id: number): Promise<InstructorId> => api("prof", id)
 
 export const getInfo = (): Promise<ServerInfo> => api("info")

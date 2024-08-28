@@ -201,7 +201,8 @@ export const gradeGPA: Partial<Record<Grade, number>> = {
 
 export type ServerResponse<T> = {
   status:"error",
-  error: "notFound"|"unauthorized"|"badRequest"|"loading"|"rateLimited"|"other",
+  error: "notFound"|"unauthorized"|"badRequest"|"loading"
+    |"rateLimited"|"other"|"sessionExpire"|"banned",
   message: string|null
 } | {status: "ok", result: T}
 
@@ -231,17 +232,20 @@ export type SmallCourse = {
   attributes: string[],
   scheduleTypes: string[],
 
-  grades: InstructorGrade
+  grades: InstructorGrade,
+  ratings: number, avgRating: number|null
 };
 
-export type CourseId = {course: Course, id: number};
+// course after indexing / server processing, normal course is used during scraping
+export type CourseId = {course: Course, id: number, ratings: number, avgRating: number|null};
 
 export const toSmallCourse = (cid: CourseId): SmallCourse => ({
   id: cid.id, ...cid.course, varTitle: null,
   termInstructors: Object.fromEntries(Object.entries(cid.course.sections)
     .map(([k,v]) => [k as Term, mergeInstructors(v.flatMap(x=>x.instructors))])),
   grades: mergeGrades(Object.values(cid.course.instructor).flatMap(x=>Object.values(x))),
-  scheduleTypes: [...new Set(Object.values(cid.course.sections).flat().map(s=>s.scheduleType))]
+  scheduleTypes: [...new Set(Object.values(cid.course.sections).flat().map(s=>s.scheduleType))],
+  ratings: cid.ratings, avgRating: cid.avgRating
 });
 
 export type ServerSearch = {

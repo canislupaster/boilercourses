@@ -1,18 +1,16 @@
 package com.boilerclasses
 
-import com.boilerclasses.Schema.Attribute
-import com.boilerclasses.Schema.Subject
-import com.boilerclasses.Schema.Term
-import io.jooby.*
+import io.jooby.Context
+import io.jooby.MediaType
+import io.jooby.StatusCode
 import io.jooby.exception.NotFoundException
-import io.jooby.kt.HandlerContext
 import io.jooby.kt.runApp
 import io.jooby.netty.NettyServer
 import kotlinx.coroutines.coroutineScope
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.*
 import kotlinx.coroutines.launch
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.*
 import java.io.File
 
 const val SESSION_MAXAGE = (3600*24*7).toLong()
@@ -31,13 +29,12 @@ enum class APIErrTy {
     BadRequest,
     Loading,
     RateLimited,
-    LoginErr,
     SessionExpire,
     Other;
 
     fun code() = when(this) {
         NotFound -> StatusCode.NOT_FOUND
-        SessionExpire, LoginErr, Unauthorized, Banned -> StatusCode.UNAUTHORIZED
+        SessionExpire, Unauthorized, Banned -> StatusCode.UNAUTHORIZED
         BadRequest -> StatusCode.BAD_REQUEST
         RateLimited -> StatusCode.TOO_MANY_REQUESTS
         Other,Loading -> StatusCode.SERVER_ERROR
@@ -47,7 +44,6 @@ enum class APIErrTy {
         NotFound -> "notFound"
         Unauthorized -> "unauthorized"
         Banned -> "banned"
-        LoginErr -> "loginErr"
         SessionExpire -> "sessionExpire"
         BadRequest -> "badRequest"
         Loading -> "loading"
@@ -167,27 +163,45 @@ suspend fun main(args: Array<String>) = coroutineScope {
             }
 
             post("/login") {
+                val accessToken = ctx.json<String>()
+
                 val mk = db.makeSession()
-                val nonce = db.genKey()
+                auth.auth(mk.sdb, accessToken)
+
                 ctx.resp(buildJsonObject {
                     put("id", mk.sdb.sesId)
                     put("key", mk.key)
-                    put("nonce", nonce)
-                    put("redirect", auth.redir(mk.sdb.state, nonce))
                 })
             }
 
-            @Serializable
-            data class AuthRequest(val code: String, val state: String, val nonce: String)
-            post("/auth", auth.withSession {
-                val authReq = ctx.json<AuthRequest>()
-                auth.auth(authReq.code, it, authReq.nonce, authReq.state)
+            post("/reindex", auth.withUser(admin=true) {
+                courses.loadCourses()
+                ctx.resp(Unit)
+            })
+
+            post("/admins", auth.withUser(admin=true) {
+                ctx.resp(db.getAdmins())
+            })
+
+            post("/userdata", auth.withUser(admin=true) {
+                ctx.resp(db.getUser(ctx.json<Int>()))
+            })
+
+            post("/ban", auth.withUser(admin=true) {
+                val req = ctx.json<DB.BanRequest>()
+                courses.removeRatings(db.banUser(req))
                 ctx.resp(Unit)
             })
 
             post("/logout", auth.withSession { it.remove() })
 
-            posts(auth, db)
+            //deletes all user data via cascade
+            post("/deleteUser", auth.withUser {
+                courses.removeRatings(db.deleteUser(it.id))
+                ctx.resp(Unit)
+            })
+
+            posts(auth, db, courses)
 
             @Serializable
             data class SetAdmin(val email: String, val admin: Boolean)

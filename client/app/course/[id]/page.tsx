@@ -1,12 +1,15 @@
 import { Metadata } from "next";
 import { courseById, getInfo } from "@/app/server";
 import { CourseDetailApp } from "./course";
+import { notFound } from "next/navigation";
 
 export async function generateMetadata(
   { params }: {params: {id: string}},
 ): Promise<Metadata> {
 	const id = Number.parseInt(params.id);
-	const course = await courseById(id);
+	if (isNaN(id)) notFound();
+
+	const course = (await courseById(id)).course;
 
 	const title = `${course.subject}${course.course}: ${course.name} at Purdue`;
 
@@ -28,7 +31,9 @@ export async function generateMetadata(
 
 export default async function Page({ params }: {params: {id: string}}) {
 	const id = Number.parseInt(params.id);
+	if (isNaN(id)) notFound();
+
 	const course = await courseById(id);
 	const info = await getInfo();
-	return <CourseDetailApp course={course} id={id} info={info} />;
+	return <CourseDetailApp {...course} info={info} />;
 }

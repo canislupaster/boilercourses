@@ -4,7 +4,7 @@ import { creditStr, formatTerm, instructorStr, sectionsByTerm } from "../../../.
 export const runtime = "edge";
  
 export async function GET(request: Request, {params: {id}}: {params: {id: string}}) {
-  const course = (await courseById(Number.parseInt(id)));
+  const course = (await courseById(Number.parseInt(id))).course;
   const terms = sectionsByTerm(course).map(x => x[0]);
 
   return makeThumbnail(`${course.subject} ${course.course}: ${course.name}`,

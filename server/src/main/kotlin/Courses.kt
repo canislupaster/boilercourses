@@ -1,7 +1,5 @@
 package com.boilerclasses
 
-import com.boilerclasses.Courses.SearchResult
-import io.jooby.AttachedFile
 import io.jooby.Environment
 import io.jooby.FileDownload
 import kotlinx.coroutines.Dispatchers
@@ -10,10 +8,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.decodeFromStream
-import kotlinx.serialization.json.encodeToJsonElement
-import org.apache.lucene.analysis.*
+import org.apache.lucene.analysis.Analyzer
+import org.apache.lucene.analysis.CharacterUtils
+import org.apache.lucene.analysis.LowerCaseFilter
+import org.apache.lucene.analysis.Tokenizer
 import org.apache.lucene.analysis.core.DecimalDigitFilter
 import org.apache.lucene.analysis.core.LetterTokenizer
 import org.apache.lucene.analysis.core.WhitespaceTokenizer
@@ -79,7 +77,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
     @Serializable
     data class SearchResult(
         val score: Float,
-        val course: JsonElement
+        val course: Schema.SmallCourse
     )
 
     @Serializable
@@ -114,7 +112,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
                 var last = -1
                 var start = -1
                 var mode=0
-                var termBuf = termAttr.buffer();
+                var termBuf = termAttr.buffer()
 
                 while (true) {
                     if (offset>=dataLen+bufferOffset) {
@@ -169,7 +167,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
 
             override fun end() {
                 super.end()
-                offsetAttr.setOffset(finalOffset, finalOffset);
+                offsetAttr.setOffset(finalOffset, finalOffset)
             }
         }
 
@@ -204,9 +202,11 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
     private var moreLike: MoreLikeThis? = null
     private var searcher: IndexSearcher? = null
 
-    private var courseById = emptyMap<Int,Schema.Course>()
-    private var smallCourseBySearchId = emptyMap<Int,JsonElement>()
-    private var sortedCourses = listOf<Schema.CourseId>()
+    //internally mutable to updated cached ratings
+    private var courseById = emptyMap<Int,Schema.CourseId>()
+    private var smallCourseBySearchId = emptyMap<Int,Schema.SmallCourse>()
+    private var sortedCourses = emptyList<Schema.CourseId>()
+    private var smallCourseByCourseId = emptyMap<Int, List<Schema.SmallCourse>>()
 
     private val fieldAnalyzer = PerFieldAnalyzerWrapper(EnglishAnalyzer(), mapOf(
         "subject" to subjectAnalyzer(), "course" to idAnalyzer(true),
@@ -227,6 +227,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
         "course" to 150,
         "subjectName" to 150,
         "title" to 100,
+        "postContent" to 40,
         "titleStandard" to 50,
         "desc" to 35,
         "instructor" to 80,
@@ -240,27 +241,37 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
 
     private fun makeQueryParser(analyzer: Analyzer) = SimpleQueryParser(analyzer, weights)
 
-    private suspend fun loadCourses() {
+    suspend fun loadCourses() {
         try {
-            log.info("loading courses")
+            log.info("loading courses & posts")
 
-            var c = db.allCourses()
+            val c = db.allCourses()
+            val posts = db.allPostContent()
             val info = db.getInfo()
+
             val subjectMap = info.subjects.associateBy { it.abbr }
 
-            val newCourseById = c.associate { it.id to it.course }
+            val newCourseById = c.associateBy { it.id }
             val newSortedCourses = c.sortedWith(
                 compareBy<Schema.CourseId>({it.course.subject}, {it.course.course})
             )
 
             data class IndexCourse(val searchId: Int, val cid: Schema.CourseId, val small: Schema.SmallCourse)
             val indexCourses = c.flatMap {
-                it.course.sections.values.flatten().map { sec->sec.name }.distinct().map {
-                    secName -> secName to it
-                }
+                it.course.sections.entries
+                    .map {x->x.value.map {y-> x.key to y}}
+                    .flatten().groupBy { sec->sec.second.name }.map {
+                        (secName, secs) -> secName to it.copy(course=it.course.copy(
+                            sections=secs.groupBy {x->x.first}.mapValues {x->x.value.map {y->y.second}}
+                        ))
+                    }
             }.mapIndexed { i, x -> IndexCourse(i, x.second, x.second.toSmall(x.first)) }
 
-            val newSmallCourses = indexCourses.associate {it.searchId to Json.encodeToJsonElement(it.small)}
+            val newSmallCourses = indexCourses.associate {
+                it.searchId to it.small
+            }.toMutableMap()
+            val newSmallCourseByCID = indexCourses.groupBy {it.cid.id}
+                .mapValues {it.value.map {v->v.small}}
 
             if (indexSwapFile.exists()) indexSwapFile.deleteRecursively()
 
@@ -268,7 +279,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
             val cfg = IndexWriterConfig(fieldAnalyzer)
             val writer = IndexWriter(newIdx, cfg)
 
-            log.info("indexing courses")
+            log.info("indexing courses & posts")
 
             val instructorNicks = db.allInstructors().values.associate {it.name to it.nicknames}
 
@@ -277,7 +288,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
 
                 Document().apply {
                     val textTermVec = FieldType().apply {
-                        setIndexOptions(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS);
+                        setIndexOptions(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS)
                         setTokenized(true)
                         setStoreTermVectors(true)
                         freeze()
@@ -291,6 +302,9 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
                     val secs = cid.course.sections.values.asSequence().flatten()
 
                     add(Field("subject", cid.course.subject, textTermVec))
+                    posts[cid.id]?.let {
+                        add(Field("postContent", it.joinToString("\n"), TextField.TYPE_NOT_STORED))
+                    }
                     add(StringField("subjectString", cid.course.subject, Field.Store.NO))
                     add(Field("subjectName",
                         subjectMap[cid.course.subject]!!.name, textTermVec))
@@ -373,7 +387,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
             writer.close()
 
             log.info("finished indexing")
-            newIdx?.close()
+            newIdx.close()
             lock.write {
                 dirReader?.close()
                 idx?.close()
@@ -384,11 +398,13 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
                 sortedCourses = newSortedCourses
                 courseById = newCourseById
                 smallCourseBySearchId = newSmallCourses
+                smallCourseByCourseId = newSmallCourseByCID
 
                 idx=MMapDirectory(indexFile.toPath())
                 dirReader=DirectoryReader.open(idx)
                 searcher=IndexSearcher(dirReader)
                 moreLike=MoreLikeThis(dirReader).apply {
+                    minDocFreq=2 //idk if this helps!
                     fieldNames=similarFields.toTypedArray()
                 }
             }
@@ -399,7 +415,31 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
         }
     }
 
-    private suspend fun scoreDocsToCourses(scoredocs: List<ScoreDoc>): List<SearchResult> {
+    private fun setSmallCoursesRating(course: Int, numRating: Int, avgRating: Double?) =
+        smallCourseByCourseId[course]!!.forEach {
+            it.ratings=numRating
+            it.avgRating=avgRating
+        }
+
+    suspend fun setRating(course: Int, k: Int, v: Int) = lock.write {
+        val c = courseById[course]!!
+
+        val nk = c.ratings+k
+        c.avgRating = if (nk==0) null else (c.ratings*(c.avgRating ?: 0.0) + k*v.toDouble())/nk.toDouble()
+        c.ratings = nk
+        setSmallCoursesRating(course, nk, c.avgRating)
+    }
+
+    suspend fun removeRatings(ratings: List<Pair<Int,Int>>) = lock.write {
+        for ((k,v) in ratings) {
+           val c = courseById[k]!!
+            c.avgRating = if (c.ratings==1) null else (c.ratings*c.avgRating!! - v)/(c.ratings-1)
+                c.ratings--
+            setSmallCoursesRating(k, c.ratings, c.avgRating)
+        }
+    }
+
+    private fun scoreDocsToCourses(scoredocs: List<ScoreDoc>): List<SearchResult> {
         val fields = searcher!!.storedFields()
 
         return scoredocs.map { scoredoc ->
@@ -416,19 +456,19 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
         val doc = searcher!!.search(IntField.newExactQuery("id", id), 1).scoreDocs[0]
 
         searcher!!.search(moreLike!!.like(doc.doc), 10).scoreDocs.filter {
-            it.doc!=doc.doc && it.score>4.5
+            it.doc!=doc.doc && it.score>4
         }.let { scoreDocsToCourses(it) }
     }
 
     suspend fun searchCourses(req: SearchReq): SearchOutput = lock.read {
         if (searcher==null) throw APIErrTy.Loading.err("courses not indexed yet")
-        if (req.page<0) throw APIErrTy.BadRequest.err("page is negative");
+        if (req.page<0) throw APIErrTy.BadRequest.err("page is negative")
 
         if (req.isEmpty())
             return@read sortedCourses.subList(req.page*numResults,
                 min(sortedCourses.size,(req.page+1)*numResults)).map {
 
-                SearchResult(0.0f, Json.encodeToJsonElement(it.toSmall(null)))
+                SearchResult(0.0f, it.toSmall(null))
             }.let {
                 SearchOutput(it, sortedCourses.size,
                     (sortedCourses.size+numResults-1)/numResults, 0.0)
@@ -506,7 +546,10 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
         )
     }
 
-    suspend fun getCourse(id: Int) = lock.read { courseById[id] }
+    suspend fun getCourse(id: Int): Schema.CourseId? = lock.read { courseById[id] }
+    suspend fun getSmallCourse(id: Int): Schema.SmallCourse? = lock.read {
+        smallCourseByCourseId[id]?.firstOrNull()
+    }
 
     suspend fun download() = lock.read {
         val json = Json.encodeToString(sortedCourses)

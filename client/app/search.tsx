@@ -14,6 +14,7 @@ import { useAPI, useInfo } from "@/components/wrapper";
 import { Card } from "@/components/card";
 import { Collapse } from 'react-collapse';
 import { Pagination } from "@nextui-org/pagination";
+import { Alert } from "@/components/clientutil";
 
 export type SearchState = {
 	query: string,
@@ -187,10 +188,7 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 								label: v, value: k
 							})))}
 						/>
-						{searchState.attributes.length>0 && <p className="flex flex-row my-2 gap-2 p-3 bg-red-900 rounded-md" >
-							<IconInfoCircle/>
-							Not all geneds may appear since they are based on catalog attributes which seem to be incomplete. Consider consulting your college's site for an accurate list.
-						</p>}
+						{searchState.attributes.length>0 && <Alert txt="Not all geneds may appear since they are based on catalog attributes which seem to be incomplete. Consider consulting your college's site for an accurate list." />}
 					</div>
 				</Collapse>
 				

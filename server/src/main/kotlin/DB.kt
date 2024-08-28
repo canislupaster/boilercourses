@@ -1,9 +1,9 @@
 package com.boilerclasses
 
-import com.boilerclasses.DB.CoursePost.references
 import io.jooby.Environment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -93,14 +93,22 @@ class DB(env: Environment) {
         val course = integer("course").references(Course.id)
         val rating = integer("rating").nullable()
         val new = bool("new")
-        val showName = bool("showName")
+        //users can optionally show name
+        val name = text("name").nullable()
         val user = integer("user").references(User.id)
+        val votes = integer("votes")
 
         val text = text("text")
         val submitted = timestamp("submitted")
     }
 
     object PostReport: Table("post_report") {
+        val user = integer("user").references(User.id)
+        val post = integer("post").references(CoursePost.id)
+        val submitted = timestamp("submitted")
+    }
+
+    object PostVote: Table("post_vote") {
         val id = integer("id")
         val user = integer("user").references(User.id)
         val post = integer("post").references(CoursePost.id)
@@ -155,32 +163,52 @@ class DB(env: Environment) {
         )
     }
 
-    private fun toCourseId(it: ResultRow) = Schema.CourseId(it[Course.id], it[Course.data])
+    private val ratingCount = (CoursePost.rating.count() as Expression<Long?>).alias("ratingCount")
+    private val avgRating = CoursePost.rating.castTo(DoubleColumnType())
+        .function("avg").alias("avgRating")
+    private val agg = CoursePost.select(ratingCount, avgRating, CoursePost.course)
+        .groupBy(CoursePost.course).alias("rating")
+    private val courseWithRating = Course.join(agg, JoinType.LEFT, Course.id, agg[CoursePost.course])
+
+    private fun toCourseId(it: ResultRow) =
+        Schema.CourseId(it[Course.id], it[Course.data],
+            it[agg[ratingCount]]?.toInt() ?: 0, it[agg[avgRating]])
 
     //these *seem* slow but sqlite is pretty fast so imma just keep things organized and store everything in db
     //https://www.sqlite.org/np1queryprob.html
 
     private suspend fun toInstructorId(it: ResultRow) =
         Schema.InstructorId(it[Instructor.id], it[Instructor.data], it[Instructor.rmp],
-            (CourseInstructor leftJoin Course).select(Course.id, Course.data)
+            (CourseInstructor leftJoin courseWithRating)
+                .select(Course.id, Course.data, agg[ratingCount], agg[avgRating])
                 .where { CourseInstructor.instructor eq it[Instructor.name] }
-                .map { Schema.CourseId(it[Course.id], it[Course.data]) })
+                .map { toCourseId(it) })
 
     suspend fun getCourseRange(n: Int, from: Int) = query {
-        Course.select(Course.id, Course.data)
+        courseWithRating.select(Course.id, Course.data, agg[ratingCount], agg[avgRating])
             .limit(n, from.toLong())
             .orderBy(Course.subject to SortOrder.ASC, Course.course to SortOrder.ASC)
             .map { toCourseId(it) }
     }
 
     suspend fun lookupCourses(sub: String, num: Int) = query {
-        Course.select(Course.id, Course.data).where {
-            (Course.subject eq sub) and (Course.course eq num)
-        }.map { Schema.CourseId(it[Course.id], it[Course.data]) }
+        courseWithRating
+            .select(Course.id, Course.data, agg[ratingCount], agg[avgRating])
+                .where { (Course.subject eq sub) and (Course.course eq num) }
+                .map { toCourseId(it) }
     }
 
     suspend fun allCourses() = query {
-        Course.select(Course.id, Course.data).map { toCourseId(it) }
+        courseWithRating.select(Course.id, Course.data, agg[avgRating], agg[ratingCount])
+            .map { toCourseId(it) }
+    }
+
+    suspend fun allPostContent() = query {
+        CoursePost.select(CoursePost.course, CoursePost.text)
+            .groupBy {it[CoursePost.course]}.mapValues {it.value.map {x->x[CoursePost.text]}}
+    }
+
+    suspend fun removeAllRatingsFrom(user: Int) = query {
     }
 
     suspend fun allInstructors() = query {
@@ -205,16 +233,25 @@ class DB(env: Environment) {
             .where {Instructor.id eq id}.firstOrNull()?.let { toInstructorId(it) }
     }
 
-    suspend fun setAdminByEmail(email: String, newAdmin: Boolean) {
+    suspend fun setAdminByEmail(email: String, newAdmin: Boolean) = query {
         if (User.update({User.email eq email}) {it[admin]=newAdmin}==0)
             throw APIErrTy.NotFound.err("User to promote not found")
     }
 
-    data class UserData(val id: Int, val email: String, val admin: Boolean, val banned: Boolean)
+    @Serializable
+    data class UserData(val id: Int, val email: String, val name: String, val admin: Boolean, val banned: Boolean)
+    val udataCols = listOf(User.id, User.email, User.name, User.admin, User.banned)
+    fun toUData(it: ResultRow) =
+        UserData(it[User.id], it[User.email], it[User.name], it[User.admin], it[User.banned])
+
+    suspend fun getUser(id: Int) = query {
+        User.select(udataCols).where {User.id eq id}.firstOrNull()
+            ?.let { toUData(it) }
+    }
 
     suspend fun auth(id: String, key: String) = query {
         val ses = (Session leftJoin User)
-            .select(Session.key, Session.user, User.admin, User.email, User.banned)
+            .select(Session.key, Session.user, Session.created, User.admin, User.email, User.banned, User.name)
             .where { Session.id eq id }
             .firstOrNull() ?: throw APIErrTy.Unauthorized.err("Session not found")
 
@@ -225,35 +262,78 @@ class DB(env: Environment) {
         if (!MessageDigest.isEqual(khash, ses[Session.key]))
             throw APIErrTy.Unauthorized.err("invalid session key")
 
-        SessionDB(id, khash.base64(), ses[Session.user]?.let { uid->
-            UserData(uid, ses[User.email], ses[User.admin] ?: false, ses[User.banned])
+        SessionDB(id, ses[Session.user]?.let { uid->
+            UserData(uid, ses[User.email], ses[User.name], ses[User.admin] ?: false, ses[User.banned])
         })
     }
 
     data class MakeSession(val sdb: SessionDB, val key: String)
-    suspend fun makeSession(): MakeSession {
+    suspend fun makeSession(): MakeSession = query {
+        val sid = genKey()
         val skey = genKey()
         val skeyHash = hash(skey)
-        val sid = Session.insertReturning(returning=listOf(Session.id)) {
+
+        Session.insert {
             it[Session.created] = Instant.now()
             it[Session.key] = skeyHash
-        }.first()[Session.id]
+            it[Session.id] = sid
+        }
 
-        return MakeSession(SessionDB(sid, skeyHash.base64(), null), skey)
+        MakeSession(SessionDB(sid, null), skey)
     }
 
-    inner class SessionDB(val sesId: String, val state: String, val user: UserData?) {
-        suspend fun withEmail(newEmail: String, newName: String): SessionDB {
-            val u = User.upsertReturning(User.email, returning=listOf(User.id,User.admin, User.banned)) {
+    private fun allRatingsFrom(user: Int) = CoursePost.select(CoursePost.rating, CoursePost.course)
+        .where {(CoursePost.user eq user) and CoursePost.rating.isNotNull()}
+        .map { it[CoursePost.course] to it[CoursePost.rating]!! }
+
+    suspend fun deleteUser(id: Int) = query {
+        val res = allRatingsFrom(id)
+        User.deleteWhere {User.id eq id}
+        res
+    }
+
+    @Serializable
+    data class BanRequest(val id: Int, val removePosts: Boolean?=null, val banned: Boolean)
+
+    suspend fun banUser(req: BanRequest) = query {
+        if (DB.User.update({DB.User.id eq req.id}) { it[banned]=req.banned }==0)
+            throw APIErrTy.NotFound.err("User to ban not found")
+
+        if (req.removePosts==true) {
+            val ratings = allRatingsFrom(req.id)
+            DB.CoursePost.deleteWhere { user eq req.id }
+            DB.PostVote.deleteWhere { user eq req.id }
+            DB.PostReport.deleteWhere { user eq req.id }
+            ratings
+        } else {
+            emptyList()
+        }
+    }
+
+    suspend fun getAdmins() = query {
+        DB.User.select(udataCols).where {User.admin eq true}.map { toUData(it) }
+    }
+
+    inner class SessionDB(val sesId: String, val user: UserData?) {
+        suspend fun withEmail(newEmail: String, newName: String): SessionDB = query {
+            val u = User.upsertReturning(User.email, returning=listOf(User.id,User.admin,User.banned)) {
                 it[email]=newEmail
                 it[name]=newName
                 //sketchy!!! :)
                 if (newEmail==adminEmail) it[admin]=true
             }.first()
 
-            return SessionDB(sesId, state, UserData(u[User.id], newEmail, u[User.admin], u[User.banned]))
+            Session.update({Session.id eq sesId}) { it[user] = u[User.id] }
+
+            SessionDB(sesId, UserData(u[User.id], newEmail, newName, u[User.admin], u[User.banned]))
         }
 
-        suspend fun remove() = query { Session.deleteWhere { id eq sesId } }
+        suspend fun remove() = query {
+            val u = user
+            Session.deleteWhere {
+                if (u==null) id eq sesId
+                else user eq u.id
+            }
+        }
     }
 }

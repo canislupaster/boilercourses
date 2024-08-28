@@ -225,7 +225,10 @@ object Schema {
         val attributes: List<String>,
         val scheduleTypes: List<String>,
 
-        val grades: InstructorGrade
+        val grades: InstructorGrade,
+
+        var ratings: Int,
+        var avgRating: Double?
     )
 
     @Serializable
@@ -288,7 +291,10 @@ object Schema {
     @Serializable
     data class CourseId(
         val id: Int,
-        val course: Course
+        val course: Course,
+
+        var ratings: Int,
+        var avgRating: Double?
     ) {
         fun toSmall(varTitle: String?) = SmallCourse(
             id, course.name, varTitle, course.subject, course.course,
@@ -300,7 +306,7 @@ object Schema {
             course.lastUpdated, course.description, course.credits,
             course.attributes,
             course.sections.values.flatten().map {it.scheduleType}.distinct(),
-            course.grades(null)
+            course.grades(null), ratings, avgRating
         )
     }
 

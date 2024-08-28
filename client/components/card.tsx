@@ -7,6 +7,7 @@ import { useAPI, useInfo } from "./wrapper";
 import { TooltipPlacement } from "@nextui-org/tooltip";
 import { twMerge } from "tailwind-merge";
 import attributeToGenEd from "../app/attributeToGenEd.json";
+import { Stars } from "./community";
 
 //ideally maybe have term inherited from search semester filter.............?????
 //causes hydration errors due to nested links (card and professors, gpa, etc)
@@ -16,9 +17,12 @@ export function Card({ course, frameless, termFilter, className, extra }: {frame
   const url = `/course/${course.id}?term=${term}`;
 
   const body = <>
-      <div className="lg:text-sm text-sm text-gray-300 font-medium flex flex-row flex-wrap items-center gap-1">
+      <div className="text-sm text-gray-300 font-medium flex flex-row flex-wrap items-center gap-1">
         {creditStr(course)} {<GPAIndicator grades={course.grades} smol />}
       </div>
+      {course.avgRating!=null && <div className="flex flex-row gap-2 font-display font-black text-md items-center" >
+        <Stars sz={18} rating={course.avgRating} /> {course.ratings}
+      </div>}
 
       {extra}
 
@@ -54,7 +58,7 @@ export function Card({ course, frameless, termFilter, className, extra }: {frame
   );
 };
 
-type LookupOrCourse = {type:"lookup",subject: string, num: number}|{type:"course", course: SmallCourse};
+type LookupOrCourse = {type:"lookup", subject: string, num: number}|{type:"course", course: SmallCourse};
 
 function useLookupOrCourse(props: LookupOrCourse): [SmallCourse|"notFound"|null, string, number] {
   let cid: "notFound"|SmallCourse|null=null;
@@ -94,11 +98,11 @@ export function CourseLinkPopup({extra, ...props}: LookupOrCourse&{extra?: React
   }</div>;
 }
 
-export function CourseLink({...props}: LookupOrCourse) {
+export function CourseLink({className,...props}: {className?: string}&LookupOrCourse) {
   const [cid, subject, num] = useLookupOrCourse(props);
 
   return <AppTooltip placement={useMd() ? "right" : "bottom"} content={<CourseLinkPopup {...props} />} >
-    <Anchor className={cid=="notFound" || cid==null ? "no-underline" : "text-white"} >
+    <Anchor className={twMerge(cid=="notFound" || cid==null ? "no-underline" : "text-white", className)} >
       {subject} {num}
     </Anchor>
   </AppTooltip>

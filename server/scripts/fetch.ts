@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { ProxyAgent } from "undici";
 import cliProgress from "cli-progress";
 
-const userAgent = "boilerclasses scraper";
+const userAgent = "boilercourses scraper";
 
 let dispatchers: (ProxyAgent|undefined)[] = [undefined];
 let waiters: (()=>void)[] = [];

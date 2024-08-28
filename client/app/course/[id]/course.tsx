@@ -13,12 +13,13 @@ import Select, { MultiValue } from "react-select";
 import { ProfLink } from "@/components/proflink";
 import Graph from "@/components/graph";
 import { InstructorList } from "@/components/instructorlist";
-import { BackButton, BarsStat, NameSemGPA, searchState, SelectionContext, simp, tabProps, TermSelect, useMd, WrapStat } from "@/components/clientutil";
+import { Alert, BackButton, BarsStat, NameSemGPA, searchState, SelectionContext, simp, tabProps, TermSelect, useMd, WrapStat } from "@/components/clientutil";
 import { Calendar, calendarDays } from "@/components/calendar";
 import { Prereqs } from "@/components/prereqs";
 import { Restrictions } from "@/components/restrictions";
 import { SimilarCourses } from "@/components/similar";
 import { CourseChips, GPAIndicator } from "@/components/card";
+import { Community } from "@/components/community";
 
 const useSmall = (cid: CourseId) => useMemo(()=>toSmallCourse(cid),[cid.id]);
 
@@ -138,10 +139,7 @@ function CourseDetail(cid: CourseId) {
 					
 					<TermSelect term={term} setTerm={setTerm} terms={Object.keys(course.sections) as Term[]} name="Data" />
 
-					{term!=latest && <div className="border border-zinc-700 bg-zinc-900 p-2 rounded-md" >
-						<h2 className="font-bold font-display text-lg" >Note:</h2>
-						<p>Most course data, except for sections and instructors, is from {formatTerm(latest)}. Fall back to the catalog for exact data from an older term.</p>
-					</div>}
+					{term!=latest && <Alert txt={`Most course data, except for sections and instructors, is from ${formatTerm(latest)}. Fall back to the catalog for exact data from an older term.`} title="Note" />}
 
 					<InstructorList course={small} term={term} whomst={instructors} />
 				</div>
@@ -223,6 +221,7 @@ function CourseDetail(cid: CourseId) {
 
 		{!smallCalendar && <Calendar sections={calSections} days={days} term={term} />}
 
+		<Community course={small} />
 		<SimilarCourses id={cid.id} />
 
 		<div className='mt-auto'>
@@ -233,7 +232,7 @@ function CourseDetail(cid: CourseId) {
 
 export function CourseDetailApp(props: CourseId&{info: ServerInfo}) {
 	useEffect(()=>{
-		setAPI<Course, number>("course", {data: props.id, result: props.course})
+		setAPI<CourseId, number>("course", {data: props.id, result: props})
 	});
 
 	return <AppWrapper info={props.info} ><CourseDetail {...props} /></AppWrapper>

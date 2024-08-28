@@ -42,7 +42,9 @@ dependencies {
 //    implementation("org.zeromq:jeromq:0.6.0")
     implementation("org.xerial:sqlite-jdbc:3.46.0.1")
 
-    implementation("com.microsoft.azure:msal4j:1.14.2")
+//    implementation("com.microsoft.azure:msal4j:1.14.2")
+    implementation("com.auth0:java-jwt:4.4.0")
+    implementation("com.auth0:jwks-rsa:0.22.1")
 }
 
 kotlin {

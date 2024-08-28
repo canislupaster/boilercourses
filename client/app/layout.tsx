@@ -8,8 +8,8 @@ import "./style.css";
 const chivo = Chivo({ subsets: ['latin'], display: 'swap', variable: "--chivo" });
 const inter = Inter({ subsets: ['latin'], display: 'swap', variable: "--inter" });
 
-const desc = "BoilerClasses (Boiler Classes) - Purdue's course catalog with over 13000 Purdue University courses. Find geneds, grades, prerequisites, schedules, and more.";
-const title="BoilerClasses - Purdue Course Catalog";
+const desc = "BoilerCourses - Purdue's unofficial course catalog with thousands of Purdue University courses. Find geneds, grades, prerequisites, schedules, and more.";
+const title="BoilerCourses - Purdue Course Catalog";
 const url = process.env.NEXT_PUBLIC_ROOT_URL!;
 const domain = new URL(url).host;
 const gtmId = process.env.NEXT_PUBLIC_GTM_ID!==undefined && process.env.NEXT_PUBLIC_GTM_ID.length>0
@@ -19,10 +19,10 @@ export const metadata: Metadata = {
   metadataBase: new URL(url),
   title, description: desc,
   icons: { icon: "/icon-color.png" },
-  keywords: [ 'Purdue', 'Purdue University', 'Purdue Courses', 'BoilerClasses', 'Boiler Classes',
-    'Boiler', 'Classes', 'BoilerCourses', 'Boiler Class', 'Catalog', 'Catalogue',
+  keywords: [ 'Purdue', 'Purdue University', 'Purdue Courses', 'BoilerCourses', 'Boiler Courses',
+    'Boiler', 'Courses', 'BoilerCourses', 'Boiler Course', "Class", "Course", 'Catalog', 'Catalogue',
     'Purdue Course Search', 'Purdue Course Catalog', 'Boilermakers', "Self-service", "Schedule",
-    "Semester", "Calendar" ],
+    "Semester", "Calendar", "Review", "Rating", "Professor", "Grade" ],
   openGraph: {
     url: "/", type: "website",
     title, description: desc,

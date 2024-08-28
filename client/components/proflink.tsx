@@ -76,13 +76,13 @@ export function Meters({children, name, rmp, grade, className, gpaSub}: {name: s
 }
 
 function ProfData({x, course, term}: {x: CourseInstructor, course: SmallCourse, term: Term}) {
-	const data = useAPI<InstructorId|null, string>("profbyname", {data: x.name, handleErr(e) {
+	const data = useAPI<InstructorId, string>("profbyname", {data: x.name, handleErr(e) {
 		if (e.error=="notFound") return null;
 	}})?.res ?? null;
 
 	const selCtx = useContext(SelectionContext);
 
-	const full = useCourse(course.id);
+	const full = useCourse(course.id)?.course;
 	if (full==null) return <Loading/>;
 
 	const ts = Object.entries(full.sections).filter(([k,v]) => v.find(

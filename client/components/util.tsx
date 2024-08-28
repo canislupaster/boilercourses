@@ -1,5 +1,5 @@
 import { Spinner, SpinnerProps } from "@nextui-org/spinner";
-import React, { useEffect, useState } from "react";
+import React, { TextareaHTMLAttributes, useEffect, useState } from "react";
 import { AnchorHTMLAttributes, HTMLAttributes } from "react";
 import { ClassNameValue, twMerge } from "tailwind-merge";
 import { Footer } from "./footer";
@@ -33,14 +33,30 @@ export const Anchor: React.FC<(AnchorHTMLAttributes<HTMLAnchorElement>)&Partial<
 }
 
 export const LogoText = ({className, ...props}: HTMLAttributes<HTMLHRElement>) => 
-	<h1 className={twMerge("text-5xl md:text-6xl mr-2 my-auto select-none text-white cursor-pointer font-display font-black", className)} {...props} >BoilerClasses</h1>;
+	<h1 className={twMerge("text-5xl md:text-6xl mr-2 my-auto select-none text-white cursor-pointer font-display font-black", className)} {...props} >BoilerCourses</h1>;
 
-export const Button = ({className, icon, ...props}: HTMLAttributes<HTMLButtonElement>&{icon?: React.ReactNode}) =>
-	<button className={twMerge('flex flex-row justify-center gap-4 px-4 py-1.5 bg-zinc-900 items-center border text-white rounded-xl border-zinc-900 hover:border-zinc-700 active:border-blue-500',className)} {...props} >
+export const Input = ({className, ...props}: React.InputHTMLAttributes<HTMLInputElement>) =>
+	<input type="text" className={twMerge("text-white bg-zinc-800 w-full p-2 border-2 border-zinc-600 focus:outline-none focus:border-blue-500 transition duration-300 rounded-lg", className)} {...props} />;
+
+export const Textarea = ({className, children, ...props}: TextareaHTMLAttributes<HTMLTextAreaElement>) =>
+	<textarea className={twMerge("text-white bg-neutral-950 w-full p-2 border-2 border-zinc-900 focus:outline-none focus:border-blue-500 transition duration-300 rounded-lg mb-5 resize-y max-h-60 min-h-24", className)}
+		rows={6} {...props} >
+		{children}
+	</textarea>;
+
+export const Button = ({className, icon, disabled, ...props}: HTMLAttributes<HTMLButtonElement>&{icon?: React.ReactNode, disabled?: boolean}) =>
+	<button disabled={disabled} className={twMerge('flex flex-row justify-center gap-2 px-4 py-1.5 bg-zinc-900 items-center border text-white rounded-xl border-zinc-800 hover:border-zinc-700 active:border-blue-500 aria-expanded:border-blue-500',
+		disabled ? " bg-zinc-600 text-gray-400" : "", className)} {...props} >
+
 		{icon &&
 			<span className="inline-block h-6 w-auto" >{icon}</span> }
 		{props.children}
-	</button>
+	</button>;
+
+export const IconButton = ({className, icon, ...props}: {icon?: React.ReactNode}&HTMLAttributes<HTMLButtonElement>) =>
+	<button className={twMerge("rounded-full p-2 bg-zinc-900 border-zinc-900 border hover:border-zinc-700 active:border-blue-500 flex items-center justify-center aria-expanded:border-blue-500", className)} {...props} >
+		{icon}
+	</button>;
 
 export const LinkButton = ({className, icon, ...props}: React.AnchorHTMLAttributes<HTMLAnchorElement>&{icon?: React.ReactNode}) =>
 	<a className={twMerge('flex flex-row gap-2 px-3 py-1.5 bg-zinc-900 items-center border text-white rounded-xl border-zinc-900 hover:border-zinc-700 active:border-blue-500 text-sm',className)} rel="noopener noreferrer" {...props} >
@@ -147,6 +163,7 @@ export function capitalize(s: string) {
 		else return `${x[0].toUpperCase()}${x.slice(1)}`;
 	}).join(" ");
 }
+
 // export const AppSelect = ({...props}: SelectProps) => <Select {...props}
 // 		classNames={{
 // 			trigger: twMerge("px-4 py-1.5 bg-zinc-900 border text-white rounded-xl border-zinc-900 hover:border-zinc-700 data-[hover=true]:bg-zinc-900 data-[open=true]:border-blue-500", props.classNames?.trigger)

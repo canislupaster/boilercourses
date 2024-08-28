@@ -12,7 +12,7 @@ export function SimilarCourses({id}: {id: number}) {
 			<h2 className="font-extrabold font-display text-2xl mb-2" >Similar Courses</h2>
 			<div className="flex flex-row flex-nowrap overflow-x-scroll w-full bg-zinc-900 rounded-md p-3 gap-3" >
 				{ret!=null && ret.res.map(c =>
-					<Card {...c} key={c.course.id} course={c.course} className="flex-shrink-0 basis-96 bg-zinc-700 max-w-[80dvw]" />
+					<Card {...c} key={`${c.course.id}\n${c.course.varTitle}`} course={c.course} className="flex-shrink-0 basis-96 bg-zinc-700 max-w-[80dvw]" />
 				)}
 			</div>
 		</div>
