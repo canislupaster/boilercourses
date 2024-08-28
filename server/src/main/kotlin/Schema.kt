@@ -2,11 +2,13 @@ package com.boilerclasses
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.json.*
+import java.time.LocalTime
+import java.time.format.DateTimeFormatterBuilder
+import java.util.Locale
 
 // just stowing the bodies here 🪦
-object CourseData {
+object Schema {
     @Serializable
     data class RMPInfo(
         val avgDifficulty: Double,
@@ -31,6 +33,7 @@ object CourseData {
 
     @Serializable
     data class Section(
+        val name: String?=null,
         val crn: Int,
         val section: String,
         val times: List<SectionTime>,
@@ -46,8 +49,17 @@ object CourseData {
     @Serializable
     data class SectionTime(
         val day: String,
-        val time: String
-    )
+        val time: String,
+    ) {
+        companion object {
+            val formatter = DateTimeFormatterBuilder().parseCaseInsensitive()
+                .appendPattern("h:mm a").toFormatter(Locale.ENGLISH)
+        }
+
+        fun toTimes(): List<LocalTime> = time.split(" - ").map {
+            LocalTime.parse(it, formatter)
+        }
+    }
 
     @Serializable
     data class SectionInstructor(
@@ -92,7 +104,7 @@ object CourseData {
         data class Attribute(
             val attribute: String,
             override val concurrent: Boolean
-        ) : CourseLike()
+        ): CourseLike()
         @Serializable
         @SerialName("range")
         data class Range(
@@ -108,10 +120,10 @@ object CourseData {
         ): PreReq()
         @Serializable
         @SerialName("gpa")
-        data class Gpa(val minimum: Double) : PreReq()
+        data class Gpa(val minimum: Double): PreReq()
         @Serializable
         @SerialName("credits")
-        data class Credits(val minimum: Int) : PreReq()
+        data class Credits(val minimum: Int): PreReq()
         @Serializable
         @SerialName("studentAttribute")
         data class StudentAttribute(val attr: String): PreReq()
@@ -125,31 +137,31 @@ object CourseData {
         @SerialName("level")
         data class Level(
             val level: String, override val exclusive: Boolean
-        ) : Restriction()
+        ): Restriction()
 
         @Serializable
         @SerialName("major")
         data class Major(
             val major: String, override val exclusive: Boolean
-        ) : Restriction()
+        ): Restriction()
 
         @Serializable
         @SerialName("degree")
         data class Degree(
             val degree: String, override val exclusive: Boolean
-        ) : Restriction()
+        ): Restriction()
 
         @Serializable
         @SerialName("program")
         data class Program(
             val program: String, override val exclusive: Boolean
-        ) : Restriction()
+        ): Restriction()
 
         @Serializable
         @SerialName("college")
         data class College(
             val college: String, override val exclusive: Boolean
-        ) : Restriction()
+        ): Restriction()
 
         @Serializable
         @SerialName("class")
@@ -160,27 +172,27 @@ object CourseData {
             val maxCredit: Int?=null,
             val year: Int?=null,
             override val exclusive: Boolean
-        ) : Restriction()
+        ): Restriction()
 
         @Serializable
         @SerialName("cohort")
         data class Cohort(
             val cohort: String,
             override val exclusive: Boolean
-        ) : Restriction()
+        ): Restriction()
     }
 
     @Serializable
     sealed class PreReqs {
         @Serializable
         @SerialName("leaf")
-        data class Leaf(val leaf: PreReq) : PreReqs()
+        data class Leaf(val leaf: PreReq): PreReqs()
         @Serializable
         @SerialName("or")
-        data class Or(val vs: List<PreReqs>) : PreReqs()
+        data class Or(val vs: List<PreReqs>): PreReqs()
         @Serializable
         @SerialName("and")
-        data class And(val vs: List<PreReqs>) : PreReqs()
+        data class And(val vs: List<PreReqs>): PreReqs()
     }
 
     @Serializable
@@ -198,6 +210,28 @@ object CourseData {
     }
 
     @Serializable
+    data class SmallCourse(
+        val id: Int,
+
+        val name: String,
+        val varTitle: String?,
+        val subject: String,
+        val course: Int,
+        val termInstructors: Map<String, List<SectionInstructor>>,
+
+        val lastUpdated: String,
+        val description: String,
+        val credits: Credits,
+        val attributes: List<String>,
+        val scheduleTypes: List<String>,
+
+        val grades: InstructorGrade,
+
+        var ratings: Int,
+        var avgRating: Double?
+    )
+
+    @Serializable
     data class Course(
         val name: String,
         val subject: String,
@@ -209,13 +243,80 @@ object CourseData {
         val credits: Credits,
         val attributes: List<String>,
         val prereqs: JsonElement,
-        val restrictions: List<Restriction>
+        val restrictions: List<Restriction>,
     ) {
         fun prereqs(): PreReqs? = when (prereqs) {
             is JsonObject -> Json.decodeFromJsonElement<PreReqs>(prereqs)
             else -> null
         }
+
+        fun grades(terms: Set<String>?): InstructorGrade = instructor.values
+            .flatMap {
+                if (terms==null) it.values else it.filterKeys { x->terms.contains(x) }.values
+            }
+            .fold(InstructorGrade(emptyMap(), null, 0, 0)) { acc, x ->
+            InstructorGrade(acc.grade + x.grade.mapValues {
+                    (acc.grade[it.key]?:0.0)+it.value*x.numSections
+                },
+                if (acc.gpaSections>0 || x.gpaSections>0) (acc.gpa?:0.0)
+                        + (x.gpa?.times(x.gpaSections)?:0.0) else null,
+                acc.gpaSections+x.gpaSections,
+                acc.numSections+x.numSections)
+        }.let { g->
+            g.copy(grade=g.grade.mapValues { it.value/g.numSections }, gpa=g.gpa?.let {it/g.gpaSections})
+        }
     }
+
+    @Serializable
+    data class Instructor(
+        val name: String,
+        val grades: List<GradeData>,
+        val nicknames: List<String>,
+        val dept: String? = null,
+        val title: String? = null,
+        val office: String? = null,
+        val site: String? = null,
+        val email: String? = null,
+        val lastUpdated: String
+    )
+
+    @Serializable
+    data class InstructorId(
+        val id: Int,
+        val instructor: Instructor,
+        val rmp: RMPInfo?=null,
+        val courses: List<CourseId>
+    )
+
+    @Serializable
+    data class CourseId(
+        val id: Int,
+        val course: Course,
+
+        var ratings: Int,
+        var avgRating: Double?
+    ) {
+        fun toSmall(varTitle: String?) = SmallCourse(
+            id, course.name, varTitle, course.subject, course.course,
+            course.sections.mapValues {(k,v)->
+                v.flatMap {it.instructors}.groupingBy {it.name}
+                    .reduce { a,b,c-> SectionInstructor(a,b.primary||c.primary) }
+                    .values.toList()
+            },
+            course.lastUpdated, course.description, course.credits,
+            course.attributes,
+            course.sections.values.flatten().map {it.scheduleType}.distinct(),
+            course.grades(null), ratings, avgRating
+        )
+    }
+
+    @Serializable
+    data class GradeData(
+        val subject: String,
+        val course: String,
+        val term: String,
+        val data: Map<String, Double?>
+    )
 
     @Serializable
     data class Term(val id: String, val name: String, val lastUpdated: String)
@@ -223,11 +324,8 @@ object CourseData {
     data class Subject(val abbr: String, val name: String)
     @Serializable
     data class Attribute(val id: String, val name: String)
-
     @Serializable
-    data class Data(
-        val courses: List<Course>,
-        val rmp: Map<String, RMPInfo>,
+    data class Info(
         val terms: Map<String, Term>,
         val subjects: List<Subject>,
         val attributes: List<Attribute>,

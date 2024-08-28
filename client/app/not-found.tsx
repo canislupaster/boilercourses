@@ -1,12 +1,12 @@
-import { StatusPage } from "@/components/util";
+import { Anchor, StatusPage } from "@/components/util";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "BoilerClasses - Not Found"
+  title: "BoilerCourses - Not Found"
 };
 
 export default function Error({ error, reset, }: { error: Error&{digest?:string}, reset:()=>void }) {
   return <StatusPage title="404 not found" >
-    <p>How do you keep falling for this?</p>
+    <p>Out of your depth? Let's go back <Anchor href="/" >home</Anchor>.</p>
   </StatusPage>;
 }

@@ -1,19 +1,21 @@
-import { IconCaretRightFilled } from "@tabler/icons-react";
+import { IconInfoTriangleFilled, IconSchool } from "@tabler/icons-react";
 import { CourseLikePreReq, PreReq, PreReqs } from "../../shared/types";
-import { CourseLink } from "./card";
+import { CourseLink, CourseLinkPopup } from "./card";
 import { AppTooltip, useMd } from "./clientutil";
 import { Anchor } from "./util";
 import React from "react";
 
 function PrereqCourseLikeLink({prereq}: {prereq: CourseLikePreReq}) {
 	let txt,extra=null,kind;
+	let courseLinkProps: {subject: string, num: number}|null=null;
+
 	switch (prereq.type) {
 		case "attribute": txt=prereq.attribute; kind="courses with this attribute"; break;
 		case "course":
 			txt=`${prereq.subject} ${prereq.course}`;
 			kind="this course";
 			const num = Number.parseInt(prereq.course);
-			if (isFinite(num)) extra=<CourseLink type="fetch" subject={prereq.subject} num={num} />
+			if (isFinite(num)) courseLinkProps={subject: prereq.subject, num};
 			break;
 		case "courseRange": txt=`${prereq.subject} ${prereq.course}-${prereq.courseTo}`; kind="courses in this range"; break;
 		case "subject": txt=`${prereq.subject}`; kind="this subject"; break;
@@ -24,21 +26,27 @@ function PrereqCourseLikeLink({prereq}: {prereq: CourseLikePreReq}) {
 	else if (prereq.minGPA!=null) what=`${prereq.minGPA.toFixed(1)} GPA`;
 	else if (prereq.minCredits!=null) what=`${prereq.minCredits} credit${prereq.minCredits==1 ? "" : "s"}`;
 
-	const mq = useMd();
-	return <AppTooltip placement={mq ? "right" : "bottom"} content={<div className="flex flex-col p-3 gap-2 items-start pl-0" >
-		<h2 className="text-2xl font-display font-extrabold ml-3" >{extra==null ? txt : extra}</h2>
-		{[prereq.grade!=null && <><span className="font-extrabold font-display" >{prereq.grade}</span> or higher</>,
-		prereq.minGPA!=null && <><span className="font-extrabold font-display" >{prereq.minGPA.toFixed(1)}</span> GPA</>,
-		prereq.minCredits!=null && <><span className="font-extrabold font-display" >{prereq.minCredits}</span> credits in {kind}</>,
-		<span className="font-extrabold" >{prereq.concurrent ? "Can be taken concurrently"
-			: "Can't be taken concurrently"}</span>].map((x,i) => {
-
+	const courseExtra = <div className="flex flex-col gap-2 items-start pl-0" >
+		{[
+			prereq.grade!=null && <><span className="font-extrabold font-display" >{prereq.grade}</span> or higher</>,
+			prereq.minGPA!=null && <><span className="font-extrabold font-display" >{prereq.minGPA.toFixed(1)}</span> GPA</>,
+			prereq.minCredits!=null && <><span className="font-extrabold font-display" >{prereq.minCredits}</span> credits in {kind}</>,
+			<span className="font-extrabold" >{`Can${prereq.concurrent ? "":"'t"} be taken concurrently`}</span>
+		].map((x,i) => {
 			if (x==false) return <React.Fragment key={i} />
-			return <div key={i} className="flex flex-row gap-1 items-center" >
-				<IconCaretRightFilled/> {x}
+			return <div key={i} className="flex flex-row gap-2 items-center" >
+				<IconInfoTriangleFilled className="text-xs" /> {x}
 			</div>
 		})}
-	</div>} >
+	</div>;
+
+	const mq = useMd();
+	return <AppTooltip placement={mq ? "right" : "bottom"} content={
+		courseLinkProps==null ? <div className="p-3" >
+			<h2 className="text-2xl font-display font-extrabold mb-2" >{extra==null ? txt : extra}</h2>
+			{courseExtra}
+		</div> : <CourseLinkPopup type="lookup" {...courseLinkProps} extra={courseExtra} />
+	} >
 		<Anchor className="text-white" >
 			{what!=null ? <>
 				<span className="font-extrabold font-display" >{what}</span> in {txt}
@@ -67,13 +75,19 @@ function Prereq({prereq}: {prereq: PreReq}) {
 		default:
 			return <PrereqCourseLikeLink prereq={prereq} />
 	}
-	
 }
+
 export function Prereqs({prereqs, isChild}: {prereqs: PreReqs, isChild?: boolean}) {
 	if (prereqs.type=="leaf") return <div className="flex flex-row gap-2 pr-2" >
-		<IconCaretRightFilled/>
+		<IconSchool/>
 		<Prereq prereq={prereqs.leaf} />
 	</div>;
+
+	if (prereqs.type=="and" && !isChild && !prereqs.vs.some(p=>p.type=="or")) {
+		return <div className="flex flex-col gap-2" >
+			{prereqs.vs.map((v,i) => <Prereqs isChild key={i} prereqs={v} />)}
+		</div>
+	}
 
 	return <div className={`flex flex-col relative border ${prereqs.type=="and" ? "border-amber-500 bg-amber-800" : "border-sky-300 bg-sky-900"} py-4 pl-3 mt-4 rounded-l-xl ${
 			isChild ? "border-r-0" : "rounded-r-xl" }`} >

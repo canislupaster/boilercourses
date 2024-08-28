@@ -119,9 +119,10 @@ export type Seats = {
   used: number, left: number
 };
 
-export type Instructor = {primary: boolean, name: string};
+export type CourseInstructor = {primary: boolean, name: string};
 
 export type Section = {
+  name?: string, // section name if it differs from course name, e.g. in variable title courses
   crn: number,
   section: string,
 
@@ -140,7 +141,7 @@ export type Section = {
   dateRange: [string, string],
   scheduleType: string,
   
-  instructors: Instructor[]
+  instructors: CourseInstructor[]
 };
 
 export const validDays = ["M","T","W","R","F","S"];
@@ -163,20 +164,33 @@ export type Course = {
   restrictions: Restriction[]
 };
 
+export type Instructor = {
+  name: string,
+	grades: {
+    subject: string, course: string, term: Term,
+    data: Partial<Record<Grade, number>>
+  }[],
+
+  nicknames: string[],
+  dept?: string,
+  title?: string,
+  office?: string,
+  site?: string,
+  email?: string,
+
+  lastUpdated: string,
+};
+
+export type InstructorId = {
+  id: number, instructor: Instructor,
+  rmp?: RMPInfo, courses: CourseId[]
+};
+
 export function normalizeName(name: string) {
   const n=name.split(",").reverse().join(" ").toLowerCase()
     .replaceAll(/[^a-z ]/g,"").split(/\s+/g).filter(x=>x.length>0);
   return n.toSpliced(1, n.length-2).join(" ");
 }
-
-// export function compareName(x: string, y: string) {
-//   if (x==y) return true;
-//   const s = new Set(x.split(" "));
-//   let cnt=0;
-//   for (const z of y.split(" "))
-//     if (s.has(z)) if (++cnt >= 2) return true;
-//   return false;
-// }
 
 export const gradeGPA: Partial<Record<Grade, number>> = {
   ...Object.fromEntries([
@@ -185,36 +199,68 @@ export const gradeGPA: Partial<Record<Grade, number>> = {
   "A+": 4, "E": 0, "F": 0
 };
 
-export type Data = {
-  courses: Course[],
-  rmp: Record<string, RMPInfo>,
+export type ServerResponse<T> = {
+  status:"error",
+  error: "notFound"|"unauthorized"|"badRequest"|"loading"
+    |"rateLimited"|"other"|"sessionExpire"|"banned",
+  message: string|null
+} | {status: "ok", result: T}
+
+export type ServerInfo = {
   terms: Partial<Record<Term,{ id: string, name: string, lastUpdated: string }>>,
   subjects: { abbr: string, name: string }[],
   attributes: { id: string, name: string }[],
   scheduleTypes: string[]
-}
+};
 
-export type ServerResponse<T> = {
-  status:"error",
-  error: "notFound"|"unauthorized"|"badRequest"|"loading"|"rateLimited"|"other",
-  msg: string|null
-} | {status: "ok", result: T}
+// just what goes on the card...
+// oof.
+// (otherwise each search is like 2-5 MB, tens of thousands of lines of JSON...)
+export type SmallCourse = {
+  id: number,
 
-export type ServerInfo = Pick<Data, "attributes"|"terms"|"subjects"|"scheduleTypes">
+  name: string,
+  varTitle: string|null,
+  subject: string,
+  course: number,
+  termInstructors: Record<Term,CourseInstructor[]>,
 
-export type CourseId = {course: Course, id: string};
+  lastUpdated: string,
+
+  description: string,
+  credits: {type: "range", min: number, max: number}|{type: "fixed", values: number[]},
+  attributes: string[],
+  scheduleTypes: string[],
+
+  grades: InstructorGrade,
+  ratings: number, avgRating: number|null
+};
+
+// course after indexing / server processing, normal course is used during scraping
+export type CourseId = {course: Course, id: number, ratings: number, avgRating: number|null};
+
+export const toSmallCourse = (cid: CourseId): SmallCourse => ({
+  id: cid.id, ...cid.course, varTitle: null,
+  termInstructors: Object.fromEntries(Object.entries(cid.course.sections)
+    .map(([k,v]) => [k as Term, mergeInstructors(v.flatMap(x=>x.instructors))])),
+  grades: mergeGrades(Object.values(cid.course.instructor).flatMap(x=>Object.values(x))),
+  scheduleTypes: [...new Set(Object.values(cid.course.sections).flat().map(s=>s.scheduleType))],
+  ratings: cid.ratings, avgRating: cid.avgRating
+});
+
 export type ServerSearch = {
-  results: ({score: number}&CourseId)[],
+  results: ({score: number, course:SmallCourse})[],
   numHits: number, npage: number, ms: number
 };
 
 //pls don't store anything using this
+//purdue term string identifiers are guaranteed to be good, this is just for ordering
 export function termIdx(t: Term) {
   const i = termPre.findIndex((v) => t.startsWith(v));
   return Number.parseInt(t.slice(termPre[i].length))*termPre.length + i;
 }
 
-export function creditStr(course: Course) {
+export function creditStr(course: {credits: Course["credits"]}) {
   let out;
   if (course.credits.type=="range") {
     out=`${course.credits.min} to ${course.credits.max} credits`;
@@ -234,8 +280,7 @@ export function sectionsByTerm(course: Course) {
     .sort(([a,x],[b,y]) => termIdx(b)-termIdx(a));
 }
 
-export function instructorsForTerm(course: Course, term: Term) {
-  const all = course.sections[term].flatMap(x => x.instructors);
+export function mergeInstructors(all: CourseInstructor[]) {
   const primary = new Map(all.filter(x => x.primary).map(x=>[x.name,x]));
   return [...primary.values(), ...new Map(all.filter(x => !primary.has(x.name))
     .map(x=>[x.name,x])).values()];
@@ -247,7 +292,7 @@ export function instructorStr(course: Course) {
     .filter(x=>x.primary).map(x=>x.name))];
   const [instructors, extra] = [arr.slice(0,2), arr.length<=2 ? null : arr.length-2];
   return `${instructors.length==0 ? `No instructors assigned for ${formatTerm(t)}`
-    : instructors.join(", ")} ${extra!=null && ` and ${extra} other${extra==1 ? "" : "s"}`}`;
+    : instructors.join(", ")}${extra==null ? "" : ` and ${extra} other${extra==1 ? "" : "s"}`}`;
 }
 
 export function formatTerm(t: Term) {
@@ -255,13 +300,17 @@ export function formatTerm(t: Term) {
   return `${x[0].toUpperCase()}${x.slice(1)} ${t.slice(x.length)}`;
 }
 
-export function latestTerm(course: Course, restrict?: Term[]): Term|null {
+export function latestTermofTerms(terms: Term[], restrict?: Term[]): Term|null {
   let latest=null, idx=-1;
-  for (const k in course.sections) {
-    const v = termIdx(k as Term);
-    if (v>idx && (restrict===undefined || restrict.includes(k as Term)))
-      idx=v, latest=k as Term;
+  for (const k of terms) {
+    const v = termIdx(k);
+    if (v>idx && (restrict===undefined || restrict.includes(k)))
+      idx=v, latest=k;
   }
 
   return latest;
+}
+
+export function latestTerm(course: Course, restrict?: Term[]): Term|null {
+  return latestTermofTerms(Object.keys(course.sections) as Term[],restrict);
 }

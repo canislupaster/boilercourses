@@ -1,59 +1,59 @@
 package com.boilerclasses
 
-import io.jooby.AttachedFile
 import io.jooby.Environment
+import io.jooby.FileDownload
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
-import org.apache.lucene.analysis.*
+import org.apache.lucene.analysis.Analyzer
+import org.apache.lucene.analysis.CharacterUtils
+import org.apache.lucene.analysis.LowerCaseFilter
+import org.apache.lucene.analysis.Tokenizer
 import org.apache.lucene.analysis.core.DecimalDigitFilter
 import org.apache.lucene.analysis.core.LetterTokenizer
 import org.apache.lucene.analysis.core.WhitespaceTokenizer
 import org.apache.lucene.analysis.en.EnglishAnalyzer
-import org.apache.lucene.analysis.en.EnglishPossessiveFilter
-import org.apache.lucene.analysis.en.PorterStemFilter
 import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper
-import org.apache.lucene.analysis.miscellaneous.SetKeywordMarkerFilter
 import org.apache.lucene.analysis.ngram.EdgeNGramTokenFilter
 import org.apache.lucene.analysis.standard.StandardAnalyzer
-import org.apache.lucene.analysis.standard.StandardTokenizer
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute
 import org.apache.lucene.document.*
-import org.apache.lucene.index.DirectoryReader
-import org.apache.lucene.index.IndexWriter
-import org.apache.lucene.index.IndexWriterConfig
-import org.apache.lucene.index.Term
-import org.apache.lucene.queryparser.flexible.standard.parser.ParseException
+import org.apache.lucene.index.*
+import org.apache.lucene.queries.mlt.MoreLikeThis
 import org.apache.lucene.queryparser.simple.SimpleQueryParser
 import org.apache.lucene.search.*
-import org.apache.lucene.store.ByteBuffersDirectory
 import org.apache.lucene.store.MMapDirectory
 import org.apache.lucene.util.BytesRef
 import org.slf4j.Logger
 import java.io.File
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalTime
 import java.util.concurrent.TimeUnit
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.Duration.Companion.minutes
 
-fun formatTerm(term: String): String {
-    for (x in listOf("fall", "summer", "spring", "winter"))
-        if (term.startsWith(x))
-            return "${x.replaceFirstChar { it.uppercaseChar() }} ${term.substring(x.length)}"
+val termTypes = listOf("fall", "summer", "spring", "winter")
+
+fun parseTerm(term: String): Pair<Int,Int> {
+    for ((i,x) in termTypes.withIndex())
+        if (term.startsWith(x)) return i to term.substring(x.length).toInt()
     throw IllegalArgumentException("invalid term")
 }
 
-fun CourseData.Course.strId() = "$subject$course$name".filter {it.isLetterOrDigit()}
+fun formatTerm(term: String): String = parseTerm(term).let {
+    "${termTypes[it.first].replaceFirstChar {x->x.uppercase()}} ${it.second}"
+}
 
-class Courses(val env: Environment, val log: Logger) {
+fun termIdx(term: String) = parseTerm(term).let { it.second*termTypes.size + it.first }
+fun timeToMin(x: LocalTime) = x.toSecondOfDay()/60
+
+class Courses(val env: Environment, val log: Logger, val db: DB) {
     val numResults = 30
     val maxResults = 1000
 
@@ -66,6 +66,9 @@ class Courses(val env: Environment, val log: Logger) {
         val subjects: List<String> = emptyList(),
         val scheduleType: List<String> = emptyList(),
         val terms: List<String> = emptyList(),
+        val instructors: List<String> = emptyList(),
+        val minMinute: Int? = null, val maxMinute: Int? = null,
+        val minGPA: Float? = null, val maxGPA: Float? = null,
         val page: Int=0
     ) {
         fun isEmpty() = copy(query=query.trim(), page=0) == SearchReq("")
@@ -74,27 +77,24 @@ class Courses(val env: Environment, val log: Logger) {
     @Serializable
     data class SearchResult(
         val score: Float,
-        val id: String,
-        val course: CourseData.Course
+        val course: Schema.SmallCourse
     )
 
     @Serializable
     data class SearchOutput(
-//        val completion: CourseData.Course?,
         val results: List<SearchResult>,
         val numHits: Int, val npage: Int,
         val ms: Double
     )
 
-    val scrapeInterval = env.getProperty("scrapeInterval")?.toInt()?.minutes
+    val scrapeInterval = env.getProperty("scrapeInterval")
+        ?.ifBlank {null}?.toInt()?.minutes
     val scrapeArgs = env.getProperty("scrapeArgs") ?: ""
-    private val coursesFile = File("./data/courses.json")
+
     private val indexFile = File("./data/index")
     private val indexSwapFile = File("./data/index-tmp")
 
-    val mut = Mutex()
-    private var courses: CourseData.Data? = null
-    private val courseMap = mutableMapOf<String, CourseData.Course>()
+    val lock = RwLock()
 
     private fun crapAnalyzer() = object: Analyzer() {
         val tokenizer = object: Tokenizer() {
@@ -112,7 +112,7 @@ class Courses(val env: Environment, val log: Logger) {
                 var last = -1
                 var start = -1
                 var mode=0
-                var termBuf = termAttr.buffer();
+                var termBuf = termAttr.buffer()
 
                 while (true) {
                     if (offset>=dataLen+bufferOffset) {
@@ -167,7 +167,7 @@ class Courses(val env: Environment, val log: Logger) {
 
             override fun end() {
                 super.end()
-                offsetAttr.setOffset(finalOffset, finalOffset);
+                offsetAttr.setOffset(finalOffset, finalOffset)
             }
         }
 
@@ -199,146 +199,214 @@ class Courses(val env: Environment, val log: Logger) {
 
     private var idx: MMapDirectory? = null
     private var dirReader: DirectoryReader? = null
+    private var moreLike: MoreLikeThis? = null
     private var searcher: IndexSearcher? = null
 
-    val fieldAnalyzer = PerFieldAnalyzerWrapper(EnglishAnalyzer(), mapOf(
+    //internally mutable to updated cached ratings
+    private var courseById = emptyMap<Int,Schema.CourseId>()
+    private var smallCourseBySearchId = emptyMap<Int,Schema.SmallCourse>()
+    private var sortedCourses = emptyList<Schema.CourseId>()
+    private var smallCourseByCourseId = emptyMap<Int, List<Schema.SmallCourse>>()
+
+    private val fieldAnalyzer = PerFieldAnalyzerWrapper(EnglishAnalyzer(), mapOf(
         "subject" to subjectAnalyzer(), "course" to idAnalyzer(true),
         "prereqs" to crapAnalyzer(), "instructor" to StandardAnalyzer(),
-        "suggest" to crapAnalyzer()
+        "suggest" to crapAnalyzer(), "titleStandard" to StandardAnalyzer()
     ))
 
     //same thing but course is crap, function (above is only for indexing)
     private fun queryFieldAnalyzer() = PerFieldAnalyzerWrapper(EnglishAnalyzer(), mapOf(
         "subject" to subjectAnalyzer(), "course" to crapAnalyzer(),
         "prereqs" to crapAnalyzer(), "instructor" to StandardAnalyzer(),
-        "suggest" to crapAnalyzer()
+        "suggest" to crapAnalyzer(), "titleStandard" to StandardAnalyzer()
     ))
 
     private val weights = mapOf(
         //uh idk lemme just type some random numbers
-        "subject" to 100,
+        "subject" to 130,
         "course" to 150,
         "subjectName" to 150,
-        "title" to 150,
+        "title" to 100,
+        "postContent" to 40,
+        "titleStandard" to 50,
         "desc" to 35,
         "instructor" to 80,
         "prereq" to 10,
         "term" to 100,
     ).mapValues { it.value.toFloat()/10.0f }
 
-    fun makeQueryParser(analyzer: Analyzer) = SimpleQueryParser(analyzer, weights)
+    private val similarFields = listOf(
+        "subject", "subjectName", "title", "desc", "instructor", "term"
+    )
+
+    private fun makeQueryParser(analyzer: Analyzer) = SimpleQueryParser(analyzer, weights)
 
     suspend fun loadCourses() {
         try {
-            log.info("loading courses")
-            val c = Json.decodeFromStream<CourseData.Data>(coursesFile.inputStream())
+            log.info("loading courses & posts")
+
+            val c = db.allCourses()
+            val posts = db.allPostContent()
+            val info = db.getInfo()
+
+            val subjectMap = info.subjects.associateBy { it.abbr }
+
+            val newCourseById = c.associateBy { it.id }
+            val newSortedCourses = c.sortedWith(
+                compareBy<Schema.CourseId>({it.course.subject}, {it.course.course})
+            )
+
+            data class IndexCourse(val searchId: Int, val cid: Schema.CourseId, val small: Schema.SmallCourse)
+            val indexCourses = c.flatMap {
+                it.course.sections.entries
+                    .map {x->x.value.map {y-> x.key to y}}
+                    .flatten().groupBy { sec->sec.second.name }.map {
+                        (secName, secs) -> secName to it.copy(course=it.course.copy(
+                            sections=secs.groupBy {x->x.first}.mapValues {x->x.value.map {y->y.second}}
+                        ))
+                    }
+            }.mapIndexed { i, x -> IndexCourse(i, x.second, x.second.toSmall(x.first)) }
+
+            val newSmallCourses = indexCourses.associate {
+                it.searchId to it.small
+            }.toMutableMap()
+            val newSmallCourseByCID = indexCourses.groupBy {it.cid.id}
+                .mapValues {it.value.map {v->v.small}}
 
             if (indexSwapFile.exists()) indexSwapFile.deleteRecursively()
 
             val newIdx = MMapDirectory(indexSwapFile.toPath())
             val cfg = IndexWriterConfig(fieldAnalyzer)
-//            cfg.setCodec(object: Lucene99Codec() {
-//                override fun getPostingsFormatForField(field: String?): PostingsFormat {
-//                    if (field=="suggest")
-//                        return Completion99PostingsFormat()
-//                    return super.getPostingsFormatForField(field)
-//                }
-//            })
             val writer = IndexWriter(newIdx, cfg)
 
-            log.info("indexing courses")
-            courseMap.clear()
-            writer.addDocuments(c.courses.withIndex().map { (i,course)->
-                courseMap[course.strId()]=course
-                courseMap["${course.subject}${course.course}"]=course
-                val subjectMap = c.subjects.associateBy { it.abbr }
-                val attrMap = c.attributes.associateBy { it.name.lowercase() }
+            log.info("indexing courses & posts")
+
+            val instructorNicks = db.allInstructors().values.associate {it.name to it.nicknames}
+
+            writer.addDocuments(indexCourses.map { indexCourse->
+                val cid = indexCourse.cid
 
                 Document().apply {
-                    add(Field("subject", course.subject, TextField.TYPE_NOT_STORED))
-                    add(StringField("subjectString", course.subject, Field.Store.NO))
-                    add(Field("subjectName",
-                        subjectMap[course.subject]!!.name, TextField.TYPE_NOT_STORED))
-                    add(Field("course", course.course.toString(), TextField.TYPE_NOT_STORED))
-                    add(Field("title", course.name, TextField.TYPE_NOT_STORED))
-//                    add(SuggestField("suggest", "${course.subject}${course.course}", 1))
-                    add(Field("desc", course.description, TextField.TYPE_NOT_STORED))
-                    add(IntField("courseInt", course.course, Field.Store.NO))
+                    val textTermVec = FieldType().apply {
+                        setIndexOptions(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS)
+                        setTokenized(true)
+                        setStoreTermVectors(true)
+                        freeze()
+                    }
 
-                    val reqs = mutableListOf<CourseData.PreReq>()
-                    course.prereqs()?.let { prereqs->
-                        val stack = ArrayDeque<CourseData.PreReqs>()
+                    add(IntField("id", indexCourse.cid.id, Field.Store.YES))
+                    add(IntField("searchId", indexCourse.searchId, Field.Store.YES))
+                    add(SortedDocValuesField("subjectSort", BytesRef(cid.course.subject)))
+                    add(SortedDocValuesField("courseSort", BytesRef(cid.course.course)))
+
+                    val secs = cid.course.sections.values.asSequence().flatten()
+
+                    add(Field("subject", cid.course.subject, textTermVec))
+                    posts[cid.id]?.let {
+                        add(Field("postContent", it.joinToString("\n"), TextField.TYPE_NOT_STORED))
+                    }
+                    add(StringField("subjectString", cid.course.subject, Field.Store.NO))
+                    add(Field("subjectName",
+                        subjectMap[cid.course.subject]!!.name, textTermVec))
+                    add(Field("course", cid.course.course.toString(), TextField.TYPE_NOT_STORED))
+                    val titleStr = (listOf(cid.course.subject, cid.course.course, cid.course.name)
+                            + if (indexCourse.small.varTitle!=null)
+                                listOf(indexCourse.small.varTitle) else emptyList()
+                        ).joinToString(" ")
+                    add(Field("title", titleStr, textTermVec))
+                    add(Field("titleStandard", titleStr, TextField.TYPE_NOT_STORED))
+                    add(Field("desc", cid.course.description, textTermVec))
+                    add(IntField("courseInt", cid.course.course, Field.Store.NO))
+
+                    val reqs = mutableListOf<Schema.PreReq>()
+                    cid.course.prereqs()?.let { prereqs->
+                        val stack = ArrayDeque<Schema.PreReqs>()
                         stack.addLast(prereqs)
                         while (stack.size>0) {
                             when (val x=stack.removeLast()) {
-                                is CourseData.PreReqs.Or -> x.vs.forEach {stack.addLast(it)}
-                                is CourseData.PreReqs.And -> x.vs.forEach {stack.addLast(it)}
-                                is CourseData.PreReqs.Leaf -> reqs.add(x.leaf)
+                                is Schema.PreReqs.Or -> x.vs.forEach {stack.addLast(it)}
+                                is Schema.PreReqs.And -> x.vs.forEach {stack.addLast(it)}
+                                is Schema.PreReqs.Leaf -> reqs.add(x.leaf)
                             }
                         }
                     }
 
                     //didnt really work...
-//                    fun c(x: Int) = if (x==1) "1 credit" else "$x credits"
-                    val (min,max) = when (course.credits) {
-                        is CourseData.Credits.Fixed->
-                            course.credits.values.min() to course.credits.values.max()
-//                                course.credits.values.joinToString(" or ") { c(it) })
-                        is CourseData.Credits.Range->
-                            course.credits.min to course.credits.max
-//                                    "${c(course.credits.min)} to ${c(course.credits.max)}")
+                    val (min,max) = when (val x = cid.course.credits) {
+                        is Schema.Credits.Fixed-> x.values.min() to x.values.max()
+                        is Schema.Credits.Range-> x.min to x.max
                     }
-//
-//                    add(Field("creditText", txt, TextField.TYPE_NOT_STORED))
+
                     add(IntField("minCredits", min, Field.Store.NO))
                     add(IntField("maxCredits", max, Field.Store.NO))
 
                     reqs.mapNotNull {
-                        if (it is CourseData.PreReq.Course) "${it.subject} ${it.course}"
+                        if (it is Schema.PreReq.Course) "${it.subject} ${it.course}"
                         else null
                     }.joinToString(" ").let {
                         add(Field("prereq", it, TextField.TYPE_NOT_STORED))
                     }
 
-                    course.sections.values.flatten().flatMap {it.instructors}
-                        .map {it.name}.distinct()
+                    secs.flatMap {it.instructors}
+                        .also { instructors->
+                            instructors.map {it.name}.distinct().forEach {
+                                add(StringField("instructorString", it, Field.Store.NO))
+                            }
+                        }
+                        .flatMap { (instructorNicks[it.name] ?: emptyList()) + it.name }.distinct()
                         .joinToString(" ").let {
-                            add(Field("instructor", it, TextField.TYPE_NOT_STORED))
+                            add(Field("instructor", it, textTermVec))
                         }
 
-                    course.sections.keys.forEach {
+                    cid.course.sections.keys.forEach {
                         add(StringField("termId", it, Field.Store.NO))
                     }
 
-                    course.sections.keys.joinToString(" ") {c.terms[it]!!.name}.let {
-                        add(Field("term", it, TextField.TYPE_NOT_STORED))
+                    cid.course.sections.keys.joinToString(" ") {info.terms[it]!!.name}.let {
+                        add(Field("term", it, textTermVec))
                     }
 
-                    course.sections.values.flatten().map {it.scheduleType}
+                    secs.map {it.scheduleType}
                         .distinct().forEach {
                             add(StringField("scheduleType", it, Field.Store.NO))
                         }
 
-                    course.attributes.flatMap { listOfNotNull(it, attrMap[it.lowercase()]?.id) }
-                        .forEach { add(StringField("attributes", it, Field.Store.NO)) }
+                    cid.course.sections.maxBy {termIdx(it.key)}.value
+                        .flatMap { it.times }.mapNotNull {it.toTimes().firstOrNull()}.forEach {
+                        add(IntField("time", timeToMin(it), Field.Store.NO))
+                    }
+
+                    cid.course.grades(null).gpa?.let {
+                        add(FloatField("gpa", it.toFloat(), Field.Store.NO))
+                    }
+
+                    cid.course.attributes.forEach { add(StringField("attributes", it, Field.Store.NO)) }
                 }
             })
 
             writer.close()
 
             log.info("finished indexing")
-            newIdx?.close()
-            mut.withLock {
-                courses = c
+            newIdx.close()
+            lock.write {
                 dirReader?.close()
                 idx?.close()
 
                 indexFile.deleteRecursively()
                 indexSwapFile.copyRecursively(indexFile, overwrite = true)
+                
+                sortedCourses = newSortedCourses
+                courseById = newCourseById
+                smallCourseBySearchId = newSmallCourses
+                smallCourseByCourseId = newSmallCourseByCID
 
                 idx=MMapDirectory(indexFile.toPath())
                 dirReader=DirectoryReader.open(idx)
                 searcher=IndexSearcher(dirReader)
+                moreLike=MoreLikeThis(dirReader).apply {
+                    minDocFreq=2 //idk if this helps!
+                    fieldNames=similarFields.toTypedArray()
+                }
             }
         } catch (e: Throwable) {
             log.error("error parsing/indexing course data:", e)
@@ -347,26 +415,67 @@ class Courses(val env: Environment, val log: Logger) {
         }
     }
 
-    suspend fun searchCourses(req: SearchReq): SearchOutput {
-        val (searcher, courses) = mut.withLock {
-            if (searcher==null) throw APIErrTy.Loading.err("courses not indexed yet")
-            searcher!! to courses!!
+    private fun setSmallCoursesRating(course: Int, numRating: Int, avgRating: Double?) =
+        smallCourseByCourseId[course]!!.forEach {
+            it.ratings=numRating
+            it.avgRating=avgRating
         }
 
-        if (req.page<0) throw APIErrTy.BadRequest.err("page is negative");
+    suspend fun setRating(course: Int, k: Int, v: Int) = lock.write {
+        val c = courseById[course]!!
+
+        val nk = c.ratings+k
+        c.avgRating = if (nk==0) null else (c.ratings*(c.avgRating ?: 0.0) + k*v.toDouble())/nk.toDouble()
+        c.ratings = nk
+        setSmallCoursesRating(course, nk, c.avgRating)
+    }
+
+    suspend fun removeRatings(ratings: List<Pair<Int,Int>>) = lock.write {
+        for ((k,v) in ratings) {
+           val c = courseById[k]!!
+            c.avgRating = if (c.ratings==1) null else (c.ratings*c.avgRating!! - v)/(c.ratings-1)
+                c.ratings--
+            setSmallCoursesRating(k, c.ratings, c.avgRating)
+        }
+    }
+
+    private fun scoreDocsToCourses(scoredocs: List<ScoreDoc>): List<SearchResult> {
+        val fields = searcher!!.storedFields()
+
+        return scoredocs.map { scoredoc ->
+            val id = fields.document(scoredoc.doc).getField("searchId").numericValue().toInt()
+            SearchResult(
+                if (scoredoc.score.isNaN()) 0.0f else scoredoc.score,
+                smallCourseBySearchId[id]!!
+            )
+        }
+    }
+
+    suspend fun similarCourses(id: Int): List<SearchResult> = lock.read {
+        if (searcher==null) throw APIErrTy.Loading.err("courses not indexed yet")
+        val doc = searcher!!.search(IntField.newExactQuery("id", id), 1).scoreDocs[0]
+
+        searcher!!.search(moreLike!!.like(doc.doc), 10).scoreDocs.filter {
+            it.doc!=doc.doc && it.score>4
+        }.let { scoreDocsToCourses(it) }
+    }
+
+    suspend fun searchCourses(req: SearchReq): SearchOutput = lock.read {
+        if (searcher==null) throw APIErrTy.Loading.err("courses not indexed yet")
+        if (req.page<0) throw APIErrTy.BadRequest.err("page is negative")
 
         if (req.isEmpty())
-            return courses.courses.subList(req.page*numResults, min(courses.courses.size, (req.page+1)*numResults)).map {
-                SearchResult(0.0f,it.strId(),it)
-            }.let { SearchOutput(it, courses.courses.size,
-                (courses.courses.size+numResults-1)/numResults, 0.0) }
+            return@read sortedCourses.subList(req.page*numResults,
+                min(sortedCourses.size,(req.page+1)*numResults)).map {
+
+                SearchResult(0.0f, it.toSmall(null))
+            }.let {
+                SearchOutput(it, sortedCourses.size,
+                    (sortedCourses.size+numResults-1)/numResults, 0.0)
+            }
 
         val startTime = Instant.now()
         val trimQuery = req.query.trim()
-//        val suggestion = searcher.suggest(PrefixCompletionQuery(crapAnalyzer(), Term(
-//            "suggest", trimQuery
-//        )), 1, true)
-//            .scoreDocs.firstOrNull()?.doc?.let {courses.courses[it]}
 
         val analyzer = queryFieldAnalyzer()
 
@@ -379,7 +488,7 @@ class Courses(val env: Environment, val log: Logger) {
                 val term = analyzer.normalize(k,trimQuery)
                 bq.add(BoostQuery(FuzzyQuery(Term(k, term)), v), BooleanClause.Occur.SHOULD)
                 parser.createPhraseQuery(k, trimQuery)?.let {
-                    bq.add(BoostQuery(it, v), BooleanClause.Occur.SHOULD)
+                    bq.add(BoostQuery(it, v*2f), BooleanClause.Occur.SHOULD)
                 }
                 bq.add(BoostQuery(PrefixQuery(Term(k, term)), v*3f), BooleanClause.Occur.SHOULD)
             }
@@ -391,6 +500,10 @@ class Courses(val env: Environment, val log: Logger) {
                 req.maxCourse?.times(100) ?: Int.MAX_VALUE),
                 BooleanClause.Occur.FILTER)
 
+        if (req.minMinute!=null || req.maxMinute!=null)
+            bq.add(IntField.newRangeQuery("time", req.minMinute ?: 0,
+                req.maxMinute ?: Int.MAX_VALUE), BooleanClause.Occur.FILTER)
+
         if (req.minCredits!=null)
             bq.add(IntField.newRangeQuery("maxCredits", req.minCredits, Int.MAX_VALUE),
                 BooleanClause.Occur.FILTER)
@@ -398,11 +511,17 @@ class Courses(val env: Environment, val log: Logger) {
             bq.add(IntField.newRangeQuery("minCredits", 0, req.maxCredits),
                 BooleanClause.Occur.FILTER)
 
+        if (req.minGPA!=null || req.maxGPA!=null)
+            bq.add(FloatField.newRangeQuery("gpa",
+                req.minGPA ?: 0.0f, req.maxGPA ?: Float.MAX_VALUE),
+                BooleanClause.Occur.FILTER)
+
         listOf(
             req.scheduleType to "scheduleType",
             req.terms to "termId",
             req.subjects to "subjectString",
-            req.attributes to "attributes"
+            req.attributes to "attributes",
+            req.instructors to "instructorString"
         ).forEach { (a,b)->
             if (a.isNotEmpty())
                 bq.add(TermInSetQuery(b,a.map {
@@ -412,50 +531,44 @@ class Courses(val env: Environment, val log: Logger) {
 
         val q = bq.build()
         val cnt = min(maxResults, (req.page+1)*numResults)
-        val manager = TopScoreDocCollectorManager(cnt, 500)
-        val res = searcher.search(q, manager)
-//        res.scoreDocs.firstOrNull()?.let {
-//            println(searcher.explain(q, it.doc).toString())
-//        }
+        val res = searcher!!.search(q, cnt,
+            if (trimQuery.isNotEmpty()) Sort.RELEVANCE
+            else Sort(SortField("subjectSort", SortField.Type.STRING), SortField("courseSort", SortField.Type.STRING)))
+//        println(searcher!!.explain(q, res.scoreDocs[0].doc).toString())
 
         val intHits = res.totalHits.value.toInt()
         //num pages may change as numhits increases...
-        return SearchOutput(res.scoreDocs.takeLast((res.scoreDocs.size-1)%numResults +1)
-            .map {
-                courses.courses[it.doc].let {c-> SearchResult(it.score, c.strId(), c) }
-            }, intHits, max(1,min(intHits+numResults-1, maxResults)/numResults),
-            Duration.between(startTime, Instant.now()).toNanos().toDouble()/1e6)
+        return@read SearchOutput(
+            res.scoreDocs.takeLast((res.scoreDocs.size-1)%numResults +1)
+                .let { scoreDocsToCourses(it) },
+            intHits, max(1,min(intHits+numResults-1, maxResults)/numResults),
+            Duration.between(startTime, Instant.now()).toNanos().toDouble()/1e6
+        )
     }
 
-    suspend fun courses() = mut.withLock {
-        courses ?: throw APIErrTy.Loading.err("courses not loaded")
+    suspend fun getCourse(id: Int): Schema.CourseId? = lock.read { courseById[id] }
+    suspend fun getSmallCourse(id: Int): Schema.SmallCourse? = lock.read {
+        smallCourseByCourseId[id]?.firstOrNull()
     }
 
-    suspend fun download() = mut.withLock {
-        if (courses==null) throw APIErrTy.Loading.err("courses not loaded")
-        AttachedFile(coursesFile.toPath())
-    }
-
-    suspend fun courseById(id: String) = mut.withLock {
-        courseMap[id] ?: throw APIErrTy.NotFound.err("course with id $id not found")
+    suspend fun download() = lock.read {
+        val json = Json.encodeToString(sortedCourses)
+        FileDownload(FileDownload.Mode.INLINE, json.toByteArray(), "courses.json")
     }
 
     suspend fun runScraper() {
-        if (coursesFile.exists()) loadCourses()
+        loadCourses()
 
         while (scrapeInterval!=null) {
-            if (courses!=null) delay(scrapeInterval)
+            delay(scrapeInterval)
 
             log.info("starting scrape")
             val (res,proc) = withContext(Dispatchers.IO) {
                 val args = mutableListOf(
                     "./scripts/node_modules/.bin/tsx",
-                    "./scripts/fetch.ts",
-                    "-o", coursesFile.path
+                    "./scripts/main.ts",
+                    "-d", db.dbFile.absolutePath
                 )
-
-                if (coursesFile.exists())
-                    args += listOf("-i", coursesFile.path)
 
                 val proc = ProcessBuilder().command(
                     args + scrapeArgs.split(" ").filterNot {it.isEmpty()}
@@ -465,13 +578,12 @@ class Courses(val env: Environment, val log: Logger) {
             }
 
             if (!res) {
-                log.error("scraper took too long, rerunning")
+                log.error("scraper took too long")
                 continue
             }
 
             log.info("scraper exited with ${proc.exitValue()}")
-            if (proc.exitValue()==0) loadCourses()
-            delay(5000) //minimum delay between invocations (in case of error)
+            loadCourses()
         }
     }
 }
