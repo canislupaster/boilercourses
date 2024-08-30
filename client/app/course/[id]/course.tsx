@@ -1,6 +1,6 @@
 "use client"
 
-import { Course, CourseId, creditStr, emptyInstructorGrade, formatTerm, CourseInstructor, InstructorGrade, InstructorGrades, mergeInstructors, latestTerm, mergeGrades, RMPInfo, Section, ServerInfo, Term, termIdx, toSmallCourse, SmallCourse } from "../../../../shared/types";
+import { Course, CourseId, creditStr, emptyInstructorGrade, formatTerm, CourseInstructor, InstructorGrade, InstructorGrades, mergeInstructors, latestTerm, mergeGrades, RMPInfo, Section, ServerInfo, Term, termIdx, toSmallCourse, SmallCourse, trimCourseNum } from "../../../../shared/types";
 import { abbr, Anchor, CatalogLinkButton, firstLast, LinkButton, Loading, RedditButton, selectProps } from "@/components/util";
 import { Footer } from "@/components/footer";
 import { AppCtx, AppWrapper, setAPI, useAPI, useInfo } from "@/components/wrapper";
@@ -13,7 +13,7 @@ import Select, { MultiValue } from "react-select";
 import { ProfLink } from "@/components/proflink";
 import Graph from "@/components/graph";
 import { InstructorList } from "@/components/instructorlist";
-import { Alert, BackButton, BarsStat, NameSemGPA, searchState, SelectionContext, simp, tabProps, TermSelect, useMd, WrapStat } from "@/components/clientutil";
+import { Alert, BackButton, BarsStat, NameSemGPA, searchState, SelectionContext, simp, tabProps, TermSelect, useDebounce, useMd, WrapStat } from "@/components/clientutil";
 import { Calendar, calendarDays } from "@/components/calendar";
 import { Prereqs } from "@/components/prereqs";
 import { Restrictions } from "@/components/restrictions";
@@ -81,10 +81,10 @@ function CourseDetail(cid: CourseId) {
 	const small = useSmall(cid);
 	const instructors = small.termInstructors[term] ?? [];
 
-	const searchInstructors = useMemo(() => {
+	const searchInstructors = useDebounce(() => {
 		const v = simp(instructorSearch);
 		return instructors.filter(x => simp(x.name).includes(v));
-	}, [term, instructorSearch]);
+	}, 100, [term, instructorSearch]);
 
 	const firstInstructor = instructors.find(x=>course.instructor[x.name]!==undefined);
 	const [selectedInstructors, setSelInstructors] = useState<CourseInstructor[]>(
@@ -100,9 +100,10 @@ function CourseDetail(cid: CourseId) {
 	const [section, setSection] = useState<Section|null>(null);
 	const app = useContext(AppCtx);
 
-	const days = calendarDays(course, term);
+	const days = useMemo(()=>calendarDays(course, term), [course,term]);
 	const smallCalendar = days.length<=3;
-	const calSections = course.sections[term].map((x):[SmallCourse, Section]=>[small,x]);
+	//memo so object reference is stable, otherwise calendar might rerender too often!
+	const calSections = useMemo(()=>course.sections[term].map((x):[SmallCourse, Section]=>[small,x]), [course,term]);
 
 	const catalog=`https://selfservice.mypurdue.purdue.edu/prod/bwckctlg.p_disp_course_detail?cat_term_in=${useInfo().terms[term]!.id}&subj_code_in=${course.subject}&crse_numb_in=${course.course}`;
 
@@ -122,7 +123,7 @@ function CourseDetail(cid: CourseId) {
 
 			{/* Left half of panel */}
 			<div className="flex flex-col md:mr-3 justify-start h-full basis-5/12 md:flex-shrink-0">
-				<BackButton>{course.subject} {course.course}: {course.name}</BackButton>
+				<BackButton>{course.subject} {trimCourseNum(course.course)}: {course.name}</BackButton>
 
 				<div className="flex flex-col gap-4 -mt-3 mb-1">
 					<div className="flex flex-row flex-wrap mb-1 items-center">
@@ -152,14 +153,14 @@ function CourseDetail(cid: CourseId) {
 					}
 
 					<RedditButton keywords={[
-							`${course.subject}${course.course.toString().replace(/00$/, '')}`,
+							`${course.subject}${trimCourseNum(course.course)}`,
 							...instructors.map(x => `"${firstLast(x.name)}"`)
 						]} />
 
 					<CatalogLinkButton href={catalog} />
 
 					{boilerexamsCourses.includes(`${course.subject}${course.course}`) &&
-						<LinkButton href={`https://www.boilerexams.com/courses/${course.subject}${course.course.toString()}/topics`}
+						<LinkButton href={`https://www.boilerexams.com/courses/${course.subject}${course.course}/topics`}
 							className="bg-yellow-500 hover:bg-yellow-600 transition-all duration-300 ease-out"
 							icon={<Image src={boilerexams} alt="Boilerexams" className="filter w-auto h-full" />} >
 
@@ -224,9 +225,7 @@ function CourseDetail(cid: CourseId) {
 		<Community course={small} />
 		<SimilarCourses id={cid.id} />
 
-		<div className='mt-auto'>
-			<Footer />
-		</div>
+		<Footer />
 	</></SelectionContext.Provider>;
 }
 

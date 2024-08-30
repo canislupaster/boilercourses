@@ -10,6 +10,7 @@ import { redirectToSignIn } from "../signin/signin";
 import { Checkbox } from "@nextui-org/checkbox";
 import { PostCard, PostCardAdminUser, PostRefreshHook } from "@/components/community";
 import { Pagination } from "@nextui-org/pagination";
+import { useRouter } from "next/navigation";
 
 type ListRequest = {
 	reported: boolean, new: boolean, page: number
@@ -35,6 +36,7 @@ function AdminPosts() {
 	const posts = postsAPI.current?.res;
 
 	const reindex = callAPI("reindex", true);
+	const logout = callAPI("logout", true);
 	const admins = callAPI<UserData[]>("admins", true)
 
 	//pretty bad way to chain requests
@@ -51,15 +53,24 @@ function AdminPosts() {
 	const dismiss = callAPI<{}, number[]>("posts/admin/dismissreports", true);
 	const markRead = callAPI<{}, number[]>("posts/admin/markread", true);
 
+	const router = useRouter();
+
 	const runSetAdmin = (x: boolean) =>
 		setAdmin.run({data: {email: adminInp, admin: x}, refresh() { admins.run(); }});
 
 	if (posts==null) return <Loading/>;
 
 	return <div className="max-w-screen-md flex flex-col gap-3" ><PostRefreshHook.Provider value={refresh} >
-		<Button disabled={reindex.loading} onClick={()=>reindex.run()} >
-			Reindex{reindex.loading && "ing..."}
-		</Button>
+		<div className="flex flex-row flex-wrap gap-2" >
+			<Button disabled={reindex.loading} onClick={()=>reindex.run()} >
+				Reindex{reindex.loading && "ing..."}
+			</Button>
+			<Button onClick={()=>logout.run({refresh() {
+				router.push("/");
+			}})} disabled={logout.loading} >
+				Logout
+			</Button>
+		</div>
 
 		<div>
 			<h2 className="font-display text-2xl font-bold mb-2" >Admins</h2>
@@ -75,7 +86,7 @@ function AdminPosts() {
 			</div>
 		</div>
 
-		<div className="w-full flex flex-row items-center justify-between" >
+		<div className="w-full flex flex-row items-center justify-between gap-4 flex-wrap" >
 			<h3 className="font-bold font-display text-2xl" >Posts</h3>
 			<ButtonPopover title="Filter" >
 				<div className="flex flex-col items-start" >

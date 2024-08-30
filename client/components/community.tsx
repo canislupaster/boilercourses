@@ -239,8 +239,8 @@ function AdminUserPopup({user}: {user: UserData}) {
 				<b>{a}</b> {b}
 			</div>)}
 		<p>
-			{v.banned && <Chip className="bg-red-600 border-red-400" >Banned</Chip>}
-			{v.admin && <Chip className="bg-green-600 border-green-400" >Admin</Chip>}
+			{v.banned && <Chip color="red" >Banned</Chip>}
+			{v.admin && <Chip color="green" >Admin</Chip>}
 		</p>
 
 		<Button disabled={ban.loading || data.loading} className="bg-red-600" onClick={()=>{
@@ -280,12 +280,14 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 
 	const [voted, setVoted] = useState(post.voted);
 	const app = useContext(AppCtx);
+	const ctx = useContext(PostRefreshHook);
 
 	return <div className="border border-zinc-600 bg-zinc-700 flex flex-col gap-3 p-5 rounded-md" >
 		<div className="flex flex-row gap-3 items-center" >
 			{post.rating && adminPost==null && <Stars sz={20} rating={post.rating} />}
 
-			{adminPost==null ? <h2 className="font-bold text-xl" >
+			{adminPost==null ? <h2 className="font-bold text-xl flex flex-row gap-2" >
+				<IconUserCircle/>
 				{post.isYours ? "You" : post.name ?? "Anonymous"}
 			</h2> : <div className="flex flex-col gap-2 items-start" >
 				<div className="flex flex-row flex-wrap gap-2 items-center" >
@@ -319,7 +321,7 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 
 		<div className="flex flex-row justify-between w-full items-center flex-wrap gap-2" >
 			<p className="text-sm text-gray-400" >
-				submitted <TimeSince t={post.submitted} />
+				submitted <TimeSince t={post.submitted} />{adminPost && `, id: ${post.id}`}
 			</p>
 			<div className="flex flex-row gap-1 items-center" >
 				{deletePost && <IconButton icon={<IconTrash/>} onClick={deletePost} />}
@@ -349,8 +351,10 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 											c.closeModal();
 											if (r.res.alreadyReported)
 												app.open({type: "error", name: "You've reported this post already", msg: "The offending post will be reviewed soon."});
-											else
+											else {
 												app.open({type: "other", name: "Post reported", modal: "Thanks for your help."});
+												ctx?.();
+											}
 										}
 									}});
 									return false;
@@ -381,7 +385,7 @@ export function Community({course}: {course: SmallCourse}) {
 
 	const isLoggedIn = posts?.res?.loggedIn!=null;
 	const logout = callAPI("logout", true);
-	const deleteUser = callAPI("deleteUser", true);
+	const deleteUser = callAPI("deleteuser", true);
 
 	const redir = redirectToSignIn();
 	const app = useContext(AppCtx);

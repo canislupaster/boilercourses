@@ -141,9 +141,43 @@ export function logArray<T, R>(x: T[], y: (x:T) => Promise<R>, name: (x:T,i:numb
 		console.error(`object ${name(p,i)} failed: ${reason}`);
 		throw reason;
 	}))).then((x) => {
-		console.log("done");
+		console.log("\ndone");
 		return x;
 	}).finally(() => {
 		bar.stop();
 	});
+}
+
+//like isdeepstrictequals but epsilon for floating point
+//also treats undefined as not a property
+export function deepEquals(x: any, y: any) {
+	if (typeof x != typeof y) return false;
+
+	switch (typeof x) {
+		case "undefined": return true;
+		case "bigint":
+		case "string":
+		case "boolean":
+			return x==y;
+
+		case "object": {
+			for (const k in y)
+				if (y[k]!==undefined && x[k]===undefined) return false;
+			for (const k in x) {
+				if (x[k]===undefined) continue;
+				else if (y[k]===undefined) return false;
+				else if (!deepEquals(x[k], y[k])) return false;
+			}
+
+			return true;
+		}
+			
+		case "number":
+			// i think all numbers in data should be bounded so this should work
+			return Math.abs(x-y)<1e-4;
+
+		case "symbol":
+		case "function":
+			throw new Error("cannot deep compare symbols/functions")
+	}
 }

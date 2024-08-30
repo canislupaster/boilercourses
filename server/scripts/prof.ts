@@ -1,10 +1,9 @@
 import { Knex } from "knex";
 import { Instructor, normalizeName, RMPInfo } from "../../shared/types";
-import { fetchDispatcher, logArray, postHTML } from "./fetch";
+import { deepEquals, fetchDispatcher, logArray, postHTML } from "./fetch";
 import { DBInstructor } from "./db";
 import { Grades } from "./grades";
 import { Element } from "cheerio";
-import { isDeepStrictEqual } from "node:util";
 
 async function RMPGraphQL(query: string, variables: Record<string,any>) {
 	return await fetchDispatcher(x => x.json(), "https://www.ratemyprofessors.com/graphql", {
@@ -141,17 +140,16 @@ export async function updateInstructors({instructors,grades,knex}:{
 			const d = await tx<DBInstructor>("instructor")
 				.where("name", k).select("data").first();
 
-			let updated = new Date().toISOString();
 			if (d!=undefined) {
 				const old: Instructor = JSON.parse(d.data);
-				if (isDeepStrictEqual({...old, lastUpdated: undefined}, instructor))
-					updated=old.lastUpdated;
+				if (deepEquals({...old, lastUpdated: undefined}, instructor))
+					return;
 			}
 
 			await tx<DBInstructor>("instructor")
 				.insert({
 					name: k, data: JSON.stringify({
-						...instructor, lastUpdated: updated
+						...instructor, lastUpdated: new Date().toISOString()
 					}), rmp
 				}).onConflict("name").merge();
 		})

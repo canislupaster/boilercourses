@@ -314,3 +314,8 @@ export function latestTermofTerms(terms: Term[], restrict?: Term[]): Term|null {
 export function latestTerm(course: Course, restrict?: Term[]): Term|null {
   return latestTermofTerms(Object.keys(course.sections) as Term[],restrict);
 }
+
+export function trimCourseNum(num: number): number {
+  if (num%100 == 0) return Math.floor(num/100);
+  else return num;
+}

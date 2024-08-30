@@ -1,10 +1,9 @@
 import { Knex } from "knex";
 import { Course, CourseLikePreReq, Day, formatTerm, Grade, grades, InstructorGrade, Level, levels, mergeGrades, normalizeName, PreReq, PreReqs, Restriction, Seats, Section, Term, termIdx, toInstructorGrade, validDays } from "../../shared/types";
 import { Grades } from "./grades";
-import { getHTML, logArray, ords, postHTML, tableToObject } from "./fetch";
+import { deepEquals, getHTML, logArray, ords, postHTML, tableToObject } from "./fetch";
 import assert from "node:assert";
 import { DBAttribute, DBCourse, DBSchedType, DBSubject } from "./db";
-import { isDeepStrictEqual } from "node:util";
 
 type Expr<T, Op extends string> =
 	{type: "leaf", leaf: T}
@@ -682,7 +681,7 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 
 		await knex.transaction(async trans => {
 			const pcourseRow = await trans<DBCourse>("course").where({subject, course, name}).first();
-			const pcourse = pcourseRow==undefined ? undefined : JSON.parse(pcourseRow.data);
+			const pcourse: Course|undefined = pcourseRow==undefined ? undefined : JSON.parse(pcourseRow.data);
 
 			const newInstructors = new Set(info.sections.flatMap(x => x.instructors).map(x => x.name));
 			const instructorSet = newInstructors.union(
@@ -724,43 +723,57 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 					};
 			}
 			
-			const mergeCourses = (old: Course|undefined, newCourse: Course): Course => {
-				if (old!==undefined
-					&& isDeepStrictEqual({...newCourse, lastUpdated: undefined}, {...old, lastUpdated: undefined}))
-					return {
-						...newCourse,
-						lastUpdated: new Date(Math.min(Date.parse(old.lastUpdated),
-							Date.parse(newCourse.lastUpdated))).toISOString()
-					};
-
-				return {
+			type CourseNoUpdated = Omit<Course, "lastUpdated">;
+			const mergeCourses = (old: CourseNoUpdated|undefined, newCourse: CourseNoUpdated): Course|null => {
+				const out = {
 					...newCourse,
 					instructor: instructorOut,
 					sections: { ...old?.sections, ...newCourse.sections }
 				};
+
+				if (old!==undefined
+					&& deepEquals({...out, lastUpdated: undefined}, {...pcourse, lastUpdated: undefined}))
+					return null;
+
+				const stripSeatsGrades = (x: CourseNoUpdated) => ({
+					...x,
+					sections: Object.fromEntries(Object.entries(out.sections)
+						.map(([k,v]) => [k, v.map(sec=>({...sec, seats: undefined}))])),
+					instructors: undefined,
+					lastUpdated: undefined
+				});
+
+				return {
+					...out,
+					lastUpdated: pcourse && deepEquals(stripSeatsGrades(out), stripSeatsGrades(pcourse))
+						? pcourse.lastUpdated : new Date().toISOString()
+				};
 			};
 
-			const toMerge: Course = {
+			const toMerge: CourseNoUpdated = {
 				name, subject, course,
 				instructor: instructorOut,
 				description: bits[0].txt,
 				restrictions, credits,
-				sections: { [t]: info.sections.map(sec => ({
-					...sec, name: sec.name==name ? undefined : sec.name
-				})) },
+				sections: {
+					//sections must be sorted to be deeply compared to old course
+					[t]: info.sections.map(sec => ({
+						...sec, name: sec.name==name ? undefined : sec.name
+					})).sort((a,b)=>a.crn-b.crn)
+				},
 				prereqs: reqs, attributes,
-				lastUpdated: new Date().toISOString()
 			}; 
 
 			const newCourse = isNewer ? mergeCourses(pcourse, toMerge) : mergeCourses(toMerge, pcourse);
+			if (newCourse==null) return;
 
 			let id: number;
-			if (pcourseRow==undefined)
+			if (pcourseRow==undefined) {
 				id=(await trans<DBCourse>("course").insert({
 					subject, course, name,
 					data: JSON.stringify(newCourse)
 				}, "id"))[0].id;
-			else {
+			} else {
 				id=pcourseRow.id;
 				await trans<DBCourse>("course").where("id", pcourseRow.id).update({
 					data: JSON.stringify(newCourse)

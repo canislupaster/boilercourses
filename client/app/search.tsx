@@ -104,7 +104,7 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 		a!=undefined ? (b!=undefined ? `${renderTime(a)} - ${renderTime(b)}` : `after ${renderTime(a)}`)
 			: (b!=undefined ? `before ${renderTime(b)}` : undefined);
 
-	const api = useAPI<ServerSearch,SearchState>("search", {data: searchState, method: "POST"});
+	const api = useAPI<ServerSearch,SearchState>("search", {data: searchState, method: "POST", debounceMs: 100});
 
 	const cond = api!=null && api.res.npage<=searchState.page;
 	useEffect(() => {
@@ -329,8 +329,6 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 					{activeFilters.length>0 && <div className='text-white -tranzinc-y-3'>Maybe try changing the filters?</div>}
 				</div>)}
 
-		<div className='mt-auto'>
-			<Footer />
-		</div>
+		<Footer />
 	</>;
 }

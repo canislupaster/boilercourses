@@ -1,5 +1,5 @@
-import { Course, formatTerm, CourseInstructor, mergeGrades, RMPInfo, Term, InstructorId, InstructorGrade, SmallCourse } from "../../shared/types";
-import { Anchor, capitalize, Chip, firstLast, gpaColor, Loading } from "./util";
+import { Course, formatTerm, CourseInstructor, mergeGrades, RMPInfo, Term, InstructorId, InstructorGrade, SmallCourse, Section, termIdx } from "../../shared/types";
+import { Anchor, capitalize, Chip, chipColorKeys, firstLast, gpaColor, Loading, shitHash } from "./util";
 import { useAPI, useCourse } from "./wrapper";
 import { CircularProgress, CircularProgressProps } from "@nextui-org/progress";
 import { twMerge } from "tailwind-merge";
@@ -75,6 +75,25 @@ export function Meters({children, name, rmp, grade, className, gpaSub}: {name: s
 	</div>;
 }
 
+function ProfSectionList({secs, course, term}: {secs: Section[], course: SmallCourse, term: Term}) {
+	const byType = new Map<string, Section[]>();
+	for (const v of secs) byType.set(v.scheduleType, [...(byType.get(v.scheduleType) ?? []), v]);
+
+	return <>{
+		[...byType.entries()].map(([ty,x]) =>
+			<Chip color={chipColorKeys[shitHash(ty)%chipColorKeys.length]} key={ty} className="inline-flex flex-row items-center flex-wrap" >
+				{ty.slice(0,3)}
+
+				{x.map((s,i)=>
+					<SectionLink course={course} term={term} section={s} className="ml-1 inline-flex flex-row items-center flex-wrap" key={s.crn} >
+						<Anchor>{s.section}</Anchor>{i<x.length-1 && ", "}
+					</SectionLink>
+				)}
+			</Chip>
+		)
+	}</>;
+}
+
 function ProfData({x, course, term}: {x: CourseInstructor, course: SmallCourse, term: Term}) {
 	const data = useAPI<InstructorId, string>("profbyname", {data: x.name, handleErr(e) {
 		if (e.error=="notFound") return null;
@@ -85,9 +104,9 @@ function ProfData({x, course, term}: {x: CourseInstructor, course: SmallCourse, 
 	const full = useCourse(course.id)?.course;
 	if (full==null) return <Loading/>;
 
-	const ts = Object.entries(full.sections).filter(([k,v]) => v.find(
+	const ts = Object.entries(full.sections).filter(([k,v]) => v.some(
 		s=>s.instructors.find(v=>v.name==x.name)
-	)).map(([k,v]) => k as Term);
+	)).map(([k,v]) => k as Term).sort((a,b) => termIdx(b)-termIdx(a));
 	const secs = full.sections[term].filter(v => v.instructors.find(y=>y.name==x.name));
 
 	const g = full.instructor[x.name]!=undefined
@@ -116,15 +135,16 @@ function ProfData({x, course, term}: {x: CourseInstructor, course: SmallCourse, 
 			<Meters name={x.name} rmp={data?.rmp ?? null} grade={g} gpaSub="(this course)" />
 		</div>
 
-		<div className="w-full flex-row flex items-center p-3 gap-3 flex-wrap" >
-			<div className="flex flex-row flex-wrap" >
-				Sections: {secs.map((s,i) => <SectionLink course={course} term={term} section={s} className="ml-1" key={s.crn} >
-					<Anchor>{s.section}</Anchor>{i<secs.length-1 && ", "}
-				</SectionLink>)}.
+		<div className="w-full flex-row flex items-center p-3 gap-1 flex-wrap" >
+			<div className="inline-flex flex-row flex-wrap items-center gap-1" >
+				<b>Sections:</b> <ProfSectionList secs={secs} course={course} term={term} />
 			</div>
-			<div className="flex flex-row flex-wrap">
-				{ts.map(t => <Chip className="border-cyan-400 bg-sky-800 cursor-pointer" key={t}
-					onClick={()=>selCtx.selTerm(t)} >{formatTerm(t)}</Chip>)}
+			<div className="inline-flex flex-row flex-wrap items-center gap-1">
+				<b>Terms:</b>
+				<div className="inline-flex flex-row flex-wrap items-center" >
+					{ts.map(t => <Chip color="blue" className="cursor-pointer" key={t}
+						onClick={()=>selCtx.selTerm(t)} >{formatTerm(t)}</Chip>)}
+				</div>
 			</div>
 		</div>
 	</div>;

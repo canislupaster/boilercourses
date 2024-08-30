@@ -12,6 +12,7 @@ import { Alert, BackButton, msalApplication, msalClientId } from "@/components/c
 import icon from "../../public/icon.png";
 import Image from "next/image";
 import { BrowserAuthError, BrowserAuthErrorCodes } from "@azure/msal-browser";
+import { Footer } from "@/components/footer";
 
 type AuthErr = ServerResponse<unknown>&{status: "error", error: "unauthorized"|"sessionExpire"};
 
@@ -105,5 +106,6 @@ export function SignIn() {
 		<MsalProvider instance={msalApplication} >
 			<SignInMSAL loggedIn={()=>router.push(v.redirect)} err={v.err} />
 		</MsalProvider>
+		<Footer/>
 	</div>;
 }

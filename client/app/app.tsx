@@ -26,7 +26,9 @@ const Landing = ({setSearch}: {setSearch: (s: string) => void}) =>
 				className="text-white text-lg md:text-xl bg-neutral-950 w-full pb-2 border-b-2 focus:outline-none focus:border-blue-500 transition duration-300"
 			/>
 
-			<Footer className="absolute bottom-0 left-0 right-0" />
+			<div className="absolute bottom-0 left-0 top-0 right-0 flex flex-col items-center justify-end -z-10 min-h-[35rem]" >
+				<Footer/>
+			</div>
 		</div>
 	</>;
 

@@ -1,3 +1,5 @@
+# note: application.prod.conf configures server using useForwardedFor to trust forwarded for header
+# in nextjs client, this is hardcoded / forwarded in server.tsx (& non configurable atm)
 services:
   api:
     build:

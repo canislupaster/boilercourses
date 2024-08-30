@@ -1,7 +1,7 @@
 "use client"
 
 import { AppCtx, AppWrapper, useInfo } from "@/components/wrapper";
-import { CourseId, emptyInstructorGrade, InstructorGrade, InstructorId, latestTermofTerms, mergeGrades, Section, ServerInfo, Term, termIdx, toInstructorGrade, toSmallCourse } from "../../../../shared/types";
+import { CourseId, emptyInstructorGrade, InstructorGrade, InstructorId, latestTermofTerms, mergeGrades, Section, ServerInfo, Term, termIdx, toInstructorGrade, toSmallCourse, trimCourseNum } from "../../../../shared/types";
 import { BackButton, BarsStat, NameSemGPA, searchState, SelectionContext, simp, tabProps, TermSelect, WrapStat } from "@/components/clientutil";
 import { Anchor, capitalize, RedditButton, selectProps } from "@/components/util";
 import { Tab, Tabs } from "@nextui-org/tabs";
@@ -66,12 +66,12 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 		const simpQ = simp(courseSearch);
 		return termCourses.filter(c=>
 			(Object.keys(c.course.sections) as Term[]).includes(term)
-				&& simp(`${c.course.subject} ${c.course.course} ${c.course.name}`).includes(simpQ)
+				&& simp(`${c.course.subject} ${c.course.course}\n${c.course.name}`).includes(simpQ)
 		);
 	}, [termCourses, courseSearch]);
 
 	const graphGrades: [string,InstructorGrade][] = useMemo(() =>
-		selCourse.map((c)=>[`${c.course.subject} ${c.course.course}`, courseGrades.get(c.id)!])
+		selCourse.map((c)=>[`${c.course.subject} ${trimCourseNum(c.course.course)}`, courseGrades.get(c.id)!])
 	, [selCourse]);
 	
 	const semGPA = useMemo(() => 
@@ -156,7 +156,7 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 							<p className="mb-2" >Select sections:</p>
 
 							<Select isMulti options={termCourses} value={selCourse}
-								getOptionLabel={(x: CourseId) => `${x.course.subject}${x.course.course}`}
+								getOptionLabel={(x: CourseId) => `${x.course.subject}${trimCourseNum(x.course.course)}`}
 								getOptionValue={x=>x.id.toString()}
 								isOptionDisabled={(x:CourseId)=>courseGrades.get(x.id)!.gpa == null}
 								onChange={(x: MultiValue<CourseId>)=>

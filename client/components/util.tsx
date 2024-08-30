@@ -33,10 +33,14 @@ export const Anchor: React.FC<(AnchorHTMLAttributes<HTMLAnchorElement>)&Partial<
 }
 
 export const LogoText = ({className, ...props}: HTMLAttributes<HTMLHRElement>) => 
-	<h1 className={twMerge("text-5xl md:text-6xl mr-2 my-auto select-none text-white cursor-pointer font-display font-black", className)} {...props} >BoilerCourses</h1>;
+	<h1 className={twMerge("text-4xl md:text-6xl mr-2 my-auto select-none text-white cursor-pointer font-display font-black", className)} {...props} >BoilerCourses</h1>;
 
-export const Input = ({className, ...props}: React.InputHTMLAttributes<HTMLInputElement>) =>
-	<input type="text" className={twMerge("text-white bg-zinc-800 w-full p-2 border-2 border-zinc-600 focus:outline-none focus:border-blue-500 transition duration-300 rounded-lg", className)} {...props} />;
+export const Input = ({className, icon, ...props}: {icon?: React.ReactNode}&React.InputHTMLAttributes<HTMLInputElement>) => <div className="relative" >
+	<input type="text" className={twMerge(`text-white bg-zinc-800 w-full p-2 border-2 border-zinc-600 focus:outline-none focus:border-blue-500 transition duration-300 rounded-lg ${icon ? "pl-11" : ""}`, className)} {...props} />
+	{icon && <div className="absolute left-0 my-auto pl-3 top-0 bottom-0 flex flex-row items-center" >
+		{icon}
+	</div>}
+</div>
 
 export const Textarea = ({className, children, ...props}: TextareaHTMLAttributes<HTMLTextAreaElement>) =>
 	<textarea className={twMerge("text-white bg-neutral-950 w-full p-2 border-2 border-zinc-900 focus:outline-none focus:border-blue-500 transition duration-300 rounded-lg mb-5 resize-y max-h-60 min-h-24", className)}
@@ -69,8 +73,19 @@ export const Loading = (props: SpinnerProps) => <div className="h-full w-full fl
 	<Spinner color="white" size="lg" {...props} ></Spinner>
 </div>
 
-export const Chip = ({className, ...props}: HTMLAttributes<HTMLSpanElement>) =>
-	<span className={twMerge("text-xs px-3 py-1 mx-0.5 my-0.5 rounded-full border-solid border border-gray-300 bg-gray-600 whitespace-nowrap", className)}
+export const chipColors = {
+	red: "bg-red-600 border-red-400",
+	green: "bg-green-600 border-green-400",
+	blue: "border-cyan-400 bg-sky-300",
+	gray: "border-gray-300 bg-gray-600",
+	purple: "bg-purple-600 border-purple-300",
+	teal: "bg-[#64919b] border-[#67cce0]"
+};
+
+export const chipColorKeys = Object.keys(chipColors) as (keyof typeof chipColors)[];
+
+export const Chip = ({className, color, ...props}: HTMLAttributes<HTMLSpanElement>&{color?: keyof typeof chipColors}) =>
+	<span className={twMerge("inline-block text-xs px-3 py-1 mx-0.5 my-0.5 rounded-full border-solid border whitespace-nowrap", chipColors[color ?? "gray"], className)}
 		{...props} >{props.children}</span>
 
 export const StatusPage = ({children, title}: {children: React.ReactNode, title: string}) =>
@@ -139,6 +154,16 @@ export const firstLast = (s: string) => {
 	const x = s.split(/\s+/);
 	return x.length>=2 ? `${x[0]} ${x[x.length-1]}` : x[0];
 };
+
+export function shitHash(s: string) {
+	let v=3, mod=17, o=0;
+	for (let i=0; i<s.length; i++) {
+		o+=s.charCodeAt(i)*v;
+		if (o>=mod) o-=mod;
+		v=3*v %mod;
+	}
+	return o;
+}
 
 export const CatalogLinkButton = ({href}: {href:string}) =>
 	<LinkButton href={href} target="_blank"

@@ -259,14 +259,19 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
 
             data class IndexCourse(val searchId: Int, val cid: Schema.CourseId, val small: Schema.SmallCourse)
             val indexCourses = c.flatMap {
-                it.course.sections.entries
-                    .map {x->x.value.map {y-> x.key to y}}
-                    .flatten().groupBy { sec->sec.second.name }.map {
-                        (secName, secs) -> secName to it.copy(course=it.course.copy(
+                (it.course.sections.entries
+                    .asSequence()
+                    .map { x->x.value.map { y-> x.key to y}}
+                    .flatten()
+                    .filter { sec->sec.second.name!=null }
+                    .groupBy { sec->sec.second.name }.map { (secName, secs) -> secName to it.copy(
+                        course=it.course.copy(
                             sections=secs.groupBy {x->x.first}.mapValues {x->x.value.map {y->y.second}}
                         ))
                     }
-            }.mapIndexed { i, x -> IndexCourse(i, x.second, x.second.toSmall(x.first)) }
+                    .toList() + listOf(null to it))
+            }.mapIndexed { i, x ->
+                IndexCourse(i, x.second, x.second.toSmall(x.first)) }
 
             val newSmallCourses = indexCourses.associate {
                 it.searchId to it.small
@@ -455,10 +460,13 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
     suspend fun similarCourses(id: Int): List<SearchResult> = withContext(Dispatchers.IO) {
         lock.read {
             if (searcher==null) throw APIErrTy.Loading.err("courses not indexed yet")
-            val doc = searcher!!.search(IntField.newExactQuery("id", id), 1).scoreDocs[0]
 
-            searcher!!.search(moreLike!!.like(doc.doc), 10).scoreDocs.filter {
-                it.doc!=doc.doc && it.score>4
+            val doc = searcher!!.search(IntField.newExactQuery("id", id), 1).scoreDocs[0]
+            val fields = searcher!!.storedFields()
+
+            searcher!!.search(moreLike!!.like(doc.doc), 15).scoreDocs.filter {
+                val id2 = fields.document(it.doc).getField("id").numericValue().toInt()
+                id!=id2 && it.score>4
             }.let { scoreDocsToCourses(it) }
         }
     }

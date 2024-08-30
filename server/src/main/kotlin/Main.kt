@@ -96,16 +96,15 @@ suspend fun main(args: Array<String>) = coroutineScope {
         val dataRateLimit = RateLimiter(1, 5.seconds)
         val loginRateLimit = RateLimiter(3, 3.seconds)
         val allRateLimit = RateLimiter(25, 2.seconds)
+        val isFF = environment.getProperty("useForwardedFor")=="true"
 
         launch { courses.runScraper() }
 
         before {
-            if (ctx.remoteAddress=="127.0.0.1")
-                ctx.header("X-Forwarded-For").valueOrNull()?.let {
-                    val idx = it.lastIndexOf(',')
-                    if (idx!=-1) ctx.remoteAddress=it.drop(idx)
-                    log.info("stripped address to ${ctx.remoteAddress}")
-                }
+            if (isFF) ctx.header("X-Forwarded-For").valueOrNull()?.let {
+                val idx = it.lastIndexOf(",")+1
+                ctx.remoteAddress = it.drop(idx)
+            }
 
             allRateLimit.check(ctx.remoteAddress)
         }
@@ -212,7 +211,7 @@ suspend fun main(args: Array<String>) = coroutineScope {
             post("/logout", auth.withSession { it.remove() })
 
             //deletes all user data via cascade
-            post("/deleteUser", auth.withUser {
+            post("/deleteuser", auth.withUser {
                 courses.removeRatings(db.deleteUser(it.id))
                 ctx.resp(Unit)
             })

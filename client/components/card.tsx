@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
-import { Course, CourseId, CourseInstructor, creditStr, formatTerm, InstructorGrade, latestTerm, latestTermofTerms, mergeGrades, ServerInfo, SmallCourse, Term, toSmallCourse } from "../../shared/types";
+import { Course, CourseId, CourseInstructor, creditStr, formatTerm, InstructorGrade, latestTerm, latestTermofTerms, mergeGrades, ServerInfo, SmallCourse, Term, toSmallCourse, trimCourseNum } from "../../shared/types";
 import { abbr, Anchor, Chip, gpaColor, Loading } from "./util";
 import { InstructorList } from "./instructorlist";
 import { AppLink, AppTooltip, useMd } from "./clientutil";
@@ -41,7 +41,7 @@ export function Card({ course, frameless, termFilter, className, extra }: {frame
     <div className="flex flex-col gap-1">
       <Anchor href={url} className="text-white hover:bg-inherit" >
         <h2 className="text-2xl font-display font-bold">
-          {course.subject} {course.course}: {course.name}
+          {course.subject} {trimCourseNum(course.course)}: {course.name}
         </h2>
       </Anchor>
       {body}
@@ -50,7 +50,7 @@ export function Card({ course, frameless, termFilter, className, extra }: {frame
   else return (
     <AppLink href={url}
       className={twMerge("flex flex-col bg-zinc-800 gap-1 p-6 rounded-md shadow-md hover:scale-105 transition hover:transition cursor-pointer", className)} >
-        <h2 className="text-xl font-display font-bold">{course.subject} {course.course}: {course.name}</h2>
+        <h2 className="text-xl font-display font-bold">{course.subject} {trimCourseNum(course.course)}: {course.name}</h2>
         {course.varTitle && 
           <h3 className="text-lg font-display font-bold">{course.varTitle}</h3>}
         {body}
@@ -114,15 +114,15 @@ export function CourseChips({course}: {course: SmallCourse}) {
 
   return <>
     {course.scheduleTypes.map((s) => (
-      <Chip className="bg-purple-600 border-purple-800" key={s}> {s} </Chip>
+      <Chip color="purple" key={s}> {s} </Chip>
     ))}
 
-    <Chip className="bg-sky-600 border-sky-800" >
+    <Chip color="blue" >
       {formatTerm(latestTermofTerms(Object.keys(course.termInstructors) as Term[])!)}
     </Chip>
 
     {geneds.map((gened) => (
-      <Chip className="bg-[#64919b] border-[#415f65]" key={gened} >
+      <Chip color="teal" key={gened} >
         {gened}
       </Chip>
     ))}

@@ -6,8 +6,8 @@ import { Tooltip, TooltipPlacement } from "@nextui-org/tooltip";
 import { twMerge } from "tailwind-merge";
 import { AppCtx, useInfo } from "./wrapper";
 import Link, { LinkProps } from "next/link";
-import { Anchor, Button, gpaColor, selectProps } from "./util";
-import { IconArrowLeft, IconInfoCircle, IconInfoTriangleFilled } from "@tabler/icons-react";
+import { Anchor, Button, gpaColor, Input, selectProps } from "./util";
+import { IconArrowLeft, IconFilterFilled, IconInfoCircle, IconInfoTriangleFilled } from "@tabler/icons-react";
 import { Progress } from "@nextui-org/progress";
 import { TabsProps } from "@nextui-org/tabs";
 import { default as Select, SingleValue } from "react-select";
@@ -44,6 +44,15 @@ export const useMd = () => {
 	if (mdMq==null) return false;
 	return useMediaQuery(mdMq);
 };
+
+export function useDebounce<T>(f: ()=>T, debounceMs: number, deps: React.DependencyList): T {
+	const [v, setV] = useState(f);
+	useEffect(()=>{
+		const ts = setTimeout(()=>setV(f()), debounceMs);
+		return () => clearTimeout(ts);
+	}, deps);
+	return v;
+}
 
 export const IsInTooltipContext = React.createContext(false);
 
@@ -263,11 +272,9 @@ export function NameSemGPA<T>({vs,lhs}: {vs: [T, [Term, number|null, number|null
 export function WrapStat({search, setSearch, title, children, searchName}: {search: string, setSearch: (x:string)=>void, title: string, children: React.ReactNode, searchName: string}) {
 	return <>
 		<h2 className="text-2xl font-display font-extrabold mb-5" >{title}</h2>
-		<input type="text" placeholder={`Filter ${searchName}...`}
-			value={search} onChange={v => setSearch(v.target.value)}
-			className="text-white bg-neutral-950 w-full p-2 border-2 border-zinc-900 focus:outline-none focus:border-blue-500 transition duration-300 rounded-lg mb-5" >
-		</input>
-		<div className="max-h-[34rem] overflow-y-scroll" >
+		<Input icon={<IconFilterFilled/>} placeholder={`Filter ${searchName}...`}
+			value={search} onChange={v => setSearch(v.target.value)} />
+		<div className="max-h-[34rem] overflow-y-scroll mt-3" >
 			{children}
 		</div>
 	</>;
@@ -298,7 +305,7 @@ export const TermSelect = ({term, terms, setTerm, name}: {term: Term, terms: Ter
 	</div>;
 
 // used for client side filtering (e.g. instructors in prof tabs)
-export const simp = (x: string) => x.toLowerCase().replace(/[^a-z]/g, "");
+export const simp = (x: string) => x.toLowerCase().replace(/[^a-z0-9\n]/g, "");
 
 export const msalClientId = process.env.NEXT_PUBLIC_MSAL_CLIENT_ID;
 export const msalApplication = new PublicClientApplication({

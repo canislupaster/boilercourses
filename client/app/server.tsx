@@ -4,13 +4,20 @@
 import { notFound } from "next/navigation";
 import { Course, CourseId, InstructorId, ServerInfo, ServerResponse } from "../../shared/types";
 import { ImageResponse } from "next/og";
+import { headers } from "next/headers";
 
 //a much worse api wrapper for server
-export const api = <T,>(endpoint: string, data?: any): Promise<T> =>
-	fetch(`${process.env.SERVER_URL}/${endpoint}`, {
+export function api<T,>(endpoint: string, data?: any): Promise<T> {
+	const v = headers().get("X-Forwarded-For");
+	const fetchHdr = new Headers();
+	if (v!=null)
+		fetchHdr.append("X-Forwarded-For", v.slice(v.lastIndexOf(",")+1));
+
+	return fetch(`${process.env.SERVER_URL}/${endpoint}`, {
 		method: "POST",
+		headers: fetchHdr,
 		body: data==undefined ? undefined : JSON.stringify(data),
-		cache: "no-store"
+		next: { revalidate: process.env.NODE_ENV=="development" ? 0 : 3600 }
 	}).then((res) => res.json() as Promise<ServerResponse<T>>)
 		.then((res) => {
 			if (res.status=="error") {
@@ -19,6 +26,7 @@ export const api = <T,>(endpoint: string, data?: any): Promise<T> =>
 			}
 			return res.result;
 		});
+}
 
 export const courseById = (id: number): Promise<CourseId> => api("course", id)
 export const profById = (id: number): Promise<InstructorId> => api("prof", id)

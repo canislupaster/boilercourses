@@ -8,7 +8,9 @@ import { twMerge } from "tailwind-merge";
 
 function InfoModal() {
 	return <div className="pt-5 flex flex-col gap-3" >
-		<p>Thank you for trying BoilerCourses, a fork/rewrite of <Anchor href="https://boilerclasses.com" >BoilerClasses</Anchor> by <Anchor href="https://www.sarthakmangla.com/" >Sarthak Mangla</Anchor> and <Anchor href="https://github.com/unkn-wn" >Leon Yee</Anchor>! We're powered by <b>Next.js (and React, Tailwind, etc) and Apache Lucene (for full-text search)</b>. Our data comes directly from the Purdue catalog, which is backed by Ellucian's  very slow and clunky Banner Self Service. If you'd like a taste, you can download everything <Anchor target="_blank" href="/api/data" >here.</Anchor> It's not complicated.</p>
+		<p>Thank you for trying BoilerCourses, a fork/rewrite of <Anchor href="https://boilerclasses.com" >BoilerClasses</Anchor> by <Anchor href="https://www.sarthakmangla.com/" >Sarthak Mangla</Anchor> and <Anchor href="https://github.com/unkn-wn" >Leon Yee</Anchor>!</p>
+		
+		<p>We're powered by <b>Next.js (and React, Tailwind, etc) and Apache Lucene (for full-text search)</b>. Our data comes directly from the Purdue catalog, which is backed by Ellucian's  very slow and clunky Banner Self Service. If you'd like a taste, you can download course data <Anchor target="_blank" href="/api/data" >here.</Anchor> It's not complicated.</p>
 		
 		<p>Check us out on <Anchor target="_blank" href="https://github.com/canislupaster/boilercourses" >
 			<IconBrandGithubFilled className="self-center" />

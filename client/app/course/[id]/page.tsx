@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { courseById, getInfo } from "@/app/server";
 import { CourseDetailApp } from "./course";
 import { notFound } from "next/navigation";
-import { latestTerm } from "../../../../shared/types";
+import { latestTerm, trimCourseNum } from "../../../../shared/types";
 
 export async function generateMetadata(
   { params }: {params: {id: string}},
@@ -12,7 +12,7 @@ export async function generateMetadata(
 
 	const course = (await courseById(id)).course;
 
-	const title = `${course.subject}${course.course}: ${course.name} at Purdue`;
+	const title = `${course.subject} ${trimCourseNum(course.course)}: ${course.name} at Purdue`;
 
   return {
     title: title,

@@ -194,10 +194,21 @@ export function setAPI<R,T extends any=null>(endpoint: string, {data,method,resu
 	cache[`${method ?? "POST"} ${endpoint}\n${JSON.stringify(data)}`] = Promise.resolve(r);
 }
 
-export function useAPI<R,T extends any=null>(endpoint: string, x: APIOptions<T,R>&{auth?: boolean|"maybe"} = {}) {
-	const {call,current} = callAPI<R,T>(endpoint, x.auth);
+export function useAPI<R,T extends any=null>(endpoint: string, {
+	auth, debounceMs, ...x
+}: APIOptions<T,R>&{auth?: boolean|"maybe", debounceMs?: number} = {}) {
+	const {call,current} = callAPI<R,T>(endpoint, auth);
 	const y = call(x);
-	useEffect(()=>{y.attempt();}, [y.k]);
+
+	useEffect(()=>{
+		if (debounceMs) {
+			const tm = setTimeout(()=>y.attempt(), debounceMs);
+			return () => clearTimeout(tm);
+		} else {
+			y.attempt();
+		}
+	}, [y.k]);
+
 	return current;
 }
 
