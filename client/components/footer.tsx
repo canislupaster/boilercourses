@@ -24,15 +24,15 @@ function InfoModal() {
 export const Footer = ({className}: {className?: string}) => {
 	const ctx = useContext(AppCtx);
 	return (
-		<div className={twMerge('grid justify-center py-5', className)} >
-			<h1 className='mx-2 text-gray-400 text-sm text-center break-words'>
+		<div className={twMerge('grid justify-center py-5 mt-4', className)} >
+			<h1 className='mx-2 text-gray-400 text-sm text-center'>
 				<span className='flex items-center justify-center'>
 					<Anchor target="_blank" onClick={()=>ctx.open({type: "other", modal: <InfoModal/>})} className="items-center align-middle" >
 						<IconInfoCircleFilled />
 						BoilerCourses
 					</Anchor>
 				</span>
-				is an unofficial catalog for Purdue courses <br className='hidden md:block' /> made by Purdue students.
+				is an unofficial catalog for Purdue courses <br/> made by Purdue students.
 			</h1>
 		</div>
 	);

@@ -204,6 +204,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
     private var searcher: IndexSearcher? = null
 
     //internally mutable to updated cached ratings
+    private var courseIds = listOf<Schema.CourseId>()
     private var courseById = emptyMap<Int,Schema.CourseId>()
     private var smallCourseBySearchId = emptyMap<Int,Schema.SmallCourse>()
     private var sortedCourses = emptyList<Schema.CourseId>()
@@ -400,7 +401,8 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
 
                 indexFile.deleteRecursively()
                 indexSwapFile.copyRecursively(indexFile, overwrite = true)
-                
+
+                courseIds = c
                 sortedCourses = newSortedCourses
                 courseById = newCourseById
                 smallCourseBySearchId = newSmallCourses
@@ -420,6 +422,9 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
             indexSwapFile.deleteRecursively()
         }
     }
+
+    suspend fun randomCourseId() =
+        (courseIds.randomOrNull() ?: throw APIErrTy.Loading.err("Courses are still indexing")).id
 
     private fun setSmallCoursesRating(course: Int, numRating: Int, avgRating: Double?) =
         smallCourseByCourseId[course]!!.forEach {

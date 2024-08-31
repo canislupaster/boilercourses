@@ -329,6 +329,7 @@ object Schema {
         val terms: Map<String, Term>,
         val subjects: List<Subject>,
         val attributes: List<Attribute>,
-        val scheduleTypes: List<String>
+        val scheduleTypes: List<String>,
+        val searchLimit: Int
     )
 }

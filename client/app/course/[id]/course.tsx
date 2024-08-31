@@ -229,10 +229,10 @@ function CourseDetail(cid: CourseId) {
 	</></SelectionContext.Provider>;
 }
 
-export function CourseDetailApp(props: CourseId&{info: ServerInfo}) {
+export function CourseDetailApp(props: CourseId) {
 	useEffect(()=>{
 		setAPI<CourseId, number>("course", {data: props.id, result: props})
 	});
 
-	return <AppWrapper info={props.info} ><CourseDetail {...props} /></AppWrapper>
+	return <CourseDetail {...props} />;
 }

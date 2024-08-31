@@ -38,6 +38,5 @@ export default async function Page({ params }: {params: {id: string}}) {
 	if (isNaN(id)) notFound();
 
 	const course = await courseById(id);
-	const info = await getInfo();
-	return <CourseDetailApp {...course} info={info} />;
+	return <CourseDetailApp {...course} />;
 }

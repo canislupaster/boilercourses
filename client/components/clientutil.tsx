@@ -131,8 +131,8 @@ export function AppTooltip({content, children, placement, className, onChange, .
 export function AppLink(props: LinkProps&HTMLAttributes<HTMLAnchorElement>) {
 	const app = useContext(AppCtx);
 	return <Link {...props} onClick={(ev) => {
-		props.onClick?.(ev);
 		app.forward();
+		props.onClick?.(ev);
 	}} >
 		{props.children}
 	</Link>
@@ -283,8 +283,8 @@ export function WrapStat({search, setSearch, title, children, searchName}: {sear
 export const tabProps: TabsProps = {
 	"aria-label": "Display",
 	size: "lg", variant:"light", classNames: {
-		tab: "px-4 py-1.5 border text-white rounded-xl border-zinc-900 hover:border-zinc-700 data-[selected=true]:border-blue-500 outline-none",
-		cursor: "dark:bg-zinc-900",
+		tab: "px-4 py-1.5 border text-white rounded-lg border-zinc-700 hover:border-zinc-600 data-[selected=true]:border-blue-500 outline-none bg-zinc-800",
+		cursor: "bg-zinc-700 rounded-lg",
 		tabContent: "text-gray-300 hover:text-gray-50 group-data-[selected=true]:text-gray-50"
 	}
 };
@@ -335,7 +335,7 @@ export function Dropdown({parts, trigger}: {trigger?: React.ReactNode, parts: Dr
 	return <Popover placement="bottom" showArrow isOpen={open} onOpenChange={setOpen} triggerScaleOnOpen={false} >
 		<PopoverTrigger><div>{trigger}</div></PopoverTrigger>
 		<PopoverContent className="rounded-md bg-zinc-900 border-gray-800 flex flex-col gap-2 items-stretch px-0 py-0 max-w-44" >
-			<div className="" >
+			<div>
 				{parts.map((x,i) => {
 					//copy pasting is encouraged by tailwind!
 					if (x.type=="act")

@@ -24,7 +24,7 @@ export default {
     //chip colors
     //tried importing them here from util but that's not allowed
     //& im too lazy to make another file...
-    "border-cyan-400 bg-sky-300",
+    "border-cyan-400 bg-sky-600",
     "border-gray-300 bg-gray-600",
     "bg-purple-600 border-purple-300",
     "bg-[#64919b] border-[#67cce0]"

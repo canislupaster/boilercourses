@@ -3,6 +3,8 @@ import { Chivo, Inter } from 'next/font/google';
 import { Metadata } from "next";
 import banner from "../public/banner.png";
 import "./style.css";
+import { AppWrapper, GoatCounter } from "@/components/wrapper";
+import { getInfo } from "./server";
 
 const chivo = Chivo({ subsets: ['latin'], display: 'swap', variable: "--chivo" });
 const inter = Inter({ subsets: ['latin'], display: 'swap', variable: "--inter" });
@@ -11,6 +13,7 @@ const desc = "BoilerCourses - Purdue's unofficial course catalog with thousands 
 const title="BoilerCourses - Purdue Course Catalog";
 const url = process.env.NEXT_PUBLIC_ROOT_URL!;
 const domain = new URL(url).host;
+
 const goatCounter = process.env.NEXT_PUBLIC_GOAT_COUNTER!==undefined && process.env.NEXT_PUBLIC_GOAT_COUNTER.length>0
   ? process.env.NEXT_PUBLIC_GOAT_COUNTER : null;
 
@@ -34,7 +37,7 @@ export const metadata: Metadata = {
   }
 };
 
-export default function RootLayout({ children, }: { children: React.ReactNode }) {
+export default async function RootLayout({ children, }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${chivo.variable} dark font-body bg-neutral-950 text-white`} >
       <head>
@@ -48,11 +51,12 @@ export default function RootLayout({ children, }: { children: React.ReactNode })
 
         <link rel="canonical" href={url} />
 
-        {goatCounter!=null &&
-          <script data-goatcounter={`https://${goatCounter}.goatcounter.com/count`} async src="https://gc.zgo.at/count.js"></script>}
+        {goatCounter && <GoatCounter goatCounter={goatCounter} />}
       </head>
       <body>
-        {children}
+        <AppWrapper info={await getInfo()} >
+          {children}
+        </AppWrapper>
       </body>
     </html>
   )

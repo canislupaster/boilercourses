@@ -210,7 +210,8 @@ export type ServerInfo = {
   terms: Partial<Record<Term,{ id: string, name: string, lastUpdated: string }>>,
   subjects: { abbr: string, name: string }[],
   attributes: { id: string, name: string }[],
-  scheduleTypes: string[]
+  scheduleTypes: string[],
+  searchLimit: number
 };
 
 // just what goes on the card...

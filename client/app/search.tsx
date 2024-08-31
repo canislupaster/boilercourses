@@ -1,7 +1,7 @@
 import { Button, ButtonPopover, Loading, LogoText, selectProps } from "@/components/util";
 import icon from "../public/icon.png";
 import Image from "next/image";
-import { IconArrowUp, IconChevronUp, IconFilterFilled, IconInfoCircle, IconMoodLookDown } from "@tabler/icons-react";
+import { IconArrowUp, IconChevronUp, IconFilterFilled, IconInfoCircle, IconMoodLookDown, IconX } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Select from 'react-select';
 import { formatTerm, ServerInfo, ServerSearch, Term, termIdx } from "../../shared/types";
@@ -156,7 +156,7 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 		{/* Search Bar */}
 		<div className="mb-3" ref={includeLogo ? undefined : searchBarRef} >
 			<input
-				maxLength={50}
+				maxLength={info.searchLimit}
 				autoFocus={autoFocus} id="search" type="text"
 				placeholder="Search for courses..."
 				value={searchState.query}
@@ -289,6 +289,11 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 									<Checkbox value={x} key={x} checked={searchState.scheduleType.includes(x)} >{x}</Checkbox>)}
 							</CheckboxGroup>
 						</ButtonPopover>
+						<Button icon={<IconX/>} onClick={()=>{
+							setSearchState({...defaultSearchState, query: searchState.query});
+						}} >
+							Clear
+						</Button>
 					</div> : <Button icon={<IconFilterFilled/>} onClick={() => setFiltersCollapsed(false)} className="w-full md:w-auto" >
 						{activeFilters.length>0 ? `Filtering by ${activeFilters.join(", ")}` : "Filters"}
 					</Button>}

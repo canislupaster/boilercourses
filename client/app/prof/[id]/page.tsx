@@ -1,6 +1,6 @@
 import { Metadata } from "next";
-import { getInfo, profById } from "@/app/server";
-import { InstructorApp } from "./instructor";
+import { profById } from "@/app/server";
+import { Instructor } from "./instructor";
 import { capitalize } from "@/components/util";
 
 export async function generateMetadata(
@@ -33,6 +33,5 @@ export async function generateMetadata(
 
 export default async function Page({ params }: {params: {id: string}}) {
 	const i = await profById(Number.parseInt(params.id));
-	const info = await getInfo();
-	return <InstructorApp instructor={i} info={info} />;
+	return <Instructor instructor={i} />;
 }

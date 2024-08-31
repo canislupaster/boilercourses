@@ -159,7 +159,8 @@ class DB(env: Environment) {
             },
             Subject.selectAll().map { Schema.Subject(it[Subject.abbr], it[Subject.name]) },
             Attribute.selectAll().map { Schema.Attribute(it[Attribute.id], it[Attribute.name]) },
-            ScheduleType.selectAll().map { it[ScheduleType.name] }
+            ScheduleType.selectAll().map { it[ScheduleType.name] },
+            SEARCH_LIMIT
         )
     }
 

@@ -1,9 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { AppCtx, callAPI, isAuthSet, ModalAction, ModalActions, ModalCtx, ModalCtxType, setAuth, useAPI } from "./wrapper";
+import { AppCtx, callAPI, isAuthSet, ModalAction, ModalActions, ModalCtx, ModalCtxType, redirectToSignIn, setAuth, useAPI } from "./wrapper";
 import { Anchor, Button, Chip, IconButton, Loading, Textarea } from "./util";
 import { Icon, IconArrowsSort, IconDotsVertical, IconEdit, IconFlag2, IconFlag2Filled, IconPaperclip, IconPhoto, IconPhotoOff, IconStar, IconStarFilled, IconThumbUp, IconThumbUpFilled, IconTrash, IconUserCircle } from "@tabler/icons-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/popover";
-import { redirectToSignIn } from "@/app/signin/signin";
 import { AddPost, AdminPost, Post, PostData, UserData } from "../../shared/posts";
 import { useRouter } from "next/navigation";
 import { Alert, AppTooltip, Dropdown, DropdownPart } from "./clientutil";
@@ -283,19 +282,19 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 	const ctx = useContext(PostRefreshHook);
 
 	return <div className="border border-zinc-600 bg-zinc-700 flex flex-col gap-3 p-5 rounded-md" >
-		<div className="flex flex-row gap-3 items-center" >
-			{post.rating && adminPost==null && <Stars sz={20} rating={post.rating} />}
-
-			{adminPost==null ? <h2 className="font-bold text-xl flex flex-row gap-2" >
+		<div className="flex flex-row gap-3 items-center w-full justify-start flex-wrap" >
+			{adminPost==null ? <h2 className="font-bold text-xl flex flex-row gap-1 items-center" >
 				<IconUserCircle/>
 				{post.isYours ? "You" : post.name ?? "Anonymous"}
 			</h2> : <div className="flex flex-col gap-2 items-start" >
 				<div className="flex flex-row flex-wrap gap-2 items-center" >
 					<CourseLink type="course" course={adminPost.course} className="text-xl" />
-					{post.rating && <Stars sz={20} rating={post.rating} />}
+					{post.rating && <Stars sz={25} rating={post.rating} />}
 				</div>
 				<PostCardAdminUser className="font-bold text-xl" user={adminPost.userData} />
 			</div>}
+
+			{post.rating && adminPost==null && <Stars sz={20} rating={post.rating} />}
 		</div>
 
 		{adminPost!=null && adminPost.numReports>0 && <Alert title="Reported" txt={<>
@@ -340,7 +339,7 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 
 				{editButton}
 
-				<IconButton icon={<IconFlag2/>} onClick={()=>{
+				{!adminPost && <IconButton icon={<IconFlag2/>} onClick={()=>{
 					app.open({type: "other", name: "Report post?", modal: "Please report inappropriate posts.",
 						actions: [
 							{
@@ -361,7 +360,7 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 								}
 							}
 						]});
-					}} />
+					}} />}
 			</div>
 		</div>
 	</div>
@@ -428,7 +427,7 @@ export function Community({course}: {course: SmallCourse}) {
 		}
 	});
 
-	return <div className="flex items-stretch flex-col gap-2 border-zinc-600 bg-zinc-800 border-1 p-5 rounded-lg" ><PostRefreshHook.Provider value={refresh} >
+	return <div className="flex items-stretch flex-col gap-2 border-zinc-600 bg-zinc-900 border-1 p-5 rounded-lg mt-2" ><PostRefreshHook.Provider value={refresh} >
 		<div className="flex flex-col items-center gap-3 md:flex-row justify-between" >
 			<div className="flex flex-row gap-2 items-center flex-wrap" >
 				<h2 className="font-extrabold font-display text-2xl" >Community</h2>

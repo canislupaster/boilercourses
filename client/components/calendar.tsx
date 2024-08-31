@@ -43,7 +43,7 @@ export function Calendar({days, sections: secs, term}: {
 		`).includes(v));
 	}, 100, [secs, search]);
  
-	return <div className="flex flex-col items-stretch gap-4 rounded-xl bg-zinc-900 p-2 md:p-4" >
+	return <div className="flex flex-col items-stretch gap-4 rounded-xl bg-zinc-900 border-zinc-600 border p-2 md:p-4" >
 		<Input value={search} onChange={ev=>setSearch(ev.target.value)}
 			placeholder="Filter sections..." icon={<IconFilter/>} />
 		<div className='flex flex-col md:flex-row flex-nowrap gap-2'>

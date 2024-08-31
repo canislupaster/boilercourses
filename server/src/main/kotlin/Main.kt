@@ -116,6 +116,8 @@ suspend fun main(args: Array<String>) = coroutineScope {
                 ctx.resp(db.getInfo())
             }
 
+            post("/random") { ctx.resp(courses.randomCourseId()) }
+
             post("/all") {
                 val courses = db.allCourses().map {
                     buildJsonObject {

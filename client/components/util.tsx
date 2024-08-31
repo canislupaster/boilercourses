@@ -49,8 +49,10 @@ export const Textarea = ({className, children, ...props}: TextareaHTMLAttributes
 	</textarea>;
 
 export const Button = ({className, icon, disabled, ...props}: HTMLAttributes<HTMLButtonElement>&{icon?: React.ReactNode, disabled?: boolean}) =>
-	<button disabled={disabled} className={twMerge('flex flex-row justify-center gap-2 px-4 py-1.5 bg-zinc-900 items-center border text-white rounded-xl border-zinc-800 hover:border-zinc-700 active:border-blue-500 aria-expanded:border-blue-500',
-		disabled ? " bg-zinc-600 text-gray-400" : "", className)} {...props} >
+	<button disabled={disabled} className={twMerge('flex flex-row justify-center gap-1.5 px-4 py-1.5 bg-zinc-800 items-center border text-white rounded-xl border-zinc-700 hover:border-zinc-600 active:border-blue-500 aria-expanded:border-blue-500',
+		icon ? "pl-3" : "",
+		disabled ? " bg-zinc-600 text-gray-400" : "",
+		className)} {...props} >
 
 		{icon &&
 			<span className="inline-block h-6 w-auto" >{icon}</span> }
@@ -76,7 +78,7 @@ export const Loading = (props: SpinnerProps) => <div className="h-full w-full fl
 export const chipColors = {
 	red: "bg-red-600 border-red-400",
 	green: "bg-green-600 border-green-400",
-	blue: "border-cyan-400 bg-sky-300",
+	blue: "border-cyan-400 bg-sky-600",
 	gray: "border-gray-300 bg-gray-600",
 	purple: "bg-purple-600 border-purple-300",
 	teal: "bg-[#64919b] border-[#67cce0]"
@@ -106,13 +108,15 @@ export const StatusPage = ({children, title}: {children: React.ReactNode, title:
 export function ButtonPopover({children, className, title, desc}: {children: React.ReactNode, className?: ClassNameValue, title: string, desc?: string}) {
 	return <Popover placement="bottom" showArrow triggerScaleOnOpen={false} >
 		<PopoverTrigger>
-			<button className={twMerge("flex justify-between flex-row gap-2 px-2 py-1.5 bg-zinc-900 items-center border text-white rounded-xl border-zinc-900 hover:border-zinc-700 aria-expanded:border-blue-500 outline-none flex-1 md:flex-none", className)} >
-				<div className="flex flex-col items-start justify-center" >
-					<span>{title}</span>
-					<span className="text-gray-300 text-sm" >{desc}</span>
-				</div>
-				<IconChevronDown />
-			</button>
+			<div className="flex-1 md:flex-none" >
+				<Button className={twMerge("w-full h-full pr-3 justify-between", className)} >
+					<div className="flex flex-col items-start justify-center" >
+						<span>{title}</span>
+						<span className="text-gray-300 text-sm whitespace-nowrap" >{desc}</span>
+					</div>
+					<IconChevronDown />
+				</Button>
+			</div>
 		</PopoverTrigger>
 		<PopoverContent className='bg-zinc-900 border-gray-800 p-5 pt-3' >
 			{children}
@@ -124,7 +128,7 @@ export const abbr = (s: string, len: number=300) =>
 	s.length > len ? `${s.substring(0, len-3)}...` : s;
 
 const selectStyle: ClassNamesConfig<any,any> = {
-	control: (state) => `flex flex-row gap-4 px-3 py-1.5 bg-zinc-900 items-center border text-white rounded-xl hover:cursor-pointer ${state.menuIsOpen ? "border-blue-500" : "border-zinc-900 hover:border-zinc-700"}`,
+	control: (state) => `flex flex-row gap-4 px-3 py-1.5 bg-zinc-800 items-center border-2 text-white rounded-lg hover:cursor-pointer ${state.menuIsOpen ? "border-blue-500" : "border-zinc-600"}`,
 	menuList: (props) => "border-zinc-700 rounded-lg bg-black border bg-zinc-900 mt-1 flex flex-col items-stretch",
 	option: ({ isDisabled, isFocused, isSelected }) => {
 		return `${isFocused ? "bg-zinc-800" : ""} hover:bg-zinc-800 p-2 border-t first:border-none border-zinc-700 hover:cursor-pointer ${isDisabled ? "text-gray-500" : ""}`;

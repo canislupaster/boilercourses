@@ -196,7 +196,3 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 		{main}
 	</SelectionContext.Provider>;
 }
-
-export function InstructorApp({info,instructor}: {info: ServerInfo, instructor: InstructorId}) {
-	return <AppWrapper info={info} ><Instructor instructor={instructor} /></AppWrapper>
-}

@@ -5,9 +5,8 @@ import { Course, CourseId, ServerInfo, ServerResponse } from "../../shared/types
 import { Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@nextui-org/modal";
 import { NextUIProvider } from "@nextui-org/system";
 import { Button, Loading } from "./util";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { twMerge } from "tailwind-merge";
-import { redirectToSignIn } from "@/app/signin/signin";
 
 export type ModalCtxType = {
 	setExtraActions: (x?: React.ReactNode)=>void,
@@ -39,6 +38,18 @@ export function setAuth(x: Auth|null) {
 
 export function isAuthSet() {
 	return window.localStorage.getItem("auth")!=null;
+}
+
+export type AuthErr = ServerResponse<unknown>&{status: "error", error: "unauthorized"|"sessionExpire"};
+
+export function redirectToSignIn() {
+	const router = useRouter();
+	const app = useContext(AppCtx);
+	return (err?: AuthErr) => {
+		app.forward();
+		window.localStorage.setItem("signIn", JSON.stringify({err, redirect: window.location.href}));
+		router.push("/signin");
+	};
 }
 
 export type AppCtx = {
@@ -265,6 +276,24 @@ function ModalContentInner({closeAll, close, x}: {x: AppModal&{type: "other"}, c
 	</>;
 }
 
+export function GoatCounter({goatCounter}: {goatCounter: string}) {
+	const path = usePathname();
+	useEffect(() => {
+		const gt = (window as any).goatcounter;
+		if (gt) gt.count({path});
+	}, [path]);
+
+	return <>
+		<script async defer src="/count.js" onLoad={()=>{
+			const wind = window as any;
+
+			wind.goatcounter.no_onload = true;
+			wind.goatcounter.allow_local = true;
+			wind.goatcounter.endpoint = `https://${goatCounter}.goatcounter.com/count`;
+		}} />
+	</>;
+}
+
 export function AppWrapper({children, className, info}: {children: React.ReactNode, className?: string, info: ServerInfo}) {
 	//😒
 	const [activeModals, setActiveModals] = useState<AppModal[]>([]);
@@ -322,16 +351,13 @@ export function AppWrapper({children, className, info}: {children: React.ReactNo
 	const [backUrls, setBackUrls] = useState<string[]>([]);
 	const router = useRouter();
 
+	const path = usePathname();
 	useEffect(() => {
-		const it = window.localStorage.getItem("backUrl");
-		if (it!=null) {
-			const backs: string[] = JSON.parse(it);
-			// after using back button
-			while (backs.length>0 && new URL(backs[backs.length-1]).href==window.location.href)
-				backs.pop();
-			setBackUrls(backs);
-		}
-	}, []);
+		// after using back button
+		let i=backUrls.length-1;
+		while (i>=0 && new URL(backUrls[i]).pathname==path) i--;
+		if (i<backUrls.length-1) setBackUrls(backUrls.slice(0,i+1));
+	}, [path]);
 
   return (<NextUIProvider>
 		<AppCtx.Provider value={{open: (m) => {
@@ -342,21 +368,19 @@ export function AppWrapper({children, className, info}: {children: React.ReactNo
 			}, tooltipCount: count,
 				incTooltipCount: () => setCount(x=>x+1),
 				forward() {
-					window.localStorage.setItem("backUrl", JSON.stringify([...backUrls, window.location.href]));
+					setBackUrls([...backUrls, window.location.href]);
 				}, back() {
 					if (backUrls.length==0) router.push("/");
 					else {
 						const nb = backUrls.slice(0,-1);
-						window.localStorage.setItem("backUrl", JSON.stringify(nb));
 						router.push(backUrls[backUrls.length-1]);
-						//happens in the very rare case that back urls get fucked up (e.g. due to load timing / maybe refreshing the current page after opening a new one) and we end up pushing the same url, in which case the page does not refresh
 						setBackUrls(nb);
 					}
 				}, info
 			}}>
 
 			{m}
-			<div id="parent" className={twMerge("flex flex-col bg-neutral-950 container mx-auto p-4 lg:px-14 lg:mt-5 gap-5 max-w-screen-xl", className)}>
+			<div id="parent" className={twMerge("flex flex-col bg-neutral-950 container mx-auto p-4 lg:px-14 lg:mt-5 max-w-screen-xl", className)}>
 				{children}
 			</div>
 		</AppCtx.Provider>
