@@ -14,7 +14,7 @@ import { useAPI, useInfo } from "@/components/wrapper";
 import { Card } from "@/components/card";
 import { Collapse } from 'react-collapse';
 import { Pagination } from "@nextui-org/pagination";
-import { Alert } from "@/components/clientutil";
+import { Alert, MoreButton } from "@/components/clientutil";
 
 export type SearchState = {
 	query: string,
@@ -96,7 +96,8 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 	const renderRange = (a?: number, b?: number) =>
 		a!=undefined ? (b!=undefined ? `${a} - ${b}` : `${a}+`) : (b!=undefined ? `up to ${b}` : undefined);
 	const renderTime = (x: number) => {
-		const h = Math.floor(x/60), m=Math.round(x)%60;
+		let h = Math.floor(x/60), m=Math.round(x)%60;
+		if (h==24) h=0;
 		const h2 = (h+11)%12 +1, m2=m<10 ? `0${m}` : m;
 		return `${h2}:${m2} ${h>=12 ? "p" : "a"}m`;
 	};
@@ -289,11 +290,11 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 									<Checkbox value={x} key={x} checked={searchState.scheduleType.includes(x)} >{x}</Checkbox>)}
 							</CheckboxGroup>
 						</ButtonPopover>
-						<Button icon={<IconX/>} onClick={()=>{
+						{activeFilters.length>0 && <Button icon={<IconX/>} onClick={()=>{
 							setSearchState({...defaultSearchState, query: searchState.query});
 						}} >
 							Clear
-						</Button>
+						</Button>}
 					</div> : <Button icon={<IconFilterFilled/>} onClick={() => setFiltersCollapsed(false)} className="w-full md:w-auto" >
 						{activeFilters.length>0 ? `Filtering by ${activeFilters.join(", ")}` : "Filters"}
 					</Button>}
@@ -302,14 +303,9 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 					</p>}
 				</div>
 
-				<Collapse isOpened={!filtersCollapsed} >
-					<div className="flex flex-col w-full items-center" >
-						<button onClick={()=>setFiltersCollapsed(true)} className="flex flex-col items-center cursor-pointer hover:-translate-y-1 transition" >
-							<IconChevronUp/>
-							Hide filters
-						</button>
-					</div>
-				</Collapse>
+				<MoreButton collapsed={!filtersCollapsed} act={()=>setFiltersCollapsed(true)} >
+					Hide filters
+				</MoreButton>
 			</div>
 		</div>
 

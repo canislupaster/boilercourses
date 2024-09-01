@@ -9,33 +9,37 @@ import { getInfo } from "./server";
 const chivo = Chivo({ subsets: ['latin'], display: 'swap', variable: "--chivo" });
 const inter = Inter({ subsets: ['latin'], display: 'swap', variable: "--inter" });
 
-const desc = "BoilerCourses - Purdue's unofficial course catalog with thousands of Purdue University courses. Find geneds, grades, prerequisites, schedules, and more.";
-const title="BoilerCourses - Purdue Course Catalog";
 const url = process.env.NEXT_PUBLIC_ROOT_URL!;
 const domain = new URL(url).host;
 
 const goatCounter = process.env.NEXT_PUBLIC_GOAT_COUNTER!==undefined && process.env.NEXT_PUBLIC_GOAT_COUNTER.length>0
   ? process.env.NEXT_PUBLIC_GOAT_COUNTER : null;
 
-export const metadata: Metadata = {
-  metadataBase: new URL(url),
-  title, description: desc,
-  icons: { icon: "/icon-color.png" },
-  keywords: [ 'Purdue', 'Purdue University', 'Purdue Courses', 'BoilerCourses', 'Boiler Courses',
-    'Boiler', 'Courses', 'BoilerCourses', 'Boiler Course', "Class", "Course", 'Catalog', 'Catalogue',
-    'Purdue Course Search', 'Purdue Course Catalog', 'Boilermakers', "Self-service", "Schedule",
-    "Semester", "Calendar", "Review", "Rating", "Professor", "Grade" ],
-  openGraph: {
-    url: "/", type: "website",
-    title, description: desc,
-    images: [banner.src]
-  },
-  twitter: {
-    card: "summary_large_image",
-    title, description: desc,
-    images: [banner.src]
-  }
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const info = await getInfo();
+  const desc = `BoilerCourses - a refreshing Purdue course catalog with ${info.nCourses} courses and ${info.nInstructor} instructors. Find geneds, grades, prerequisites, schedules, insightful reviews, comments, and more.`
+  const title = "BoilerCourses, Purdue's cooler course catalog";
+
+  return {
+    metadataBase: new URL(url),
+    title: "BoilerCourses", description: desc,
+    icons: { icon: "/icon-color.png" },
+    keywords: [ 'Purdue', 'Purdue University', 'Purdue Courses', 'BoilerCourses', 'Boiler Courses',
+      'Boiler', 'Courses', 'BoilerCourses', "Boiler.Courses", 'Boiler Course', "Class", "Course", 'Catalog', 'Catalogue', "Boiler Classes", "BoilerClasses", "Classes",
+      'Purdue Course Search', 'Purdue Course Catalog', 'Boilermakers', "Self-service", "Schedule",
+      "Semester", "Calendar", "Review", "Rating", "Professor", "Grade", "Information" ],
+    openGraph: {
+      url: "/", type: "website",
+      title, description: desc,
+      images: [banner.src]
+    },
+    twitter: {
+      card: "summary_large_image",
+      title, description: desc,
+      images: [banner.src]
+    }
+  };
+}
 
 export default async function RootLayout({ children, }: { children: React.ReactNode }) {
   return (

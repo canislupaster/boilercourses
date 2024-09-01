@@ -6,6 +6,7 @@ import { twMerge } from "tailwind-merge";
 import { useContext } from "react";
 import { AppTooltip, SelectionContext, StyleClasses, useMd } from "./clientutil";
 import { SectionLink } from "./sectionlink";
+import { Collapse } from "react-collapse";
 
 export const CircProg = ({cssColor,...props}: CircularProgressProps&{cssColor: string|undefined}) =>
 	<StyleClasses f={(r)=> <CircularProgress ref={r}
@@ -81,7 +82,7 @@ function ProfSectionList({secs, course, term}: {secs: Section[], course: SmallCo
 
 	return <>{
 		[...byType.entries()].map(([ty,x]) =>
-			<Chip color={chipColorKeys[shitHash(ty)%chipColorKeys.length]} key={ty} className="inline-flex flex-row items-center flex-wrap" >
+			<Chip color={chipColorKeys[shitHash(ty)%chipColorKeys.length]} key={ty} className={`inline-flex flex-row items-center flex-wrap ${secs.length>4 ? "rounded-sm p-2" : ""}`} >
 				{ty.slice(0,3)}
 
 				{x.map((s,i)=>
@@ -125,15 +126,18 @@ function ProfData({x, course, term}: {x: CourseInstructor, course: SmallCourse, 
 		{x.primary && <p className="text-sm text-gray-400 font-bold">Primary instructor</p>}
 
 		<span className="my-2" ></span>
-		<div className="flex flex-col w-full item-center text-center" >
-			{i?.title && <p className="font-bold" >{capitalize(i.title)}</p>}
-			
-			{i?.dept && <p className="text-xs mb-2" >
-				<b className="font-extrabold" >Department:</b> {capitalize(i.dept)}
-			</p>}
 
-			<Meters name={x.name} rmp={data?.rmp ?? null} grade={g} gpaSub="(this course)" />
-		</div>
+		<Collapse isOpened>
+			<div className="flex flex-col w-full item-center text-center" >
+				{i?.title && <p className="font-bold" >{capitalize(i.title)}</p>}
+				
+				{i?.dept && <p className="text-xs mb-2" >
+					<b className="font-extrabold" >Department:</b> {capitalize(i.dept)}
+				</p>}
+
+				<Meters name={x.name} rmp={data?.rmp ?? null} grade={g} gpaSub="(this course)" />
+			</div>
+		</Collapse>
 
 		<div className="w-full flex-row flex items-center p-3 gap-1 flex-wrap" >
 			<div className="inline-flex flex-row flex-wrap items-center gap-1" >

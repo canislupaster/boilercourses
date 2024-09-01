@@ -98,7 +98,7 @@ class DB(env: Environment) {
         val user = integer("user").references(User.id)
         val votes = integer("votes")
 
-        val text = text("text")
+        val text = text("text").nullable()
         val submitted = timestamp("submitted")
     }
 
@@ -153,6 +153,8 @@ class DB(env: Environment) {
 
     //this could be considered sucky, by some
     suspend fun getInfo(): Schema.Info = query {
+        val count = intLiteral(1).count().alias("count")
+
         Schema.Info(
             Term.selectAll().associate {
                 it[Term.id] to Schema.Term(it[Term.purdueId], it[Term.name], it[Term.lastUpdated].toString())
@@ -160,7 +162,9 @@ class DB(env: Environment) {
             Subject.selectAll().map { Schema.Subject(it[Subject.abbr], it[Subject.name]) },
             Attribute.selectAll().map { Schema.Attribute(it[Attribute.id], it[Attribute.name]) },
             ScheduleType.selectAll().map { it[ScheduleType.name] },
-            SEARCH_LIMIT
+            SEARCH_LIMIT,
+            Course.select(count).first()[count].toInt(),
+            Instructor.select(count).first()[count].toInt()
         )
     }
 
@@ -174,23 +178,6 @@ class DB(env: Environment) {
     private fun toCourseId(it: ResultRow) =
         Schema.CourseId(it[Course.id], it[Course.data],
             it[agg[ratingCount]]?.toInt() ?: 0, it[agg[avgRating]])
-
-    //these *seem* slow but sqlite is pretty fast so imma just keep things organized and store everything in db
-    //https://www.sqlite.org/np1queryprob.html
-
-    private suspend fun toInstructorId(it: ResultRow) =
-        Schema.InstructorId(it[Instructor.id], it[Instructor.data], it[Instructor.rmp],
-            (CourseInstructor leftJoin courseWithRating)
-                .select(Course.id, Course.data, agg[ratingCount], agg[avgRating])
-                .where { CourseInstructor.instructor eq it[Instructor.name] }
-                .map { toCourseId(it) })
-
-    suspend fun getCourseRange(n: Int, from: Int) = query {
-        courseWithRating.select(Course.id, Course.data, agg[ratingCount], agg[avgRating])
-            .limit(n, from.toLong())
-            .orderBy(Course.subject to SortOrder.ASC, Course.course to SortOrder.ASC)
-            .map { toCourseId(it) }
-    }
 
     suspend fun lookupCourses(sub: String, num: Int) = query {
         courseWithRating
@@ -206,10 +193,8 @@ class DB(env: Environment) {
 
     suspend fun allPostContent() = query {
         CoursePost.select(CoursePost.course, CoursePost.text)
-            .groupBy {it[CoursePost.course]}.mapValues {it.value.map {x->x[CoursePost.text]}}
-    }
-
-    suspend fun removeAllRatingsFrom(user: Int) = query {
+            .where {CoursePost.text.isNotNull()}
+            .groupBy {it[CoursePost.course]}.mapValues {it.value.map {x->x[CoursePost.text]!!}}
     }
 
     suspend fun allInstructors() = query {
@@ -224,14 +209,22 @@ class DB(env: Environment) {
         profs.map { m[it] }
     }
 
+    data class DBInstructor(val id: Int, val data: Schema.Instructor, val rmp: Schema.RMPInfo?, val courseIds: List<Int>)
+
+    private fun toDBInstructor(r: ResultRow) =
+        DBInstructor(r[Instructor.id], r[Instructor.data], r[Instructor.rmp],
+            CourseInstructor.select(CourseInstructor.course).where {
+                CourseInstructor.instructor eq r[Instructor.data].name
+            }.map { it[CourseInstructor.course] })
+
     suspend fun getInstructorByName(name: String) = query {
         Instructor.select(Instructor.id, Instructor.data, Instructor.rmp, Instructor.name)
-            .where {Instructor.name eq name}.firstOrNull()?.let { toInstructorId(it) }
+            .where {Instructor.name eq name}.firstOrNull()?.let { toDBInstructor(it) }
     }
 
     suspend fun getInstructor(id: Int) = query {
         Instructor.select(Instructor.id, Instructor.data, Instructor.rmp, Instructor.name)
-            .where {Instructor.id eq id}.firstOrNull()?.let { toInstructorId(it) }
+            .where {Instructor.id eq id}.firstOrNull()?.let { toDBInstructor(it) }
     }
 
     suspend fun setAdminByEmail(email: String, newAdmin: Boolean) = query {
@@ -283,9 +276,10 @@ class DB(env: Environment) {
         MakeSession(SessionDB(sid, null), skey)
     }
 
-    private fun allRatingsFrom(user: Int) = CoursePost.select(CoursePost.rating, CoursePost.course)
-        .where {(CoursePost.user eq user) and CoursePost.rating.isNotNull()}
-        .map { it[CoursePost.course] to it[CoursePost.rating]!! }
+    private fun allRatingsFrom(user: Int) =
+        CoursePost.select(CoursePost.rating, CoursePost.course)
+            .where {(CoursePost.user eq user) and CoursePost.rating.isNotNull()}
+            .map { it[CoursePost.course] to it[CoursePost.rating]!! }
 
     suspend fun deleteUser(id: Int) = query {
         val res = allRatingsFrom(id)

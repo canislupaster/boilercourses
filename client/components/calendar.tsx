@@ -1,5 +1,5 @@
 import { useContext, useMemo, useState } from "react";
-import { SelectionContext, simp, useDebounce } from "./clientutil";
+import { SelectionContext, ShowMore, simp, useDebounce } from "./clientutil";
 import { Course, CourseId, CourseInstructor, Day, Section, ServerInfo, SmallCourse, Term, validDays } from "../../shared/types";
 import { SectionLink } from "./sectionlink";
 import { abbr, Input } from "./util";
@@ -20,14 +20,10 @@ export function calendarDays(course: Course, term: Term) {
 	return days;
 }
 
-export function Calendar({days, sections: secs, term}: {
-	days: Day[], sections: [SmallCourse, Section][], term: Term
+export function Calendar({sections: secs, term}: {
+	sections: [SmallCourse, Section][], term: Term
 }) {
 	const selCtx = useContext(SelectionContext);
-
-	const sortedDays = days
-		.map(x=>validDays.indexOf(x))
-		.sort().map(x=>validDays[x]);
 
 	const [search, setSearch] = useState("");
 
@@ -42,16 +38,21 @@ export function Calendar({days, sections: secs, term}: {
 			${x.times.map(v=>`${v.day} ${v.time}`).join("\n")}
 		`).includes(v));
 	}, 100, [secs, search]);
+
+	const sortedDays = [...new Set(filterSecs
+		.flatMap(sec=>sec[1].times.map(v=>v.day)))]
+		.map(x=>validDays.indexOf(x))
+		.sort().map(x=>validDays[x]);
  
 	return <div className="flex flex-col items-stretch gap-4 rounded-xl bg-zinc-900 border-zinc-600 border p-2 md:p-4" >
 		<Input value={search} onChange={ev=>setSearch(ev.target.value)}
 			placeholder="Filter sections..." icon={<IconFilter/>} />
-		<div className='flex flex-col md:flex-row flex-nowrap gap-2'>
-			{sortedDays.length==0 ?
-				<h2 className="font-display font-bold text-xl mx-auto" key="none" >
-					Empty course schedule
-				</h2>
-			: sortedDays.map(d => {
+		{sortedDays.length==0 ?
+			<h2 className="font-display font-bold text-xl mx-auto" key="none" >
+				{search ? "No matches" : "Empty course schedule"}
+			</h2>
+		: <ShowMore forceShowMore={search!=""} ><div className='flex flex-col md:flex-row flex-nowrap gap-2' >
+			{sortedDays.map(d => {
 				const inD = filterSecs
 					.flatMap(x=>x[1].times.filter(y=>y.day==d && y.time!="TBA")
 					.map((t):[number, string, string, SmallCourse, Section]=> {
@@ -61,8 +62,8 @@ export function Calendar({days, sections: secs, term}: {
 					})).sort((a,b) => a[0]-b[0]);
 
 				return <div key={d} className='last:border-r-0 md:border-r-2 border-gray-500 flex-1 pr-2'>
-						<p className='relative text-right text-gray-500'>{d}</p>
-						<div className="overflow-y-auto overflow-x-hidden max-h-40 md:max-h-80 lg:h-full">
+						<p className='text-right text-gray-500' >{d}</p>
+						<div>
 							{ inD.map(([_,start,end,c,sec], i) => {
 								const hi = sec.crn==selCtx.section?.crn;
 
@@ -90,6 +91,6 @@ export function Calendar({days, sections: secs, term}: {
 						</div>
 				</div>;
 			})}
-		</div>
+		</div></ShowMore>}
 	</div>;
 }

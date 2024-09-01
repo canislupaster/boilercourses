@@ -1,11 +1,11 @@
 "use client"
 
-import { AppCtx, AppWrapper, useInfo } from "@/components/wrapper";
-import { CourseId, emptyInstructorGrade, InstructorGrade, InstructorId, latestTermofTerms, mergeGrades, Section, ServerInfo, Term, termIdx, toInstructorGrade, toSmallCourse, trimCourseNum } from "../../../../shared/types";
+import { AppCtx, AppWrapper, setAPI, useInfo } from "@/components/wrapper";
+import { CourseId, emptyInstructorGrade, InstructorGrade, InstructorId, latestTermofTerms, mergeGrades, Section, ServerInfo, SmallCourse, Term, termIdx, toInstructorGrade, toSmallCourse, trimCourseNum } from "../../../../shared/types";
 import { BackButton, BarsStat, NameSemGPA, searchState, SelectionContext, simp, tabProps, TermSelect, WrapStat } from "@/components/clientutil";
 import { Anchor, capitalize, RedditButton, selectProps } from "@/components/util";
 import { Tab, Tabs } from "@nextui-org/tabs";
-import { useContext, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { Meters } from "@/components/proflink";
 import { default as Select, MultiValue } from "react-select";
 import Graph from "@/components/graph";
@@ -14,6 +14,11 @@ import { Calendar } from "@/components/calendar";
 import { decodeQueryToSearchState, encodeSearchState, Search, SearchState } from "@/app/search";
 
 export function Instructor({instructor}: {instructor: InstructorId}) {
+	useEffect(() => {
+		setAPI<InstructorId, number>("prof", {data: instructor.id, result: instructor})
+		setAPI<InstructorId, string>("profbyname", {data: instructor.instructor.name, result: instructor})
+	}, []);
+
 	const i = instructor.instructor;
 	const total = mergeGrades(i.grades.map(x=>toInstructorGrade(x.data)));
 
@@ -91,12 +96,16 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 	const smallCourses = useMemo(()=>new Map(
 		instructor.courses.map(x=>[x.id, toSmallCourse(x)])
 	), [])
-	const cal = <>
+
+	const calSecs = useMemo((): [SmallCourse, Section][]=>
+		termSecs.map(x=>[smallCourses.get(x[0].id)!,x[2]]), [instructor, term]);
+
+	const cal = calSecs.length>0 && <>
 		<TermSelect term={term} setTerm={setTerm} terms={allTerms} name="Schedule" />
-		<Calendar days={days} sections={termSecs.map(x=>[smallCourses.get(x[0].id)!,x[2]])} term={term} />
+		<Calendar sections={calSecs} term={term} />
 	</>;
 
-	const main=<>
+	const main=<div className="flex flex-col gap-2" >
 		<div className="flex lg:flex-row flex-col gap-4 items-stretch relative" >
 			<div className="flex flex-col md:mr-3 justify-start items-start h-full basis-5/12 md:flex-shrink-0">
 				<BackButton>
@@ -176,14 +185,14 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 
 		{!smallCalendar && cal}
 		
-		<div className="flex flex-col" >
+		<div className="flex flex-col mt-2" >
 			<h2 className="font-extrabold font-display text-3xl mb-2" >All Courses</h2>
 			<Search init={initSearch.search} setSearchState={(search)=>
 					setInitSearch({...initSearch, search})
 				}
 				includeLogo={false} />
 		</div>
-	</>;
+	</div>;
 
 	const app = useContext(AppCtx);
 	return <SelectionContext.Provider value={{

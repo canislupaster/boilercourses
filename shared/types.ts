@@ -211,7 +211,9 @@ export type ServerInfo = {
   subjects: { abbr: string, name: string }[],
   attributes: { id: string, name: string }[],
   scheduleTypes: string[],
-  searchLimit: number
+  searchLimit: number,
+  nCourses: number,
+  nInstructor: number
 };
 
 // just what goes on the card...

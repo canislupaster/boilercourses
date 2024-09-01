@@ -572,6 +572,10 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
         smallCourseByCourseId[id]?.firstOrNull()
     }
 
+    suspend fun dbInstructorToInstructorId(dbI: DB.DBInstructor) = lock.read {
+        Schema.InstructorId(dbI.id, dbI.data, dbI.rmp, dbI.courseIds.mapNotNull { courseById[it] })
+    }
+
     suspend fun download() = withContext(Dispatchers.IO) {
         lock.read {
             val json = Json.encodeToString(sortedCourses)

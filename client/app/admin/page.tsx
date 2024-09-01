@@ -97,7 +97,7 @@ function AdminPosts() {
 		<div className="flex flex-col gap-2" >
 			{posts.posts.length==0 && <Alert title="No posts found" txt="Maybe clear your filters?" />}
 			{posts.posts.map(x => <div key={x.id} >
-				<PostCard post={{...x, name: null, isYours: true, voted: false}}
+				<PostCard post={{...x, name: null, voted: false}} yours
 					adminPost={x} deletePost={()=>del.run({data: x.id, refresh})}
 					dismissReports={()=>dismiss.run({data: [x.id], refresh})} />
 			</div>)}

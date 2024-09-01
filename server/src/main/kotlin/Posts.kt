@@ -7,6 +7,7 @@ import kotlinx.serialization.json.put
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNotNull
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.minus
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.plus
 import java.time.Instant
@@ -24,22 +25,22 @@ data class CoursePostsRequest(val course: Int, val sortBy: CoursePostsSortBy)
 
 @Serializable
 data class CoursePost(val name: String?, val rating: Int?,
-                      val votes: Int, val text: String,
-                      val id: Int,
-                      val isYours: Boolean, val voted: Boolean,
+                      //text is only null if edit in coursepostdata (otherwise should be null-asserted n stuff)
+                      val votes: Int, val text: String?,
+                      val id: Int, val voted: Boolean,
                       @Serializable(with=InstantSerializer::class)
                       val submitted: Instant)
+
+@Serializable
+data class AddCoursePost(val showName: Boolean, val edit: Int?, val course: Int, val rating: Int?, val text: String?)
 
 @Serializable
 data class CoursePostData(
     val posts: List<CoursePost>,
     val postLimit: Int,
     val loggedIn: DB.UserData?,
-    val canMakePost: Boolean
+    val edit: CoursePost?
 )
-
-@Serializable
-data class AddCoursePost(val showName: Boolean, val edit: Int?, val course: Int, val rating: Int?, val text: String)
 
 @Serializable
 data class AdminCoursePost(
@@ -60,12 +61,15 @@ fun Kooby.posts(auth: Auth, db: DB, courses: Courses) = path("/posts") {
             if (u.banned) throw APIErrTy.Banned.err()
 
             val post = ctx.json<AddCoursePost>().let {
-                it.copy(text=it.text.trim())
+                it.copy(text=it.text?.trim())
             }
-            if (post.text.length !in 1..POST_LIMIT)
+
+            if (post.text!=null && post.text.length !in 1..POST_LIMIT)
                 throw APIErrTy.BadRequest.err("Post requires text (at most $POST_LIMIT characters)")
             if (post.rating!=null && post.rating !in 1..5)
                 throw APIErrTy.BadRequest.err("Bad rating")
+            if (post.rating==null && post.text==null)
+                throw APIErrTy.BadRequest.err("You should leave a rating or a comment on the course!")
 
             postRatelimit.check(u.id.toString())
 
@@ -105,22 +109,38 @@ fun Kooby.posts(auth: Auth, db: DB, courses: Courses) = path("/posts") {
 
         post("/course", auth.withUserMaybe { u->
             val req = ctx.json<CoursePostsRequest>()
-            val isYours = (if (u?.id==null) Op.FALSE else DB.CoursePost.user eq u.id).alias("isYours")
 
             val didVote = (intLiteral(1) as Expression<Int?>).alias("didVote")
+
             val subq = if (u?.id==null) null else
                 DB.PostVote.select(didVote, DB.PostVote.post).where {
                     DB.PostVote.user eq u.id
                 }.alias("userVoted")
+
             val ret = db.query {
+                val edit = u?.id?.let {uid ->
+                    DB.CoursePost.select(DB.CoursePost.id, DB.CoursePost.text, DB.CoursePost.rating,
+                            DB.CoursePost.name, DB.CoursePost.votes, DB.CoursePost.submitted)
+                        .where {(DB.CoursePost.user eq uid) and (DB.CoursePost.course eq req.course)}
+                        .firstOrNull()?.let {
+                            CoursePost(it[DB.CoursePost.name], it[DB.CoursePost.rating], it[DB.CoursePost.votes],
+                                it[DB.CoursePost.text], it[DB.CoursePost.id],
+                                false, it[DB.CoursePost.submitted])
+                        }
+                }
+
                 ((subq?.let {
                     DB.CoursePost.join(it, JoinType.LEFT, DB.CoursePost.id, it[DB.PostVote.post])
                 } ?: DB.CoursePost)
                     .select(DB.CoursePost.id, DB.CoursePost.text, DB.CoursePost.rating,
                         DB.CoursePost.name, DB.CoursePost.votes, DB.CoursePost.submitted,
-                        *(if (subq==null) emptyArray() else arrayOf(subq[didVote])), isYours))
-                    .where { DB.CoursePost.course eq req.course }
-                    .orderBy(isYours to SortOrder.DESC, *when (req.sortBy) {
+                        *(if (subq==null) emptyArray() else arrayOf(subq[didVote]))))
+                    .where {
+                        ((DB.CoursePost.course eq req.course) and DB.CoursePost.text.isNotNull()).let {
+                            if (edit==null) it else it and (DB.CoursePost.id neq edit.id)
+                        }
+                    }
+                    .orderBy(*when (req.sortBy) {
                         CoursePostsSortBy.Newest->null
                         CoursePostsSortBy.RatingDesc->DB.CoursePost.rating to SortOrder.DESC_NULLS_LAST
                         CoursePostsSortBy.RatingAsc->DB.CoursePost.rating to SortOrder.ASC_NULLS_LAST
@@ -129,11 +149,11 @@ fun Kooby.posts(auth: Auth, db: DB, courses: Courses) = path("/posts") {
                         DB.CoursePost.submitted to SortOrder.DESC
                     ).map {
                         CoursePost(it[DB.CoursePost.name], it[DB.CoursePost.rating], it[DB.CoursePost.votes],
-                            it[DB.CoursePost.text], it[DB.CoursePost.id],
-                                it[isYours], if (subq==null) false else it[subq[didVote]]==1,
+                            it[DB.CoursePost.text]!!, it[DB.CoursePost.id],
+                                if (subq==null) false else it[subq[didVote]]==1,
                             it[DB.CoursePost.submitted])
                     }.let {
-                        CoursePostData(it, POST_LIMIT, u, u!=null && !it.any {r->r.isYours})
+                        CoursePostData(it, POST_LIMIT, u, edit)
                     }
             }
 
@@ -213,7 +233,7 @@ fun Kooby.posts(auth: Auth, db: DB, courses: Courses) = path("/posts") {
                 val req = ctx.json<ListRequest>()
 
                 val nreports = (Count(intLiteral(1)) as Expression<Long?>).alias("count")
-                var where: Op<Boolean> = Op.TRUE
+                var where: Op<Boolean> = DB.CoursePost.text.isNotNull()
                 if (req.new) where = where and DB.CoursePost.new
                 val nreportQuery = DB.PostReport.select(nreports, DB.PostReport.post)
                     .groupBy(DB.PostReport.post)
@@ -246,7 +266,7 @@ fun Kooby.posts(auth: Auth, db: DB, courses: Courses) = path("/posts") {
                         .limit(ADMIN_PAGE_POSTS, req.page.toLong()*ADMIN_PAGE_POSTS)
                         .map {
                             AdminCoursePost(it[DB.CoursePost.id], db.toUData(it),
-                                it[DB.CoursePost.rating], it[DB.CoursePost.text],
+                                it[DB.CoursePost.rating], it[DB.CoursePost.text]!!,
                                 it[nreportQuery[nreports]]?.toInt() ?: 0,
                                 it[DB.CoursePost.votes], it[DB.CoursePost.submitted],
                                 //kinda fucked up!

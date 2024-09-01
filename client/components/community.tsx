@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AppCtx, callAPI, isAuthSet, ModalAction, ModalActions, ModalCtx, ModalCtxType, redirectToSignIn, setAuth, useAPI } from "./wrapper";
 import { Anchor, Button, Chip, IconButton, Loading, Textarea } from "./util";
-import { Icon, IconArrowsSort, IconDotsVertical, IconEdit, IconFlag2, IconFlag2Filled, IconPaperclip, IconPhoto, IconPhotoOff, IconStar, IconStarFilled, IconThumbUp, IconThumbUpFilled, IconTrash, IconUserCircle } from "@tabler/icons-react";
+import { Icon, IconArrowsSort, IconDotsVertical, IconEdit, IconFlag2, IconFlag2Filled, IconPaperclip, IconPhoto, IconPhotoOff, IconStar, IconStarFilled, IconThumbUp, IconThumbUpFilled, IconTrash, IconUserCircle, IconX } from "@tabler/icons-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/popover";
-import { AddPost, AdminPost, Post, PostData, UserData } from "../../shared/posts";
+import { AddPost, AdminPost, EditPost, Post, PostData, UserData } from "../../shared/posts";
 import { useRouter } from "next/navigation";
 import { Alert, AppTooltip, Dropdown, DropdownPart } from "./clientutil";
 import { Checkbox } from "@nextui-org/checkbox";
@@ -11,6 +11,7 @@ import React from "react";
 import { SmallCourse } from "../../shared/types";
 import { CourseLink } from "./card";
 import Markdown, { Components } from "react-markdown";
+import remarkGfm from 'remark-gfm'
 
 type PostSortBy = "ratingAsc" | "ratingDesc" | "newest" | "mostHelpful";
 
@@ -27,23 +28,22 @@ type CoursePostsReq = {
 };
 
 //rating: 1-5
-export function Stars({rating, setStar, sz}: {rating: number, setStar?: (x: number)=>void, sz: number}) {
+export function Stars({rating, setStar, sz}: {rating?: number, setStar?: (x: number)=>void, sz: number}) {
+	const [previewStar, setPreviewStar] = useState<null|number>(null);
+
 	const star = (x: Icon, i: number) =>
 		setStar ? <button key={i} className="m-0 p-0 bg-none border-none inline" onClick={(ev)=>{
-			setStar(i+1);
+			setStar(i+1); setPreviewStar(null);
 			ev.preventDefault();
-		}}  >
+		}} onPointerEnter={() => setPreviewStar(i+1)} onPointerLeave={() => setPreviewStar(null)} >
 			{React.createElement(x, {size: sz})}
 		</button> : React.createElement(x, {key: i, size: sz, className: "inline"});
 
 	return <div className="flex flex-col items-start whitespace-nowrap" ><div className="relative text-gray-200" style={{lineHeight: 0}} >
-		{/* <div className="left-0 top-0 z-10 absolute whitespace-nowrap" >
-			{[...new Array(5)].map((_,i)=>star(i))}
-		</div> */}
 		<div>
 			{[...new Array(5)].map((_,i)=>star(IconStar, i))}
 		</div>
-		<div className="left-0 top-0 absolute text-amber-400 overflow-x-hidden whitespace-nowrap" style={{width: `${rating*20}%`}} >
+		<div className="left-0 top-0 absolute text-amber-400 overflow-x-hidden whitespace-nowrap" style={{width: `${(previewStar ?? rating ?? 0)*20}%`, opacity: previewStar!=null ? "50%" : "100%"}} >
 			{[...new Array(5)].map((_,i)=>star(IconStarFilled, i))}
 		</div>
 	</div></div>;
@@ -104,24 +104,31 @@ function PostCreator({postLimit, add: add2, setAdd: setAdd2}: {
 	postLimit: number, add: AddPost, setAdd: (x: AddPost)=>void
 }) {
 	const make = callAPI<{}, AddPost>("posts/submit", true);
+	const [triedSubmit, setTriedSubmit] = useState(false);
 
 	//needs to keep track of own state, otherwise passed thru modal which is illegal...
 	const [add, setAdd] = useState(add2);
-	useEffect(()=>setAdd2(add), [add]);
+	const empty = add.rating==null && (add.text==null || add.text.trim().length==0);
+
 	const ctx = useContext(ModalCtx);
 
 	const formRef = useRef<HTMLFormElement>(null);
+	const textAreaRef = useRef<HTMLTextAreaElement>(null);
 	const refresh = refreshPosts();
 
 	return <form ref={formRef} onSubmit={(ev) => {
-		if (ev.currentTarget.reportValidity()) {
-			ctx.setLoading();
-			make.run({data: add, cb(r) {
-				if (r) {refresh(); ctx.closeModal();}
-				else ctx.setLoading(false);
-			}});
+		ev.preventDefault();
+		setTriedSubmit(true);
 
-			ev.preventDefault();
+		if (!empty && ev.currentTarget.reportValidity()) {
+			ctx.setLoading();
+			make.run({
+				data: {...add, text: add.text==null || add.text.trim().length==0 ? null : add.text},
+				cb(r) {
+					if (r) {refresh(); ctx.closeModal();}
+					else ctx.setLoading(false);
+				}
+			});
 		}
 	}} className="flex flex-col gap-4" >
 		<Checkbox onChange={(ev)=>setAdd({...add, rating: ev.target.checked ? (add.rating ?? 5) : null})} isSelected={add.rating!=null} >
@@ -132,12 +139,13 @@ function PostCreator({postLimit, add: add2, setAdd: setAdd2}: {
 
 		<b>Write your post here. You can use a subset of markdown to format your content.</b>
 
-		<Textarea required className="mb-0"
+		<Textarea ref={textAreaRef} className="mb-0"
 			onChange={(txt)=>setAdd({...add, text: txt.currentTarget.value.trimStart()})}
-			minLength={1} maxLength={postLimit} value={add.text} >
+			minLength={1} maxLength={postLimit} value={add.text ?? ""}
+			placeholder={add.rating!=null ? "Optional content (markdown)" : "I thought the course..."} >
 		</Textarea>
 
-		<p className="text-xs text-gray-400" >{add.text.trim().length}/{postLimit} characters used</p>
+		<p className="text-xs text-gray-400" >{add.text?.trim()?.length ?? 0}/{postLimit} characters used</p>
 
 		<Checkbox onChange={(ev)=>setAdd({...add, showName: !ev.target.checked})} isSelected={!add.showName} >
 			Post anonymously
@@ -147,8 +155,10 @@ function PostCreator({postLimit, add: add2, setAdd: setAdd2}: {
 			You will still be associated with this post internally, but nothing (name/email/etc) will be made public.
 		</p>}
 
+		{triedSubmit && empty && <Alert bad title="Your post is empty" txt="First add a rating or some text!" />}
+
 		<ModalActions>
-			<Button className="bg-blue-800" onClick={()=>formRef.current?.requestSubmit()} >Submit</Button>
+			<Button disabled={make.loading} className="bg-blue-800" onClick={()=>formRef.current?.requestSubmit()} >Submit</Button>
 		</ModalActions>
 	</form>;
 }
@@ -179,7 +189,7 @@ function createPost(x: AddPost) {
 		}
 
 		app.open({type: "other", actions: acts,
-			name: id==null ? "Create post" : "Edit post",
+			name: id==null || add.text==null ? "Create post" : "Edit post",
 			modal: <PostRefreshHook.Provider value={ctx} >
 				<PostCreator postLimit={postLimit} add={add} setAdd={setAdd} />
 			</PostRefreshHook.Provider>
@@ -187,14 +197,15 @@ function createPost(x: AddPost) {
 	};
 }
 
-function PostEditButton({post, course, postLimit}: {
-	post: Post, course: number, postLimit: number
-}) {
-	const edit = createPost({
-		rating: post.rating, text: post.text, course,
-		showName: post.name!=null, edit: post.id
-	});
+const postToAddPost = (post: EditPost, course: number): AddPost => ({
+	rating: post.rating, text: post.text, course,
+	showName: post.name!=null, edit: post.id
+});
 
+function PostEditButton({post, course, postLimit}: {
+	post: EditPost, course: number, postLimit: number
+}) {
+	const edit = createPost(postToAddPost(post,course));
 	return <IconButton icon={<IconEdit/>} onClick={()=>edit(postLimit)} />;
 }
 
@@ -209,7 +220,7 @@ function BanModal({user}: {user: number}) {
 			Remove all posts
 		</Checkbox>
 		<ModalActions>
-			<Button className="bg-red-600" onClick={()=>
+			<Button className="bg-red-600" disabled={ban.loading} onClick={()=>
 				ban.run({refresh() {
 					refresh();
 					modal.closeModal();
@@ -270,9 +281,9 @@ export function PostCardAdminUser({user, className}: {user: UserData, className?
 	</AppTooltip>;
 }
 
-export function PostCard({post, adminPost, editButton, deletePost, dismissReports}: {
+export function PostCard({post, adminPost, editButton, deletePost, dismissReports, yours}: {
 	post: Post, editButton?: React.ReactNode, adminPost?: AdminPost
-	deletePost?: ()=>void, dismissReports?: ()=>void
+	deletePost?: ()=>void, dismissReports?: ()=>void, yours?: boolean
 }) {
 	const vote = callAPI<{}, {id: number, vote: boolean}>("posts/vote", true);
 	const report = callAPI<{alreadyReported: boolean}, number>("posts/report", true);
@@ -285,7 +296,7 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 		<div className="flex flex-row gap-3 items-center w-full justify-start flex-wrap" >
 			{adminPost==null ? <h2 className="font-bold text-xl flex flex-row gap-1 items-center" >
 				<IconUserCircle/>
-				{post.isYours ? "You" : post.name ?? "Anonymous"}
+				{yours ? "You" : post.name ?? "Anonymous"}
 			</h2> : <div className="flex flex-col gap-2 items-start" >
 				<div className="flex flex-row flex-wrap gap-2 items-center" >
 					<CourseLink type="course" course={adminPost.course} className="text-xl" />
@@ -306,7 +317,7 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 
 		{adminPost ? <pre className="p-3 rounded-md max-h-52 overflow-y-scroll bg-zinc-800 whitespace-pre-wrap" >
 			{post.text}
-		</pre> : <Markdown components={{
+		</pre> : <Markdown remarkPlugins={[remarkGfm]} components={{
 			a: SafeLink, img: SafeImageLink,
 			blockquote: Blockquote,
 			...titleComponents
@@ -326,7 +337,7 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 				{deletePost && <IconButton icon={<IconTrash/>} onClick={deletePost} />}
 
 				<IconButton icon={voted ? <IconThumbUpFilled/> : <IconThumbUp/>} onClick={()=>{
-					if (!post.isYours) {
+					if (!yours) {
 						vote.run({data: {id: post.id, vote: !voted}, refresh(r) {
 							setVoted(r.req!!.vote);
 						}});
@@ -366,9 +377,34 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 	</div>
 }
 
-function CreatePostButton({postLimit, course}: {postLimit: number, course: number}) {
-	const create = createPost({text: "", rating: null, course, edit: null, showName: false});
-	return <Button onClick={()=>create(postLimit)} >Create post</Button>;
+function CreatePostButton({postLimit, course, post}: {postLimit: number, course: number, post?: EditPost}) {
+	const create = createPost(post ? postToAddPost(post, course) : {text: "", rating: null, course, edit: null, showName: false});
+	const make = callAPI<{}, AddPost>("posts/submit", true);
+	const del = callAPI<{}, number>("posts/delete", true);
+	const ctx = useContext(PostRefreshHook);
+
+	const ratingPost = (x: number): AddPost => ({
+		edit: post?.id ?? null, showName: false, rating: x, course: course, text: null
+	});
+
+	return <div className="flex flex-col gap-1 items-center" >
+		<Button onClick={()=>create(postLimit)} >{post && post.text!=null ? "Edit post" : "Create post"}</Button>
+		{(post==undefined || post.text==null) && <>
+			<p className="text text-sm text-gray-400" >or {post ? "update your" : "leave a"} rating</p>
+			{make.loading || del.loading
+				? <span className="text text-sm text-gray-400" >Updating...</span>
+				: <div className="flex flex-row gap-3 items-center" >
+						<Stars rating={post==undefined ? undefined : post.rating!!}
+						setStar={(r) => {
+							make.run({data: ratingPost(r), refresh() { ctx?.(); }});
+						}} sz={35} />
+						{post && <IconButton icon={<IconX size={18} />} onClick={()=>
+							del.run({ data: post.id, refresh() { ctx?.(); } })
+						} />}
+					</div>}
+		</>}
+
+	</div>;
 }
 
 export function Community({course}: {course: SmallCourse}) {
@@ -427,7 +463,7 @@ export function Community({course}: {course: SmallCourse}) {
 		}
 	});
 
-	return <div className="flex items-stretch flex-col gap-2 border-zinc-600 bg-zinc-900 border-1 p-5 rounded-lg mt-2" ><PostRefreshHook.Provider value={refresh} >
+	return <div className="flex items-stretch flex-col gap-2 border-zinc-600 bg-zinc-900 border-1 p-5 rounded-lg pt-2" ><PostRefreshHook.Provider value={refresh} >
 		<div className="flex flex-col items-center gap-3 md:flex-row justify-between" >
 			<div className="flex flex-row gap-2 items-center flex-wrap" >
 				<h2 className="font-extrabold font-display text-2xl" >Community</h2>
@@ -447,19 +483,22 @@ export function Community({course}: {course: SmallCourse}) {
 
 		<div className="py-3 md:px-7">
 			{posts==null ? <Loading/> : <div className="flex flex-col gap-2 overflow-y-scroll max-h-96 md:max-h-[40rem] mb-5" >
-				{posts.res.posts.map(post =>
-					<PostCard post={post} key={post.id} editButton={
-						post.isYours ? <PostEditButton postLimit={posts.res.postLimit} course={course.id} post={post} /> : undefined
-					} />
-				)}
+				{posts.res.edit?.text!=null && <PostCard
+					post={{...posts.res.edit, text: posts.res.edit.text}}
+					key={posts.res.edit.id} yours editButton={
+						<PostEditButton postLimit={posts.res.postLimit} course={course.id} post={posts.res.edit} />
+					} />}
+				{posts.res.posts.map(post => <PostCard post={post} key={post.id} />)}
 			</div>}
 
 			<div className="flex flex-col items-center justify-center gap-2" >
-				{posts?.res?.canMakePost ? <>
-					{posts?.res?.posts?.length==0 && <p>Nobody has contributed to this course yet!</p>}
+				{posts!=null && isLoggedIn ? (posts?.res.edit==null ? <>
+					{posts?.res.posts.length==0 && <p>Nobody has contributed to this course yet!</p>}
 					<CreatePostButton postLimit={posts.res.postLimit} course={course.id} />
-				</> : !isLoggedIn && <>
-					{posts?.res?.posts?.length==0 && <p>Nobody has contributed to this course.</p>}
+				</> : <>
+					<CreatePostButton postLimit={posts.res.postLimit} course={course.id} post={posts.res.edit} />
+				</>) : <>
+					{posts?.res.posts.length==0 && <p>Nobody has contributed to this course.</p>}
 					<p><b>Want to add a post?</b></p>
 					<Button onClick={()=>redir()} >Login</Button>
 				</>}

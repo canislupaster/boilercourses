@@ -13,7 +13,7 @@ import Select, { MultiValue } from "react-select";
 import { ProfLink } from "@/components/proflink";
 import Graph from "@/components/graph";
 import { InstructorList } from "@/components/instructorlist";
-import { Alert, BackButton, BarsStat, NameSemGPA, searchState, SelectionContext, simp, tabProps, TermSelect, useDebounce, useMd, WrapStat } from "@/components/clientutil";
+import { Alert, BackButton, BarsStat, NameSemGPA, searchState, SelectionContext, ShowMore, simp, tabProps, TermSelect, useDebounce, useMd, WrapStat } from "@/components/clientutil";
 import { Calendar, calendarDays } from "@/components/calendar";
 import { Prereqs } from "@/components/prereqs";
 import { Restrictions } from "@/components/restrictions";
@@ -100,8 +100,7 @@ function CourseDetail(cid: CourseId) {
 	const [section, setSection] = useState<Section|null>(null);
 	const app = useContext(AppCtx);
 
-	const days = useMemo(()=>calendarDays(course, term), [course,term]);
-	const smallCalendar = days.length<=3;
+	const smallCalendar = useMemo(()=>calendarDays(course, term).length<=3, [course,term]);
 	//memo so object reference is stable, otherwise calendar might rerender too often!
 	const calSections = useMemo(()=>course.sections[term].map((x):[SmallCourse, Section]=>[small,x]), [course,term]);
 
@@ -118,7 +117,7 @@ function CourseDetail(cid: CourseId) {
 			else app.open({type: "error", name: "Term not available",
 				msg: "We don't have data for this semester"})
 		}, selSection:setSection, section
-	}} ><>
+	}} ><div className="flex flex-col gap-2" >
 		<div className="flex lg:flex-row flex-col gap-4 items-stretch relative" >
 
 			{/* Left half of panel */}
@@ -177,10 +176,11 @@ function CourseDetail(cid: CourseId) {
 				{/* Prerequisites */}
 				{course.prereqs=="failed" ? <p className="text-sm text-red-700 my-3" >Failed to parse prerequisites. Please use the <Anchor href={catalog} >catalog</Anchor>.</p>
 					: (course.prereqs!="none" && <>
-						<h2 className="text-2xl font-display font-extrabold mb-4" >Prerequisites</h2>
-						<div className="max-h-[30rem] overflow-y-scroll mb-4" >
-							<Prereqs prereqs={course.prereqs} />
-						</div></>)}
+							<h2 className="text-2xl font-display font-extrabold mb-4" >Prerequisites</h2>
+							<ShowMore className="mb-4" >
+								<Prereqs prereqs={course.prereqs} />
+							</ShowMore>
+						</>)}
 
 				<Restrictions restrictions={course.restrictions} />
 			</div>
@@ -216,17 +216,17 @@ function CourseDetail(cid: CourseId) {
 					</Tabs>
 				</div>
 
-				{smallCalendar && <Calendar sections={calSections} days={days} term={term} />}
+				{smallCalendar && calSections.length>0 && <Calendar sections={calSections} term={term} />}
 			</div>
 		</div>
 
-		{!smallCalendar && <Calendar sections={calSections} days={days} term={term} />}
+		{!smallCalendar && calSections.length>0 && <Calendar sections={calSections} term={term} />}
 
 		<Community course={small} />
 		<SimilarCourses id={cid.id} />
 
 		<Footer />
-	</></SelectionContext.Provider>;
+	</div></SelectionContext.Provider>;
 }
 
 export function CourseDetailApp(props: CourseId) {

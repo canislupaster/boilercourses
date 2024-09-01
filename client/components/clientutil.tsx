@@ -7,12 +7,13 @@ import { twMerge } from "tailwind-merge";
 import { AppCtx, useInfo } from "./wrapper";
 import Link, { LinkProps } from "next/link";
 import { Anchor, Button, gpaColor, Input, selectProps } from "./util";
-import { IconArrowLeft, IconFilterFilled, IconInfoCircle, IconInfoTriangleFilled } from "@tabler/icons-react";
+import { IconArrowLeft, IconChevronDown, IconChevronUp, IconFilterFilled, IconInfoCircle, IconInfoTriangleFilled } from "@tabler/icons-react";
 import { Progress } from "@nextui-org/progress";
 import { TabsProps } from "@nextui-org/tabs";
 import { default as Select, SingleValue } from "react-select";
 import { PublicClientApplication } from "@azure/msal-browser";
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/popover";
+import { Collapse } from "react-collapse";
 
 export type SelectionContext = {
 	section: Section|null,
@@ -185,6 +186,10 @@ export function StyleClasses({f,classStyles}: {f: (setRef: React.Ref<HTMLElement
 }
 
 export function BarsStat<T>({lhs,type,vs,className}: {lhs: (x: T)=>React.ReactNode, type: "gpa"|"rmp", vs: [T,number|null][], className?: string}) {
+	if (vs.length==0) return <h2 className="text-xl font-bold w-full" >
+		No data available
+	</h2>;
+
 	const y=vs.toSorted((a,b)=>(b[1]??-1) - (a[1]??-1)).map(([i,x], j)=>{
 		if (x==null) {
 			return <React.Fragment key={j} >
@@ -230,7 +235,7 @@ export function NameSemGPA<T>({vs,lhs}: {vs: [T, [Term, number|null, number|null
 		.sort((a,b) => termIdx(a)-termIdx(b)).slice(-5);
 
 	if (sems.length==0)
-		return <p className='text-white text-xl font-bold'>No data available</p>;
+		return <p className='text-xl font-bold'>No data available</p>;
 
 	const sorted = vs.map((x):[T, [Term, number|null, number|null][], number]=> {
 		const bySem = new Map(x[1].map(v=>[v[0],v]));
@@ -274,9 +279,11 @@ export function WrapStat({search, setSearch, title, children, searchName}: {sear
 		<h2 className="text-2xl font-display font-extrabold mb-5" >{title}</h2>
 		<Input icon={<IconFilterFilled/>} placeholder={`Filter ${searchName}...`}
 			value={search} onChange={v => setSearch(v.target.value)} />
-		<div className="max-h-[34rem] overflow-y-scroll mt-3" >
-			{children}
-		</div>
+		<Collapse isOpened >
+			<div className="max-h-[34rem] overflow-y-scroll mt-3" >
+				{children}
+			</div>
+		</Collapse>
 	</>;
 }
 
@@ -355,4 +362,54 @@ export function Dropdown({parts, trigger}: {trigger?: React.ReactNode, parts: Dr
 			</div>
 		</PopoverContent>
 	</Popover>;
+}
+
+export function MoreButton({collapsed, children, className, act: hide, down}: {collapsed: boolean, act: ()=>void, children?: React.ReactNode, className?: string, down?: boolean}) {
+	return <Collapse isOpened={collapsed} >
+		<div className={twMerge("flex flex-col w-full items-center", className)} >
+			<button onClick={hide} className={`flex flex-col items-center cursor-pointer transition ${down ? "hover:translate-y-1" : "hover:-translate-y-1"}`} >
+				{down ? <>{children}<IconChevronDown/></>
+					: <><IconChevronUp/>{children}</>}
+			</button>
+		</div>
+	</Collapse>;
+}
+
+export function ShowMore({children, className, forceShowMore}: {children: React.ReactNode, className?: string, forceShowMore?: boolean}) {
+	const [showMore, setShowMore] = useState<boolean|null>(false);
+	const inner = useRef<HTMLDivElement>(null), ref=useRef<HTMLDivElement>(null);
+
+	useEffect(()=>{
+		if (showMore!=null && !forceShowMore
+			&& inner.current!!.clientHeight<=ref.current!!.clientHeight+100)
+			setShowMore(null); //not needed
+	}, [showMore!=null, forceShowMore]);
+
+	if (showMore==null || forceShowMore)
+		return <div className={twMerge("overflow-y-auto max-h-dvh", className)} >
+			{children}
+		</div>;
+
+	return <div className={className} >
+		<Collapse isOpened >
+			<div ref={ref} className={`relative ${showMore ? "" : "max-h-52 overflow-y-hidden"}`} >
+				<div ref={inner} className={showMore ? "overflow-y-auto max-h-dvh" : ""} >
+					{children}
+				</div>
+
+				<div className="absolute bottom-0 left-0 right-0 z-40" >
+					<MoreButton act={()=>setShowMore(true)} collapsed={!showMore} down >
+						Show more
+					</MoreButton>
+				</div>
+
+				{!showMore &&
+					<div className="absolute bottom-0 h-14 max-h-full bg-gradient-to-b from-transparent to-zinc-900 z-20 left-0 right-0" ></div>}
+			</div>
+		</Collapse>
+
+		<MoreButton act={()=>setShowMore(false)} collapsed={showMore} className="pt-2" >
+			Show less
+		</MoreButton>
+	</div>;
 }

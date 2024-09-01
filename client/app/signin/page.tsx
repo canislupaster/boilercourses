@@ -13,6 +13,7 @@ import icon from "../../public/icon.png";
 import Image from "next/image";
 import { BrowserAuthError, BrowserAuthErrorCodes } from "@azure/msal-browser";
 import { Footer } from "@/components/footer";
+import { Metadata } from "next";
 
 function SignedIn({loggedIn,tok}: {loggedIn: ()=>void,tok:string}) {
 	const ret = useAPI<{id: string, key: string}, string>("login", {data: tok})
@@ -29,6 +30,10 @@ function SignedIn({loggedIn,tok}: {loggedIn: ()=>void,tok:string}) {
 		<Loading/>
 	</>;
 }
+
+export const metadata: Metadata = {
+	title: "Sign into BoilerCourses"
+};
 
 function SignInMSAL({loggedIn, err}: {loggedIn: ()=>void, err?: AuthErr}) {
 	const msal = useMsal();

@@ -19,9 +19,10 @@ const val SESSION_MAXAGE = (3600*24*7).toLong()
 const val NONCE_MAXAGE = (60*5).toLong()
 
 val json = Json {
-    classDiscriminatorMode= ClassDiscriminatorMode.NONE
+    classDiscriminatorMode=ClassDiscriminatorMode.NONE
     encodeDefaults=true
     decodeEnumsCaseInsensitive = true
+    prettyPrint=false
 }
 
 enum class APIErrTy {
@@ -166,11 +167,13 @@ suspend fun main(args: Array<String>) = coroutineScope {
             }
 
             post("/prof") {
-                ctx.resp(db.getInstructor(ctx.json<Int>()) ?: throw APIErrTy.NotFound.err())
+                val dbI = db.getInstructor(ctx.json<Int>()) ?: throw APIErrTy.NotFound.err()
+                ctx.resp(courses.dbInstructorToInstructorId(dbI))
             }
 
             post("/profbyname") {
-                ctx.resp(db.getInstructorByName(ctx.json<String>()) ?: throw APIErrTy.NotFound.err())
+                val dbI = db.getInstructorByName(ctx.json<String>()) ?: throw APIErrTy.NotFound.err()
+                ctx.resp(courses.dbInstructorToInstructorId(dbI))
             }
 
             post("/rmp") {

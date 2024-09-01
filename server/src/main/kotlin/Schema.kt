@@ -330,6 +330,8 @@ object Schema {
         val subjects: List<Subject>,
         val attributes: List<Attribute>,
         val scheduleTypes: List<String>,
-        val searchLimit: Int
+        val searchLimit: Int,
+        val nCourses: Int,
+        val nInstructor: Int
     )
 }

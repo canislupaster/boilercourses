@@ -28,6 +28,8 @@ export async function up(knex: Knex): Promise<void> {
 
 			tb.text("text").notNullable();
 			tb.timestamp("submitted").notNullable();
+
+			tb.unique(["course", "user"]);
 		})
 		.createTable("post_report", tb=>{
 			tb.bigIncrements("id");

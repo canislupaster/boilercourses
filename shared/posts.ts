@@ -17,10 +17,11 @@ export type Post = {
 	votes: number,
 	text: string,
 	id: number,
-	isYours: boolean,
 	voted: boolean,
 	submitted: string
 };
+
+export type EditPost = Omit<Post, "text">&{text: string|null};
 
 export type UserData = {
 	id: number,
@@ -34,7 +35,7 @@ export type PostData = {
 	posts: Post[],
 	postLimit: number,
 	loggedIn: UserData|null,
-	canMakePost: boolean
+	edit: EditPost|null
 };
 
 //data class AddCoursePost(val showName: Boolean, val edit: Int?, val course: Int, val rating: Int?, val text: String)
@@ -43,5 +44,5 @@ export type AddPost = {
 	edit: number|null,
 	course: number,
 	rating: number|null,
-	text: string
+	text: string|null
 };

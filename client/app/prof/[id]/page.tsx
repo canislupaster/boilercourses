@@ -14,7 +14,7 @@ export async function generateMetadata(
 	const desc = i.instructor.title==null ? "Instructor at Purdue University" : capitalize(i.instructor.title);
 
   return {
-    title: title,
+    title: i.instructor.name,
 		description: desc,
 		openGraph: {
 			type: "profile",

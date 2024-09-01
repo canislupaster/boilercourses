@@ -7,9 +7,11 @@ import { NextUIProvider } from "@nextui-org/system";
 import { Button, Loading } from "./util";
 import { usePathname, useRouter } from "next/navigation";
 import { twMerge } from "tailwind-merge";
+import Script from "next/script";
+import { createPortal } from "react-dom";
 
 export type ModalCtxType = {
-	setExtraActions: (x?: React.ReactNode)=>void,
+	extraActions: Element|null,
 	closeModal: ()=>void,
 	setLoading: (loading?: boolean)=>void
 };
@@ -228,27 +230,30 @@ export const useCourse = (id: number): CourseId|null =>
 	useAPI<CourseId,number>("course", {data:id})?.res ?? null;
 
 export const ModalCtx = createContext<ModalCtxType>({
-	setExtraActions: (x?: React.ReactNode)=>{},
+	extraActions: null,
 	closeModal: ()=>{},
 	setLoading: (loading?: boolean)=>{}
 });
 
 export function ModalActions({children}: {children?: React.ReactNode}) {
 	const ctx = useContext(ModalCtx);
-	//bruh, will this actually work??
-	useEffect(()=>ctx.setExtraActions(children), [children]);
-	return <></>;
+	return <>
+		{children && ctx.extraActions && createPortal(children, ctx.extraActions)}
+	</>;
 }
 
 function ModalContentInner({closeAll, close, x}: {x: AppModal&{type: "other"}, close: ()=>void, closeAll?: ()=>void}) {
-	const [extra, setExtra] = useState<React.ReactNode|undefined>();
+	const [extra, setExtra] = useState<Element|null>(null);
 	const [ld, setLd] = useState<boolean>(false);
+	const extraRef = useRef<HTMLDivElement>(null);
 
-	const ctx = {
-		setExtraActions: setExtra,
+	const ctx: ModalCtxType = {
+		extraActions: extra,
 		closeModal: close,
 		setLoading: (x?: boolean)=>setLd(x===undefined || x===true)
 	};
+
+	useEffect(()=>setExtra(extraRef.current), []);
 
 	return <>
 		{x.name && <ModalHeader className="font-display font-extrabold text-2xl" >{x.name}</ModalHeader>}
@@ -259,7 +264,7 @@ function ModalContentInner({closeAll, close, x}: {x: AppModal&{type: "other"}, c
 		</ModalBody>}
 		<ModalFooter className="py-2" >
 			{ld ? <Loading/> : <>
-				{extra}
+				<div ref={extraRef} className="contents" ></div>
 				{x.actions && x.actions.map((x,i) =>
 					<Button key={i} onClick={()=>{
 						const ret = x.act(ctx);
@@ -278,20 +283,23 @@ function ModalContentInner({closeAll, close, x}: {x: AppModal&{type: "other"}, c
 
 export function GoatCounter({goatCounter}: {goatCounter: string}) {
 	const path = usePathname();
+	const initPath = useRef(path);
 	useEffect(() => {
+		if (initPath.current==path) return;
+
 		const gt = (window as any).goatcounter;
 		if (gt) gt.count({path});
 	}, [path]);
 
-	return <>
-		<script async defer src="/count.js" onLoad={()=>{
-			const wind = window as any;
+	return <Script strategy="lazyOnload" src="/count.js" onLoad={() => {
+		const wind = window as any;
 
-			wind.goatcounter.no_onload = true;
-			wind.goatcounter.allow_local = true;
-			wind.goatcounter.endpoint = `https://${goatCounter}.goatcounter.com/count`;
-		}} />
-	</>;
+		wind.goatcounter.no_onload = true;
+		wind.goatcounter.allow_local = true;
+		wind.goatcounter.endpoint = `https://${goatCounter}.goatcounter.com/count`;
+		
+		wind.goatcounter.count({path});
+	}} />;
 }
 
 export function AppWrapper({children, className, info}: {children: React.ReactNode, className?: string, info: ServerInfo}) {
@@ -357,6 +365,8 @@ export function AppWrapper({children, className, info}: {children: React.ReactNo
 		let i=backUrls.length-1;
 		while (i>=0 && new URL(backUrls[i]).pathname==path) i--;
 		if (i<backUrls.length-1) setBackUrls(backUrls.slice(0,i+1));
+
+		setActiveModals([]);
 	}, [path]);
 
   return (<NextUIProvider>

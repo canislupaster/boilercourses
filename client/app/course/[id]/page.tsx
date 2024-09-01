@@ -12,17 +12,19 @@ export async function generateMetadata(
 
 	const course = (await courseById(id)).course;
 
-	const title = `${course.subject} ${trimCourseNum(course.course)}: ${course.name} at Purdue`;
+	const simpleTitle = `${course.subject} ${trimCourseNum(course.course)}: ${course.name}`;
+	const title = `${simpleTitle} at Purdue`
 
   return {
-    title: title,
+    title: simpleTitle,
 		description: course.description,
 		authors: [...new Set(course.sections[latestTerm(course)!]
 			.flatMap(x=>x.instructors)
 			.filter(x=>x.primary).map(x=>({name:x.name})))],
 		openGraph: {
 			url: `/course/${id}`,
-			type: "website", title, description: course.description,
+			type: "website", title,
+			description: course.description,
 			images: [`/course/${id}/thumb`]
 		},
 		twitter: {

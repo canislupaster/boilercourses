@@ -23,6 +23,7 @@
     "@nextui-org/theme": "^2.2.9",
     "@nextui-org/tooltip": "^2.0.39",
     "@tabler/icons-react": "^3.11.0",
+    "@types/react-dom": "^18.3.0",
     "chart.js": "^4.4.1",
     "framer-motion": "^11.3.19",
     "next": "^14.2.5",
@@ -32,6 +33,7 @@
     "react-dom": "^18",
     "react-markdown": "^9.0.1",
     "react-select": "^5.8.0",
+    "remark-gfm": "^4.0.0",
     "sharp": "^0.33.4",
     "tailwind-merge": "^2.4.0"
   },

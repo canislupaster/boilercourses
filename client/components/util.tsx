@@ -1,5 +1,5 @@
 import { Spinner, SpinnerProps } from "@nextui-org/spinner";
-import React, { TextareaHTMLAttributes, useEffect, useState } from "react";
+import React, { forwardRef, TextareaHTMLAttributes, useEffect, useState } from "react";
 import { AnchorHTMLAttributes, HTMLAttributes } from "react";
 import { ClassNameValue, twMerge } from "tailwind-merge";
 import { Footer } from "./footer";
@@ -42,14 +42,16 @@ export const Input = ({className, icon, ...props}: {icon?: React.ReactNode}&Reac
 	</div>}
 </div>
 
-export const Textarea = ({className, children, ...props}: TextareaHTMLAttributes<HTMLTextAreaElement>) =>
+export const Textarea = forwardRef<HTMLTextAreaElement, JSX.IntrinsicElements["textarea"]>((
+	{className, children, ...props}: JSX.IntrinsicElements["textarea"], ref
+) =>
 	<textarea className={twMerge("text-white bg-neutral-950 w-full p-2 border-2 border-zinc-900 focus:outline-none focus:border-blue-500 transition duration-300 rounded-lg mb-5 resize-y max-h-60 min-h-24", className)}
-		rows={6} {...props} >
+		rows={6} {...props} ref={ref} >
 		{children}
-	</textarea>;
+	</textarea>);
 
 export const Button = ({className, icon, disabled, ...props}: HTMLAttributes<HTMLButtonElement>&{icon?: React.ReactNode, disabled?: boolean}) =>
-	<button disabled={disabled} className={twMerge('flex flex-row justify-center gap-1.5 px-4 py-1.5 bg-zinc-800 items-center border text-white rounded-xl border-zinc-700 hover:border-zinc-600 active:border-blue-500 aria-expanded:border-blue-500',
+	<button disabled={disabled} className={twMerge('flex flex-row justify-center gap-1.5 px-4 py-1.5 bg-zinc-800 items-center border text-white rounded-xl border-zinc-700 hover:border-zinc-600 active:border-blue-500 aria-expanded:border-blue-500 group',
 		icon ? "pl-3" : "",
 		disabled ? " bg-zinc-600 text-gray-400" : "",
 		className)} {...props} >
@@ -60,7 +62,7 @@ export const Button = ({className, icon, disabled, ...props}: HTMLAttributes<HTM
 	</button>;
 
 export const IconButton = ({className, icon, ...props}: {icon?: React.ReactNode}&HTMLAttributes<HTMLButtonElement>) =>
-	<button className={twMerge("rounded-full p-2 bg-zinc-900 border-zinc-900 border hover:border-zinc-700 active:border-blue-500 flex items-center justify-center aria-expanded:border-blue-500", className)} {...props} >
+	<button className={twMerge("rounded-full p-2 bg-zinc-800 border-zinc-700 border hover:border-zinc-600 active:border-blue-500 flex items-center justify-center aria-expanded:border-blue-500", className)} {...props} >
 		{icon}
 	</button>;
 
