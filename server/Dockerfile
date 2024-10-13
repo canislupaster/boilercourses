@@ -1,4 +1,4 @@
-FROM node:22-alpine3.19 AS nodejs
+FROM node:22.9-alpine3.19 AS nodejs
 
 FROM eclipse-temurin:22-alpine AS base
 
@@ -12,7 +12,7 @@ FROM base AS builder
 WORKDIR /server
 
 COPY server/scripts/package.json server/scripts/package-lock.json ./scripts/
-RUN cd ./scripts && npm install
+RUN cd ./scripts && npm install && npx playwright install chromium
 
 COPY server/gradlew server/settings.gradle ./
 COPY server/gradle ./gradle
@@ -34,7 +34,7 @@ COPY shared /shared
 COPY --from=builder /server/build/install/boilerclasses ./boilerclasses
 COPY server/application.prod.conf application.conf
 
-HEALTHCHECK --interval=5m --timeout=1s \
+HEALTHCHECK --interval=5m --timeout=1m --start-period=1m \
   CMD curl -s -o /dev/null -w "%{http_code}" -X POST localhost:8080/info | grep -q 200 || exit 1
 
 CMD cd ./scripts && npm run migrate:latest && cd .. && ./boilerclasses/bin/boilerclasses

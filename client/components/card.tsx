@@ -1,13 +1,11 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
-import { Course, CourseId, CourseInstructor, creditStr, formatTerm, InstructorGrade, latestTerm, latestTermofTerms, mergeGrades, ServerInfo, SmallCourse, Term, toSmallCourse, trimCourseNum } from "../../shared/types";
-import { abbr, Anchor, Chip, gpaColor, Loading } from "./util";
-import { InstructorList } from "./instructorlist";
-import { AppLink, AppTooltip, useMd } from "./clientutil";
-import { useAPI, useInfo } from "./wrapper";
-import { TooltipPlacement } from "@nextui-org/tooltip";
 import { twMerge } from "tailwind-merge";
+import { CourseId, creditStr, formatTerm, InstructorGrade, latestTermofTerms, SmallCourse, Term, toSmallCourse, trimCourseNum } from "../../shared/types";
 import attributeToGenEd from "../app/attributeToGenEd.json";
+import { AppLink, AppTooltip, useMd, gpaColor } from "./clientutil";
 import { Stars } from "./community";
+import { InstructorList } from "./instructorlist";
+import { abbr, Anchor, bgColor, borderColor, Chip, Loading, Text, textColor } from "./util";
+import { useAPI } from "./wrapper";
 
 //ideally maybe have term inherited from search semester filter.............?????
 //causes hydration errors due to nested links (card and professors, gpa, etc)
@@ -17,42 +15,42 @@ export function Card({ course, frameless, termFilter, className, extra }: {frame
   const url = `/course/${course.id}?term=${term}`;
 
   const body = <>
-      <div className="text-sm text-gray-300 font-medium flex flex-row flex-wrap items-center gap-1">
-        {creditStr(course)} {<GPAIndicator grades={course.grades} smol />}
-      </div>
-      {course.avgRating!=null && <div className="flex flex-row gap-2 font-display font-black text-md items-center" >
-        <Stars sz={18} rating={course.avgRating} /> {course.ratings}
-      </div>}
+    <Text v="sm" className="flex flex-row flex-wrap items-center gap-1">
+      {creditStr(course)} {<GPAIndicator grades={course.grades} smol />}
+    </Text>
+    {course.avgRating!=null && <div className="flex flex-row gap-2 font-display font-black text-md items-center" >
+      <Stars sz={18} rating={course.avgRating} /> {course.ratings}
+    </div>}
 
-      {extra}
+    {extra}
 
-      <InstructorList short className="my-2" whomst={course.termInstructors[term]} term={term} course={course} />
+    <InstructorList short className="my-2" whomst={course.termInstructors[term]} term={term} course={course} />
 
-      <p className="text-sm text-gray-200 break-words grow">
-        <span>{abbr(course.description)}</span>
-      </p>
+    <Text v="sm" className="grow" >
+      <span>{abbr(course.description)}</span>
+    </Text>
 
-      <div className="flex flex-row flex-wrap">
-        <CourseChips course={course} />
-      </div>
-    </>;
+    <div className="flex flex-row flex-wrap">
+      <CourseChips course={course} />
+    </div>
+  </>;
 
   if (frameless) return (
     <div className="flex flex-col gap-1">
-      <Anchor href={url} className="text-white hover:bg-inherit" >
-        <h2 className="text-2xl font-display font-bold">
+      <Anchor href={url} >
+        <Text v="lg" >
           {course.subject} {trimCourseNum(course.course)}: {course.name}
-        </h2>
+        </Text>
       </Anchor>
       {body}
     </div>
   );
   else return (
     <AppLink href={url}
-      className={twMerge("flex flex-col bg-zinc-800 gap-1 p-6 rounded-md shadow-md hover:scale-105 transition hover:transition cursor-pointer", className)} >
-        <h2 className="text-xl font-display font-bold">{course.subject} {trimCourseNum(course.course)}: {course.name}</h2>
+      className={twMerge("flex flex-col gap-1 p-6 rounded-md shadow-md hover:scale-105 transition hover:transition cursor-pointer", bgColor.secondary, className)} >
+        <Text v="lg" >{course.subject} {trimCourseNum(course.course)}: {course.name}</Text>
         {course.varTitle && 
-          <h3 className="text-lg font-display font-bold">{course.varTitle}</h3>}
+          <Text v="bold" >{course.varTitle}</Text>}
         {body}
     </AppLink>
   );
@@ -65,7 +63,7 @@ function useLookupOrCourse(props: LookupOrCourse): [SmallCourse|"notFound"|null,
   let subject:string, num:number;
   //cant change type! different hooks
   if (props.type=="lookup") {
-    subject=props.subject, num=props.num;
+    subject=props.subject; num=props.num;
     while (num<1e4) num*=10;
 
     const res = useAPI<CourseId[], {subject: string, course: number}>("lookup", {
@@ -74,7 +72,7 @@ function useLookupOrCourse(props: LookupOrCourse): [SmallCourse|"notFound"|null,
 
     if (res!=null) cid=res.res.length==0 ? "notFound" : toSmallCourse(res.res[0]);
   } else {
-    cid=props.course, subject=cid.subject, num=cid.course;
+    cid=props.course; subject=cid.subject; num=cid.course;
   }
 
   return [cid, subject, num];
@@ -86,11 +84,11 @@ export function CourseLinkPopup({extra, ...props}: LookupOrCourse&{extra?: React
   return <div className="pt-2 pb-1 px-2" >{cid==null ? <Loading label={`Loading ${subject}${num}`} />
     : (cid=="notFound" ? <div className="p-2" >
       {extra ? <>
-        <h2 className="text-2xl font-display font-extrabold mb-2" >{subject} {num}</h2>
+        <Text v="lg" className="mb-2" >{subject} {num}</Text>
         {extra}
         <p className="mt-2" >We don't have any more information on this course</p>
       </> : <>
-        <h2 className="text-2xl font-display font-extrabold" >Course not found</h2>
+        <Text v="lg" >Course not found</Text>
         <p>Maybe it's been erased from the structure of the universe, or it just isn't on our servers...</p>
       </>}
     </div>
@@ -102,7 +100,7 @@ export function CourseLink({className,...props}: {className?: string}&LookupOrCo
   const [cid, subject, num] = useLookupOrCourse(props);
 
   return <AppTooltip placement={useMd() ? "right" : "bottom"} content={<CourseLinkPopup {...props} />} >
-    <Anchor className={twMerge(cid=="notFound" || cid==null ? "no-underline" : "text-white", className)} >
+    <Anchor className={twMerge("font-display", cid=="notFound" || cid==null ? "no-underline" : "", className)} >
       {subject} {num}
     </Anchor>
   </AppTooltip>
@@ -131,7 +129,7 @@ export function CourseChips({course}: {course: SmallCourse}) {
 
 export function GPAIndicator({grades,smol,tip}:{grades: InstructorGrade, smol?:boolean, tip?:string}) {
   return <AppTooltip content={tip ?? (grades.gpaSections==0 ? "No data" : `Averaged over ${grades.gpaSections} section${grades.gpaSections==1?"":"s"} (all time)`)} >
-    <div className={`text-white flex flex-row cursor-pointer font-display ${smol ? "font-bold gap-1" : "font-extrabold gap-2"} items-center m-1 p-1 rounded-md px-3 ${grades.gpa==null ? "bg-zinc-800" : ""}`}
+    <div className={`${textColor.contrast} flex flex-row cursor-pointer font-display ${smol ? "font-bold gap-1" : "font-extrabold gap-2"} items-center m-1 p-1 rounded-md px-3 ${grades.gpa==null ? bgColor.default : ""} border ${borderColor.default}`}
       style={{backgroundColor: gpaColor(grades.gpa)}} >
       <span className={smol ? "text-xs font-light" : "font-normal"} >GPA</span>
       <h2 className={smol ? "text-sm" : "text-2xl"} >{grades.gpa?.toFixed(2) ?? "?"}</h2>

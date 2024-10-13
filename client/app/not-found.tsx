@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: "BoilerCourses - Not Found"
 };
 
-export default function Error({ error, reset, }: { error: Error&{digest?:string}, reset:()=>void }) {
+export default function Error(_: { error: Error&{digest?:string}, reset:()=>void }) {
   return <StatusPage title="404 not found" >
     <p>Out of your depth? Let's go back <Anchor href="/" >home</Anchor>.</p>
   </StatusPage>;

@@ -1,9 +1,29 @@
-import { Knex } from "knex";
-import { Course, CourseLikePreReq, Day, formatTerm, Grade, grades, InstructorGrade, Level, levels, mergeGrades, normalizeName, PreReq, PreReqs, Restriction, Seats, Section, Term, termIdx, toInstructorGrade, validDays } from "../../shared/types";
-import { Grades } from "./grades";
-import { deepEquals, getHTML, logArray, ords, postHTML, tableToObject } from "./fetch";
+import {Knex} from "knex";
 import assert from "node:assert";
-import { DBAttribute, DBCourse, DBSchedType, DBSubject } from "./db";
+import {
+  Course,
+  CourseLikePreReq,
+  Day,
+  formatTerm,
+  Grade,
+  grades,
+  InstructorGrade,
+  Level,
+  levels,
+  mergeGrades,
+  normalizeName,
+  PreReq,
+  PreReqs,
+  Restriction,
+  Section,
+  Term,
+  termIdx,
+  toInstructorGrade,
+  validDays
+} from "../../shared/types";
+import {DBAttribute, DBCourse, DBSchedType, DBSubject} from "./db";
+import {deepEquals, getHTML, logArray, ords, postHTML, tableToObject} from "./fetch";
+import {Grades} from "./grades";
 
 type Expr<T, Op extends string> =
 	{type: "leaf", leaf: T}
@@ -20,7 +40,7 @@ type ExprOptions<T,Op extends string> = {
 	| { type: "ex", parseEx: (s: string) => [Expr<T,Op>|null,string] });
 
 function parseExpr<T,Op extends string,>(s: string, {operators,precedence,left,right,...opt}: ExprOptions<T,Op>): [Expr<T,Op>|null,string] {
-	let stack: (({type: "op", op: Op, a: Expr<T,Op>}|{type: "single"})&{prec: number})[] = [{
+	const stack: (({type: "op", op: Op, a: Expr<T,Op>}|{type: "single"})&{prec: number})[] = [{
 		type: "single", prec: 0
 	}];
 
@@ -28,10 +48,10 @@ function parseExpr<T,Op extends string,>(s: string, {operators,precedence,left,r
 		s=s.trimStart();
 		if (s.length==0) {
 			if (stack.length==1) return [null,s];
-			throw "expected expr";
+			throw new Error("expected expr");
 		}
 
-		if (s[0]=="(") {
+		if (s[0]==left) {
 			s=s.slice(1);
 			stack.push({type: "single", prec: 0});
 			continue;
@@ -39,15 +59,15 @@ function parseExpr<T,Op extends string,>(s: string, {operators,precedence,left,r
 
 		let cv: Expr<T,Op>|null;
 		if (opt.type=="atom") {
-			let [v,ns] = opt.parseAtom(s);
-			s=ns, cv = {type: "leaf", leaf: v};
+			const [v,ns] = opt.parseAtom(s);
+			s=ns; cv = {type: "leaf", leaf: v};
 		} else {
-			let [v,ns] = opt.parseEx(s);
-			s=ns, cv=v;
+			const [v,ns] = opt.parseEx(s);
+			s=ns; cv=v;
 		}
 
 		while (stack.length>0) {
-			let p = stack[stack.length-1];
+			const p = stack[stack.length-1];
 
 			s=s.trimStart();
 			let nxt: number|"right"|null = null;
@@ -106,7 +126,7 @@ function parsePreReqs(txt: string, concurrent: boolean=false) {
 		}, s.slice(m2[0].length)];
 
 		const m = s.match(/^(?:(Undergraduate|Graduate|Professional)\s+level\s+)?(\w+) (\w{5})(?:\s+Minimum Grade of ([\w-+]+))?(\s+\[may be taken concurrently\])?/);
-		if (m==null || (m[4]!=undefined && !grades.includes(m[4]))) throw "expected prerequisite";
+		if (m==null || (m[4]!=undefined && !grades.includes(m[4]))) throw new Error("expected prerequisite");
 
 		return [{
 			type: "course",
@@ -130,7 +150,7 @@ function parsePreReqs(txt: string, concurrent: boolean=false) {
 
 //very broad! will match anything kinda, be careful
 function parseCourseTest(s: string): [CourseLikePreReq, string]|null {
-	const courseTestRe = /^(?:Course Attribute:\s+(?<attribute>\w+)|(?<subject>\w+)\s+(?:(?<course>\w{5})(?:\s+to\s+(?<courseTo>\w{5}))?)?)\s+(?:Required Credits:\s+(?<credits>[\d\.]+)\s+)?(?:Minimum Grade of\s+(?<grade>[\w+-]+)\s+)?/;
+	const courseTestRe = /^(?:Course Attribute:\s+(?<attribute>\w+)|(?<subject>\w+)\s+(?:(?<course>\w{5})(?:\s+to\s+(?<courseTo>\w{5}))?)?)\s+(?:Required Credits:\s+(?<credits>[\d.]+)\s+)?(?:Minimum Grade of\s+(?<grade>[\w+-]+)\s+)?/;
 
 	let match=s.match(/^Course or Test:\s+/);
 	if (match!=null) s=s.slice(match[0].length);
@@ -140,7 +160,7 @@ function parseCourseTest(s: string): [CourseLikePreReq, string]|null {
 		return null;
 
 	const {grade, course, courseTo, credits, subject, attribute} = match.groups;
-	if (grade!==undefined && !grades.includes(grade)) throw "invalid grade";
+	if (grade!==undefined && !grades.includes(grade)) throw new Error("invalid grade");
 
 	const base = {
 		minCredits: credits==undefined ? null : Number.parseInt(credits),
@@ -170,8 +190,8 @@ function parseCourseTest(s: string): [CourseLikePreReq, string]|null {
 function parseGenReq(s: string): [PreReqExpr|null,string] {
 	const ruleRe = /^Rule: (.+):.+\n\s*(\))?(?:and|or)*\s*([\s\S]*?)End of rule \1\.?/;
 	const studentAttrRe = /^Student Attribute:\s+(\w+)/
-	const gpaRe = /^([\d\.]+) gpa\./
-	const creditsRe = /^Required Credits:\s+([\d\.]+)/
+	const gpaRe = /^([\d.]+) gpa\./
+	const creditsRe = /^Required Credits:\s+([\d.]+)/
 	const rangeRe = /^(\w+)?\s+(\d+)(?:\s+to\s+(\d+))?/
 
 	const m = (re: RegExp): RegExpMatchArray|null => {
@@ -187,7 +207,7 @@ function parseGenReq(s: string): [PreReqExpr|null,string] {
 	if (ctest!=null) {
 		ret={type: "leaf", leaf: ctest[0]};
 		s=ctest[1];
-	} else if (match=m(ruleRe)) {
+	} else if ((match=m(ruleRe))) {
 		isRule=true;
 
 		let cv: PreReqExpr|null = null;
@@ -201,38 +221,38 @@ function parseGenReq(s: string): [PreReqExpr|null,string] {
 
 		ret=cv;
 		if (match[2]!==undefined) s=`${match[2]} ${s}`;
-	} else if (match=m(studentAttrRe)) {
+	} else if ((match=m(studentAttrRe))) {
 		ret={type: "leaf", leaf: {type: "studentAttribute", attr: match[1]}};
-	} else if (match=m(gpaRe)) {
+	} else if ((match=m(gpaRe))) {
 		const r = parseCourseTest(s);
 		const gpa = Number.parseFloat(match[1]);
 		if (r!=null) {
 			s=r[1];
 			ret = {type: "leaf", leaf: {...r[0], minGPA: gpa}};
-		} else if (match=m(/^00100\s+to\s+59\d{3}/)) {
+		} else if ((match=m(/^00100\s+to\s+59\d{3}/))) {
 			ret = {type: "leaf", leaf: {type: "gpa", minimum: gpa}};
 		} else {
-			throw "gpa expects all courses or one course/test selector";
+			throw new Error("gpa expects all courses or one course/test selector");
 		}
-	} else if (match=m(rangeRe)) {
+	} else if ((match=m(rangeRe))) {
 		if (match[1]==undefined) ret=null; //range of wat?! c.f. spring 2024 econ 499...
 		else ret = {type: "leaf", leaf: {
 			type: "range", what: match[1],
 			min: Number.parseInt(match[2]),
 			max: Number.parseInt(match[3])
 		}};
-	} else if (match=m(creditsRe)) {
+	} else if ((match=m(creditsRe))) {
 		ret={type: "leaf", leaf: {type: "credits", minimum: Number.parseInt(match[1])}};
 	} else {
 		// expected to error on e.g. spring 2024 com 565, which is literally just "may not be taken concurrently" D:
-		throw "expected general requirement";
+		throw new Error("expected general requirement");
 	}
 
 	if (!isRule) {
 		match=m(/^May (not )?be taken concurrently\./);
-		if (match==null) throw "expected may / may not be taken concurrently.";
-		if (ret!=null && ret.type=="leaf" && (ret.leaf as any).concurrent!==undefined) {
-			(ret.leaf as any).concurrent = match[1]==undefined;
+		if (match==null) throw new Error("expected may / may not be taken concurrently.");
+		if (ret!=null && ret.type=="leaf" && "concurrent" in ret.leaf) {
+			ret.leaf.concurrent = match[1]==undefined;
 		}
 	}
 
@@ -294,7 +314,7 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 
 	if (subjectArg!=undefined) {
 		subjects=subjects.filter(x=>x.abbr.toLowerCase()==subjectArg.toLowerCase());
-		if (subjects.length==0) throw `subject ${subjectArg} not found`;
+		if (subjects.length==0) throw new Error(`subject ${subjectArg} not found`);
 	}
 
 	//subject -> course code
@@ -304,10 +324,6 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 	};
 
 	const courseNames = new Map<string, Map<number, CourseInfo>>();
-	const allSections: (
-			Omit<Section,"seats"|"waitlist"|"permissionOfInstructor"|"permissionOfDept">
-				&{course: number, subject: string}
-		)[] = [];
 
 	const allInstructors: [string, number][] = [];
 
@@ -366,14 +382,14 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 			const objs = tableToObject(allCourses, tb);
 
 			const times: Section["times"] = [];
-			let dateRange: (number|null)[] = [null,null];
+			const dateRange: (number|null)[] = [null,null];
 			let scheduleType:string|null=null;
-			let instructors: Map<string,boolean> = new Map();
+			const instructors: Map<string,boolean> = new Map();
 			for (const o of objs) {
 				const dr = o["Date Range"].split(" - ")
 				if (dr.length==0 || o.Where=="TBA") continue;
 
-				let start=Date.parse(`${dr[0]} Z`), end = Date.parse(`${dr[1]} Z`);
+				const start=Date.parse(`${dr[0]} Z`), end = Date.parse(`${dr[1]} Z`);
 				if (dateRange[0]==null || start<dateRange[0]) dateRange[0]=start;
 				if (dateRange[1]==null || end>dateRange[1]) dateRange[1]=end;
 
@@ -410,21 +426,22 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 		assert(names.length==more.length, "mismatched rows of subject query");
 
 		for (let i=0; i<names.length; i++) {
-			const s = courseNames.get(names[i].subject) ?? new Map<number, CourseInfo>();
-			if (!s.has(names[i].course)) s.set(names[i].course, {
-				sections: [], grades: new Map()
-			});
+			// no date range / TBA
+			if (more[i]==null) continue;
 
-			courseNames.set(names[i].subject, s);
-
-			const x = more[i];
-			if (x!=null) allSections.push({
+			const sec: Section = {
 				name: names[i].name,
-				course: names[i].course, subject: names[i].subject,
 				crn: names[i].crn,
 				section: names[i].section,
-				...x
-			});
+				...more[i]!
+			};
+
+			const s = courseNames.get(names[i].subject) ?? new Map<number, CourseInfo>();
+			const v = s.get(names[i].course);
+			if (v==undefined) s.set(names[i].course, { sections: [sec], grades: new Map() });
+			else s.set(names[i].course, {...v, sections: [...v.sections, sec]});
+
+			courseNames.set(names[i].subject, s);
 		}
 	}, sub => sub.abbr);
 
@@ -439,39 +456,12 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 		gr.set(i, [...(gr.get(i) ?? []), g]);
 	}
 
-	console.log(`getting availability for ${allSections.length} sections`);
-
-	await logArray(allSections, async (sec) => {
-		const res = await getHTML("https://selfservice.mypurdue.purdue.edu/prod/bwckschd.p_disp_detail_sched", {
-			term_in: termId,
-			crn_in: sec.crn.toString()
-		});
-
-		const labels = res("div.pagebodydiv table.datadisplaytable[width=\"100%\"] td.dddefault > span.fieldlabeltext")
-			.toArray().map(x => res(x).text().trim());
-
-		const obj = tableToObject(res,res("table.datadisplaytable table.datadisplaytable tbody"));
-		const seats: Seats[] = obj.map((x) => ({used: Number.parseInt(x.Actual), left: Number.parseInt(x.Remaining)}));
-
-		const normal = seats.at(obj.findIndex(x => x[""]=="Seats"));
-		const waitlist = seats.at(obj.findIndex(x => x[""]=="Waitlist Seats"));
-		if (normal==undefined || waitlist==undefined)
-			throw "couldn't find registration availability";
-
-		const s = {
-			...sec, course: undefined, subject: undefined, //clear course/subject
-			permissionOfInstructor: labels.includes("Permission from Instructor Required"),
-			permissionOfDept: labels.includes("Permission from Department Required"),
-			seats: normal, waitlist
-		};
-
-		courseNames.get(sec.subject)!.get(sec.course)!.sections.push(s);
-	}, (sec) => `${sec.subject} ${sec.course} - ${sec.section}`);
-
 	const courseArr = [...courseNames.entries()].flatMap(([subject,courses]) => [...courses.keys()]
 		.map((k): [string,number] => [subject,k]));
 
 	console.log(`getting details for ${courseArr.length} courses`);
+
+	const courseIds: number[] = [];
 
 	const courses = await logArray(courseArr, async ([subject,course]) => {
 		//https://selfservice.mypurdue.purdue.edu/prod/bwckctlg.p_disp_course_detail?cat_term_in=202510&subj_code_in=MA&crse_numb_in=66400
@@ -484,7 +474,7 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 		const name = res(".nttitle").first().text().split(" - ")[1].trim();
 
 		const td = res("div.pagebodydiv table.datadisplaytable[width=\"100%\"] td.ntdefault");
-		let bits: {
+		const bits: {
 			heading?: string,
 			txt: string
 		}[] = [];
@@ -508,12 +498,12 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 		}
 
 		bits[0].txt=bits[0].txt.trim();
-		const match = bits[0].txt.match(/^Credit Hours: [\d\.]+(\s*\w+\s*[\d\.]+)?.\s*/);
+		const match = bits[0].txt.match(/^Credit Hours: [\d.]+(\s*\w+\s*[\d.]+)?.\s*/);
 		if (match!=null) {
 			bits[0].txt=bits[0].txt.slice(match[0].length);
 		}
 
-		let end = " Credit hours";
+		const end = " Credit hours";
 		bits[1].txt=bits[1].txt.trim();
 		assert(bits[1].txt.endsWith(end), "doesn't end with credit hours");
 		bits[1].txt=bits[1].txt.slice(0,bits[1].txt.length-end.length);
@@ -523,7 +513,7 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 			precedence: [1,1],
 			type: "atom",
 			parseAtom: (credits) => {
-				const m = credits.match(/^[\d\.]+/)![0];
+				const m = credits.match(/^[\d.]+/)![0];
 				return [{value: Number.parseInt(m)}, credits.slice(m.length)];
 			},
 			left: "(", right: ")"
@@ -534,8 +524,8 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 		if (expr.type=="op" && expr.op=="TO") {
 			credits={
 				type: "range",
-				min: reduceExpr(expr, x=>x.value, (a,b,c) => Math.min(a,b)),
-				max: reduceExpr(expr, x=>x.value, (a,b,c) => Math.max(a,b))
+				min: reduceExpr(expr, x=>x.value, (a,b,) => Math.min(a,b)),
+				max: reduceExpr(expr, x=>x.value, (a,b,) => Math.max(a,b))
 			};
 		} else {
 			credits={
@@ -552,8 +542,8 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 		}
 
 		let reqs: Course["prereqs"] = "none";
-		let restrictions: Course["restrictions"] = [];
-		let attributes: string[] = [];
+		const restrictions: Course["restrictions"] = [];
+		const attributes: string[] = [];
 
 		let which: "none"|"restrictions"|"requirements" = "none";
 		let curRestrictionTy: Pick<Restriction, "exclusive"|"type">|null = null;
@@ -603,7 +593,7 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 
 						switch (type) {
 							case "level":
-							case "class":
+							case "class": {
 								if (levels.includes(bTrim)) {
 									restrictions.push({type: "level",exclusive,level: bTrim as Level});
 									break;
@@ -612,7 +602,7 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 								const m = bTrim.match(/^(Junior|Sophomore|Freshman|Senior):? (\d+)(?: - (\d+)|\+) hours$|^Professional (\w+) Year$/);
 								
 								if (m==null)
-									throw "invalid classification or level, (which are parsed as one due to the abomination that is AAE 571)";
+									throw new Error("invalid classification or level, (which are parsed as one due to the abomination that is AAE 571)");
 
 								if (m[4]===undefined) restrictions.push({type: "class",exclusive,
 									class: m[1] as "Sophomore" | "Junior" | "Freshman" | "Senior",
@@ -624,6 +614,7 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 								});
 
 								break;
+							}
 							case "cohort": restrictions.push({type,exclusive,cohort: bTrim}); break;
 							case "college": restrictions.push({type,exclusive,college: bTrim}); break;
 							case "degree": restrictions.push({type,exclusive,degree: bTrim}); break;
@@ -642,7 +633,7 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 						};
 
 						if (b.txt.endsWith(":")) b.txt=b.txt.slice(0,b.txt.length-1);
-						const ty = Object.entries(tyMap).find(([k,v]) => v.find(x => b.txt.endsWith(x))!==undefined);
+						const ty = Object.entries(tyMap).find(([,v]) => v.find(x => b.txt.endsWith(x))!==undefined);
 
 						if (ty!==undefined) curRestrictionTy = {
 							exclusive: b.txt.startsWith("May not be"),
@@ -653,8 +644,8 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 				} else if (which=="requirements") {
 					genReqStrs[genReqStrs.length-1]+=` ${b.txt}`;
 				}
-			} catch(e) {
-				console.error(`error parsing ${subject} ${course}: ${e}\nline: ${b.txt}`)
+			} catch (e) {
+				console.error(`error parsing ${subject} ${course}: ${e as Error}\nline: ${b.txt}`)
 			}
 		}
 
@@ -673,7 +664,7 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 				]};
 			} catch (e) {
 				reqs="failed";
-				console.error(`error parsing prerequisites for ${subject} ${course}: ${e}\npart: ${txt}`);
+				console.error(`error parsing prerequisites for ${subject} ${course}: ${e as Error}\npart: ${txt}`);
 			}
 		};
 
@@ -681,7 +672,7 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 
 		await knex.transaction(async trans => {
 			const pcourseRow = await trans<DBCourse>("course").where({subject, course, name}).first();
-			const pcourse: Course|undefined = pcourseRow==undefined ? undefined : JSON.parse(pcourseRow.data);
+			const pcourse: Course|undefined = pcourseRow==undefined ? undefined : JSON.parse(pcourseRow.data) as Course;
 
 			const newInstructors = new Set(info.sections.flatMap(x => x.instructors).map(x => x.name));
 			const instructorSet = newInstructors.union(
@@ -724,32 +715,6 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 			}
 			
 			type CourseNoUpdated = Omit<Course, "lastUpdated">;
-			const mergeCourses = (old: CourseNoUpdated|undefined, newCourse: CourseNoUpdated): Course|null => {
-				const out = {
-					...newCourse,
-					instructor: instructorOut,
-					sections: { ...old?.sections, ...newCourse.sections }
-				};
-
-				if (old!==undefined
-					&& deepEquals({...out, lastUpdated: undefined}, {...pcourse, lastUpdated: undefined}))
-					return null;
-
-				const stripSeatsGrades = (x: CourseNoUpdated) => ({
-					...x,
-					sections: Object.fromEntries(Object.entries(out.sections)
-						.map(([k,v]) => [k, v.map(sec=>({...sec, seats: undefined}))])),
-					instructors: undefined,
-					lastUpdated: undefined
-				});
-
-				return {
-					...out,
-					lastUpdated: pcourse && deepEquals(stripSeatsGrades(out), stripSeatsGrades(pcourse))
-						? pcourse.lastUpdated : new Date().toISOString()
-				};
-			};
-
 			const toMerge: CourseNoUpdated = {
 				name, subject, course,
 				instructor: instructorOut,
@@ -764,27 +729,66 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 				prereqs: reqs, attributes,
 			}; 
 
-			const newCourse = isNewer ? mergeCourses(pcourse, toMerge) : mergeCourses(toMerge, pcourse);
-			if (newCourse==null) return;
-
 			let id: number;
-			if (pcourseRow==undefined) {
+			if (pcourse==undefined) {
 				id=(await trans<DBCourse>("course").insert({
 					subject, course, name,
-					data: JSON.stringify(newCourse)
+					data: JSON.stringify({
+						...toMerge, lastUpdated: new Date().toISOString()
+					})
 				}, "id"))[0].id;
 			} else {
-				id=pcourseRow.id;
-				await trans<DBCourse>("course").where("id", pcourseRow.id).update({
-					data: JSON.stringify(newCourse)
-				});
-			}
+				id=pcourseRow!.id;
 
+				const out = {
+					...isNewer ? toMerge : pcourse,
+					instructor: instructorOut,
+					sections: { ...pcourse.sections, ...toMerge.sections }
+				};
+
+				const oldSectionsByCRN = new Map<string, Section>();
+				for (const [term,x] of Object.entries(pcourse.sections)) {
+					for (const s of x) {
+						oldSectionsByCRN.set(`${term}\n${s.crn}`, s);
+					}
+				}
+
+				for (const [term,x] of Object.entries(toMerge.sections)) {
+					for (const s of x) {
+						const os = oldSectionsByCRN.get(`${term}\n${s.crn}`);
+
+						if (os) {
+							s.seats ??= os.seats;
+							s.room ??= os.room;
+						}
+					}
+				}
+
+				const stripSeatsGrades = (x: CourseNoUpdated) => ({
+					...x,
+					sections: Object.fromEntries(Object.entries(out.sections)
+						.map(([k,v]) => [k, v.map(sec=>({
+							...sec, seats: undefined, waitlist: undefined, room: undefined
+						}))])),
+					instructors: undefined,
+					lastUpdated: undefined
+				});
+
+				const data = JSON.stringify({
+					...out,
+					lastUpdated: deepEquals(stripSeatsGrades(toMerge), stripSeatsGrades(pcourse))
+						? pcourse.lastUpdated : new Date().toISOString()
+				});
+
+				await trans<DBCourse>("course").where("id", pcourseRow!.id).update({ data });
+			};
+
+			courseIds.push(id);
 			for (const i of newInstructors) allInstructors.push([i,id]);
 		});
 	}, ([course, sub]) => `${sub} ${course}`);
 
 	console.log(`done (${courses.reduce((y,x) => (x.status=="fulfilled" ? 1 : 0)+y,0)}/${courses.length} successful)`);
 
-	return { instructors: allInstructors };
+	return { instructors: allInstructors, courseIds };
 }

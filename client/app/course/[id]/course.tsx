@@ -1,25 +1,26 @@
 "use client"
 
-import { Course, CourseId, creditStr, emptyInstructorGrade, formatTerm, CourseInstructor, InstructorGrade, InstructorGrades, mergeInstructors, latestTerm, mergeGrades, RMPInfo, Section, ServerInfo, Term, termIdx, toSmallCourse, SmallCourse, trimCourseNum } from "../../../../shared/types";
-import { abbr, Anchor, CatalogLinkButton, firstLast, LinkButton, Loading, RedditButton, selectProps } from "@/components/util";
-import { Footer } from "@/components/footer";
-import { AppCtx, AppWrapper, setAPI, useAPI, useInfo } from "@/components/wrapper";
-import { useContext, useEffect, useMemo, useState } from "react";
-import boilerexamsCourses from "../../boilerexamsCourses.json";
-import boilerexams from "../../../public/boilerexams-icon.png";
-import Image from "next/image";
-import { Tab, Tabs } from "@nextui-org/tabs";
-import Select, { MultiValue } from "react-select";
-import { ProfLink } from "@/components/proflink";
+import { CourseNotificationButton } from "@/components/availability";
+import { Calendar, calendarDays } from "@/components/calendar";
+import { CourseChips, GPAIndicator } from "@/components/card";
+import { Alert, BarsStat, NameSemGPA, searchState, SelectionContext, ShowMore, simp, TermSelect, useDebounce, useMd, WrapStat } from "@/components/clientutil";
+import { Community } from "@/components/community";
 import Graph from "@/components/graph";
 import { InstructorList } from "@/components/instructorlist";
-import { Alert, BackButton, BarsStat, NameSemGPA, searchState, SelectionContext, ShowMore, simp, tabProps, TermSelect, useDebounce, useMd, WrapStat } from "@/components/clientutil";
-import { Calendar, calendarDays } from "@/components/calendar";
+import { MainLayout } from "@/components/mainlayout";
 import { Prereqs } from "@/components/prereqs";
+import { ProfLink } from "@/components/proflink";
 import { Restrictions } from "@/components/restrictions";
 import { SimilarCourses } from "@/components/similar";
-import { CourseChips, GPAIndicator } from "@/components/card";
-import { Community } from "@/components/community";
+import { abbr, Anchor, bgColor, Button, CatalogLinkButton, containerDefault, Divider, firstLast, LinkButton, Loading, RedditButton, selectProps, Text } from "@/components/util";
+import { AppCtx, setAPI, useAPI, useInfo } from "@/components/wrapper";
+import { IconPaperclip, IconWorld } from "@tabler/icons-react";
+import Image from "next/image";
+import React, { useContext, useEffect, useMemo, useState } from "react";
+import Select, { MultiValue } from "react-select";
+import { Attachment, CourseId, CourseInstructor, creditStr, emptyInstructorGrade, formatTerm, InstructorGrade, InstructorGrades, latestTerm, mergeGrades, RMPInfo, Section, SmallCourse, Term, termIdx, toSmallCourse, trimCourseNum } from "../../../../shared/types";
+import boilerexams from "../../../public/boilerexams-icon.png";
+import boilerexamsCourses from "../../boilerexamsCourses.json";
 
 const useSmall = (cid: CourseId) => useMemo(()=>toSmallCourse(cid),[cid.id]);
 
@@ -34,7 +35,7 @@ function InstructorGradeView({xs,type,cid,term}: {xs: CourseInstructor[], cid: C
 		res=o.res;
 	}
 
-	let out: [CourseInstructor, number|null][] = xs.map((i,j) => {
+	const out: [CourseInstructor, number|null][] = xs.map((i,j) => {
 		if (type=="gpa" && cid.course.instructor[i.name]!=undefined) {
 			const g = mergeGrades(Object.values(cid.course.instructor[i.name]));
 			if (g.gpa!=null) return [i,g.gpa];
@@ -46,7 +47,7 @@ function InstructorGradeView({xs,type,cid,term}: {xs: CourseInstructor[], cid: C
 	});
 
 	return <BarsStat lhs={i=>
-			<ProfLink x={i} className="font-semibold text-nowrap text-white"
+			<ProfLink x={i} className="font-semibold text-nowrap"
 				course={small} term={term}
 				label={abbr(i.name, isMd ? 35 : 20)} />
 			} className="grid-cols-[4fr_10fr_1fr] "
@@ -59,15 +60,17 @@ function InstructorSemGPA({xs, term, cid}: {xs: CourseInstructor[], term: Term, 
 	const vs = xs.map((x): [CourseInstructor, InstructorGrades] => [
 			x, cid.course.instructor[x.name] ?? {}
 		]).map(([i,x]): [CourseInstructor, [Term, number|null, number][]] => [
-			i, Object.entries(x).filter(([sem,v]) => termIdx(sem as Term)<=idx)
+			i, Object.entries(x).filter(([sem,]) => termIdx(sem as Term)<=idx)
 				.map(([sem,v])=>[sem as Term, v?.gpa ?? null, v?.numSections ?? 0]),
 		]);
 	
 	const small = useSmall(cid);
 	return <NameSemGPA vs={vs} lhs={i=>
-		<ProfLink className='text-white font-bold text-xl' x={i} course={small} term={term} />
+		<ProfLink className='font-bold text-lg' x={i} course={small} term={term} />
 	} />;
 }
+
+const averageInstructor = {type: "avg"} as const;
 
 function CourseDetail(cid: CourseId) {
 	const latest = latestTerm(cid.course)!;
@@ -79,23 +82,12 @@ function CourseDetail(cid: CourseId) {
 	const [instructorSearch, setInstructorSearch] = useState("");
 
 	const small = useSmall(cid);
-	const instructors = small.termInstructors[term] ?? [];
+	const instructors = useMemo(()=>small.termInstructors[term] ?? [], [term]);
 
 	const searchInstructors = useDebounce(() => {
 		const v = simp(instructorSearch);
 		return instructors.filter(x => simp(x.name).includes(v));
 	}, 100, [term, instructorSearch]);
-
-	const firstInstructor = instructors.find(x=>course.instructor[x.name]!==undefined);
-	const [selectedInstructors, setSelInstructors] = useState<CourseInstructor[]>(
-		firstInstructor==undefined ? [] : [firstInstructor]
-	);
-
-	const graphGrades: [string,InstructorGrade][] = useMemo(() =>
-		selectedInstructors.map(x =>
-			[x.name,course.instructor[x.name]==undefined ? emptyInstructorGrade
-				: mergeGrades(Object.values(course.instructor[x.name]))]
-		), [selectedInstructors, term, course]);
 
 	const [section, setSection] = useState<Section|null>(null);
 	const app = useContext(AppCtx);
@@ -103,6 +95,8 @@ function CourseDetail(cid: CourseId) {
 	const smallCalendar = useMemo(()=>calendarDays(course, term).length<=3, [course,term]);
 	//memo so object reference is stable, otherwise calendar might rerender too often!
 	const calSections = useMemo(()=>course.sections[term].map((x):[SmallCourse, Section]=>[small,x]), [course,term]);
+	const attachmentsTerm = (Object.entries(course?.attachments ?? {}) as [Term, Attachment[]][])
+		.sort(([a],[b]) => termIdx(b)-termIdx(a));
 
 	const catalog=`https://selfservice.mypurdue.purdue.edu/prod/bwckctlg.p_disp_course_detail?cat_term_in=${useInfo().terms[term]!.id}&subj_code_in=${course.subject}&crse_numb_in=${course.course}`;
 
@@ -111,122 +105,177 @@ function CourseDetail(cid: CourseId) {
 	const gradesForTerm = useMemo(()=>
 		mergeGrades(Object.values(course.instructor).map(x=>x[term] ?? emptyInstructorGrade)), [term]);
 
+	const hasGrades = instructors.some(x=>course.instructor[x.name]!==undefined);
+	type GradeInstructorOption = ({type:"instructor"}&CourseInstructor)|typeof averageInstructor;
+	const [selectedInstructors, setSelInstructors] = useState<GradeInstructorOption[]>(
+		hasGrades ? [averageInstructor] : []
+	);
+
+	const graphGrades: [string,InstructorGrade][] = useMemo(() =>
+		selectedInstructors.map(x =>
+			x.type=="avg" ? ["Average",
+				mergeGrades(Object.values(course.instructor).flatMap(x=>Object.values(x)))]
+			: [x.name,course.instructor[x.name]==undefined ? emptyInstructorGrade
+				: mergeGrades(Object.values(course.instructor[x.name]))]
+		), [selectedInstructors, term, course]);
+
+	const gradeInstructors: GradeInstructorOption[] = useMemo(()=>
+		[averageInstructor, ...instructors.map((x): GradeInstructorOption=>
+			({type: "instructor", ...x}))], [instructors]);
+
 	return <SelectionContext.Provider value={{
 		selTerm(term) {
 			if (term in course.sections) setTerm(term);
 			else app.open({type: "error", name: "Term not available",
 				msg: "We don't have data for this semester"})
 		}, selSection:setSection, section
-	}} ><div className="flex flex-col gap-2" >
-		<div className="flex lg:flex-row flex-col gap-4 items-stretch relative" >
+	}} >
+		<MainLayout left={<>
+			<div className="flex flex-col gap-4 -mt-3 mb-1">
+				<div className="flex flex-row flex-wrap mb-1 items-center">
+					{/* Credits Display */}
+					<Text v="sm" >{creditStr(course)}</Text>
 
-			{/* Left half of panel */}
-			<div className="flex flex-col md:mr-3 justify-start h-full basis-5/12 md:flex-shrink-0">
-				<BackButton>{course.subject} {trimCourseNum(course.course)}: {course.name}</BackButton>
-
-				<div className="flex flex-col gap-4 -mt-3 mb-1">
-					<div className="flex flex-row flex-wrap mb-1 items-center">
-
-						{/* Credits Display */}
-						<p className="text-sm text-gray-400 font-bold">
-							{creditStr(course)}
-						</p>
-
-						{/* Separator Display */}
-						<span className="mx-2 h-6 w-0.5 bg-gray-400 rounded" />
-						<CourseChips course={small} />
-					</div>
-					
-					<TermSelect term={term} setTerm={setTerm} terms={Object.keys(course.sections) as Term[]} name="Data" />
-
-					{term!=latest && <Alert txt={`Most course data, except for sections and instructors, is from ${formatTerm(latest)}. Fall back to the catalog for exact data from an older term.`} title="Note" />}
-
-					<InstructorList course={small} term={term} whomst={instructors} />
+					{/* Separator Display */}
+					<Divider/>
+					<CourseChips course={small} />
 				</div>
+				
+				<TermSelect term={term} setTerm={setTerm} terms={Object.keys(course.sections) as Term[]} label="Data from" />
 
-				{/* Other Links Buttons */}
-				<div className="flex flex-row flex-wrap my-2 gap-1 items-center">
-					{gradesForTerm.gpa!=null ?
-						<GPAIndicator grades={gradesForTerm} tip={`Averaged over ${gradesForTerm.gpaSections} section${gradesForTerm.gpaSections==1?"":"s"} from ${formatTerm(term)}`} />
-						: <GPAIndicator grades={small.grades} />
-					}
+				{term!=latest && <Alert txt={`Most course data, except for sections and instructors, is from ${formatTerm(latest)}. Fall back to the catalog for exact data from an older term.`} title="Note" />}
 
-					<RedditButton keywords={[
-							`${course.subject}${trimCourseNum(course.course)}`,
-							...instructors.map(x => `"${firstLast(x.name)}"`)
-						]} />
-
-					<CatalogLinkButton href={catalog} />
-
-					{boilerexamsCourses.includes(`${course.subject}${course.course}`) &&
-						<LinkButton href={`https://www.boilerexams.com/courses/${course.subject}${course.course}/topics`}
-							className="bg-yellow-500 hover:bg-yellow-600 transition-all duration-300 ease-out"
-							icon={<Image src={boilerexams} alt="Boilerexams" className="filter w-auto h-full" />} >
-
-							Boilerexams
-						</LinkButton>
-					}
-				</div>
-
-
-				{/* Description */}
-				<p className="lg:text-base text-sm text-gray-200 mt-1 mb-3 break-words">{course.description}</p>
-				<h1 className="lg:text-sm text-xs text-gray-400 mt-1 mb-3 break-words">Course {course.subject} {course.course} from Purdue University - West Lafayette.</h1>
-
-				{/* Prerequisites */}
-				{course.prereqs=="failed" ? <p className="text-sm text-red-700 my-3" >Failed to parse prerequisites. Please use the <Anchor href={catalog} >catalog</Anchor>.</p>
-					: (course.prereqs!="none" && <>
-							<h2 className="text-2xl font-display font-extrabold mb-4" >Prerequisites</h2>
-							<ShowMore className="mb-4" >
-								<Prereqs prereqs={course.prereqs} />
-							</ShowMore>
-						</>)}
-
-				<Restrictions restrictions={course.restrictions} />
+				<InstructorList course={small} term={term} whomst={instructors} />
 			</div>
-			<div className="flex flex-col flex-grow max-w-full gap-4" >
-				<div className="flex flex-col" >
-					<Tabs {...tabProps} >
-						<Tab key="gpa" title="GPA" >
-							<WrapStat title="GPA by professor" {...statProps} >
-								<InstructorGradeView xs={searchInstructors} type="gpa" cid={cid} term={term} />
-							</WrapStat>
-						</Tab>
-						<Tab key="gpaSemester" title="GPA Breakdown" >
-							<WrapStat title="GPA by semester" {...statProps} >
-								<InstructorSemGPA xs={searchInstructors} cid={cid} term={term} />
-							</WrapStat>
-						</Tab>
-						<Tab key="rmp" title="Rating" >
-							<WrapStat title="RateMyProfessor ratings" {...statProps} >
-								<InstructorGradeView xs={searchInstructors} type="rmp" cid={cid} term={term} />
-							</WrapStat>
-						</Tab>
-						<Tab key="grades" title="Grade distribution" >
-							<p className="mb-2" >Select instructors:</p>
-							<Select isMulti options={instructors}
-								value={selectedInstructors} getOptionLabel={x => x.name} getOptionValue={x=>x.name}
-								onChange={(x: MultiValue<CourseInstructor>)=>setSelInstructors(x as CourseInstructor[])}
-								isOptionDisabled={(x: CourseInstructor) => course.instructor[x.name]==undefined}
-								{...selectProps}
-							/>
 
-							<Graph title="Average grades by instructor" grades={graphGrades} />
-						</Tab>
-					</Tabs>
-				</div>
+			{/* Other Links Buttons */}
+			<div className="flex flex-row flex-wrap my-2 gap-1 items-center">
+				{gradesForTerm.gpa!=null ?
+					<GPAIndicator grades={gradesForTerm} tip={`Averaged over ${gradesForTerm.gpaSections} section${gradesForTerm.gpaSections==1?"":"s"} from ${formatTerm(term)}`} />
+					: <GPAIndicator grades={small.grades} />
+				}
 
-				{smallCalendar && calSections.length>0 && <Calendar sections={calSections} term={term} />}
+				<RedditButton keywords={[
+						`${course.subject}${trimCourseNum(course.course)}`,
+						...instructors.map(x => `"${firstLast(x.name)}"`)
+					]} />
+
+				<CatalogLinkButton href={catalog} />
+
+				{boilerexamsCourses.includes(`${course.subject}${course.course}`) &&
+					<LinkButton href={`https://www.boilerexams.com/courses/${course.subject}${course.course}/topics`}
+						className="theme:bg-yellow-600 theme:hover:bg-yellow-700 transition-all duration-300 ease-out"
+						icon={<Image src={boilerexams} alt="Boilerexams" className="filter w-auto h-full invert dark:invert-0" />} >
+
+						Boilerexams
+					</LinkButton>
+				}
 			</div>
-		</div>
 
-		{!smallCalendar && calSections.length>0 && <Calendar sections={calSections} term={term} />}
 
-		<Community course={small} />
-		<SimilarCourses id={cid.id} />
+			{/* Description */}
+			<Text v="sm" className="mt-1 mb-3" >{course.description}</Text>
+			<Text v="dim" className="mt-1 mb-3" >Course {course.subject} {course.course} from Purdue University - West Lafayette.</Text>
 
-		<Footer />
-	</div></SelectionContext.Provider>;
+			{/* Prerequisites */}
+			{course.prereqs=="failed" ? <Text v="err" >Failed to parse prerequisites. Please use the <Anchor href={catalog} >catalog</Anchor>.</Text>
+				: (course.prereqs!="none" && <>
+						<Text v="md" className="mb-4" >Prerequisites</Text>
+						<ShowMore className="mb-4" >
+							<Prereqs prereqs={course.prereqs} />
+						</ShowMore>
+					</>)}
+
+			<Restrictions restrictions={course.restrictions} />
+
+			{attachmentsTerm.length>0 && <>
+				<Text v="md" >Attachments</Text>
+				<div className={`border p-2 flex flex-col gap-2 ${containerDefault} overflow-y-auto max-h-[8rem] md:max-h-[15rem]`} >
+					{attachmentsTerm.map(([t, attachments]) => <React.Fragment key={t} >
+						<Text v="bold" >{formatTerm(t)}</Text>
+						<div className="flex flex-row gap-2 flex-wrap" >
+							{attachments.map((attach,i) => {
+								const inner = <div className="flex flex-col gap-1 items-start justify-stretch" >
+									<Text v="smbold" >{abbr(attach.name, 35)}</Text>
+									<div className="flex flex-row flex-wrap" >
+										<Text v="dim" >{abbr(attach.author, 20)}</Text>
+										<Divider/>
+										<Text v="dim" >updated {new Date(attach.updated).toLocaleDateString()}</Text> 
+									</div>
+								</div>;
+
+								const icon = attach.type=="web" ? <IconWorld/> : <IconPaperclip/>;
+								const cls = bgColor.secondary;
+
+								if (attach.href)
+									return <LinkButton key={i} className={cls} icon={icon} href={attach.href} >{inner}</LinkButton>
+								else return <Button className={cls} icon={icon} key={i} onClick={()=>{
+									app.open({type: "other", name: "Secured resource", modal: <>
+										<p>To access this resource, login and then look up the course in Purdue's Course Insights.</p>
+									</>, actions: [
+										{name: "Continue to Course Insights", status: "primary", act(ctx) {
+											window.open("https://sswis.mypurdue.purdue.edu/CourseInsights/", "_blank");
+											ctx.closeModal();
+										}}
+									]})
+								}} >
+									{inner}
+								</Button>
+							})}
+						</div>
+					</React.Fragment>)}
+				</div>
+			</>}
+		</>} right={<>
+			{smallCalendar && calSections.length>0 && <Calendar sections={calSections} term={term} />}
+		</>} rightTabs={[
+			{
+				key: "GPA", title: "GPA",
+				body: <WrapStat title="GPA by professor" {...statProps} >
+					<InstructorGradeView xs={searchInstructors} type="gpa" cid={cid} term={term} />
+				</WrapStat>
+			},
+			{
+				key: "gpaSemester", title: "GPA Breakdown",
+				body: <WrapStat title="GPA by semester" {...statProps} >
+					<InstructorSemGPA xs={searchInstructors} cid={cid} term={term} />
+				</WrapStat>
+			},
+			{
+				key: "rmp", title: "Rating",
+				body: <WrapStat title="RateMyProfessor ratings" {...statProps} >
+					<InstructorGradeView xs={searchInstructors} type="rmp" cid={cid} term={term} />
+				</WrapStat>
+			},
+			{
+				key: "grades", title: "Grade distribution",
+				body: <>
+					<Select isMulti options={gradeInstructors}
+						placeholder="Select instructors"
+						value={selectedInstructors}
+						getOptionLabel={x => x.type=="avg" ? "Average" : x.name}
+						getOptionValue={x=>x.type=="avg" ? "" : x.name}
+						onChange={(x: MultiValue<GradeInstructorOption>)=>
+							setSelInstructors(x as GradeInstructorOption[])}
+						isOptionDisabled={(x: GradeInstructorOption) =>
+							(x.type=="avg" && !hasGrades) || (x.type!="avg" && course.instructor[x.name]==undefined)}
+						{...selectProps<GradeInstructorOption,true>()}
+					/>
+
+					<Graph title="Average grades by instructor" grades={graphGrades} />
+				</>
+			}
+		]} bottom={<>
+			{!smallCalendar && calSections.length>0 && <Calendar sections={calSections} term={term} />}
+
+			<Community course={small} />
+			<SimilarCourses id={cid.id} />
+		</>} title={<>
+			{course.subject} {trimCourseNum(course.course)}: {course.name}
+		</>} extraButtons={
+			<CourseNotificationButton course={cid} />
+		} />
+	</SelectionContext.Provider>;
 }
 
 export function CourseDetailApp(props: CourseId) {

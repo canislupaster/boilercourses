@@ -1,4 +1,4 @@
-import { Grade, grades, Term, termPre } from "../../shared/types";
+import {Grade, grades, Term, termPre} from "../../shared/types";
 import * as XLSX from 'xlsx';
 
 export type Grades = {
@@ -9,7 +9,7 @@ export type Grades = {
 	data: Partial<Record<Grade, number>>
 };
 
-export async function getGrades(buf: ArrayBuffer): Promise<Grades[]> {
+export function getGrades(buf: ArrayBuffer): Grades[] {
 	console.log("loading grades from buffer...");
 	const excel = XLSX.read(buf);
 
@@ -25,7 +25,7 @@ export async function getGrades(buf: ArrayBuffer): Promise<Grades[]> {
 
 		let headerFound=false, gradeHeaderFound=false;
 		const header: (string|null)[] = [];
-		let gradeHeader: [Grade, number][]=[];
+		const gradeHeader: [Grade, number][]=[];
 		let headerI=0;
 
 		for (let i=0; i<data.length; i++) {
@@ -42,7 +42,7 @@ export async function getGrades(buf: ArrayBuffer): Promise<Grades[]> {
 				} else if (data[i][j]=="A" && !gradeHeaderFound) {
 					for (const c in data[i]) {
 						const e = data[i][c];
-						if (typeof e=="string" && (grades as string[]).includes(e))
+						if (typeof e=="string" && grades.includes(e))
 							gradeHeader.push([e as Grade, Number(c)]);
 					}
 
@@ -52,29 +52,29 @@ export async function getGrades(buf: ArrayBuffer): Promise<Grades[]> {
 			}
 		}
 
-		if (!headerFound || !gradeHeaderFound) throw "header not found";
+		if (!headerFound || !gradeHeaderFound) throw new Error("header not found");
 
-		let o: Record<string,string>={};
+		let o: Record<string,string> = {};
 		for (let i=headerI+1; i<data.length; i++) {
 			const row=data[i];
 			const nums = Object.keys(row).map(Number);
 
-			o ={
+			o={
 				...o,
 				...Object.fromEntries(nums.map(i => [header[i], row[i]])
-					.filter(([k,v]) => typeof v == "string"))
+					.filter(([,v]) => typeof v == "string")) as Record<string,string>
 			};
 
-			let term=o["Academic Period Desc"]==undefined ? o["Academic Period"] : o["Academic Period Desc"];
-			if (term===undefined) throw "term not found";
+			const term=o["Academic Period Desc"]==undefined ? o["Academic Period"] : o["Academic Period Desc"];
+			if (term===undefined) throw new Error("term not found");
 			const parts = term.split(" ");
 			const termTy = parts[0].toLowerCase();
-			if (!termPre.includes(termTy) || parts.length!=2) throw "invalid term";
+			if (!termPre.includes(termTy) || parts.length!=2) throw new Error("invalid term");
 
-			let grades: null|Partial<Record<Grade,number>> =
+			const grades: null|Partial<Record<Grade,number>> =
 				Object.fromEntries(gradeHeader.map(([x,i]) => {
 					if (row[i]=="" || row[i]==undefined) return [x,0];
-					if (typeof row[i] != "number") throw "grade not a number";
+					if (typeof row[i] != "number") throw new Error("grade not a number");
 					return [x,row[i]];
 				})) as Partial<Record<Grade,number>>;
 
@@ -90,7 +90,8 @@ export async function getGrades(buf: ArrayBuffer): Promise<Grades[]> {
 
 			let subject:string, course:string;
 			if (o["Course Number"]!==undefined) {
-				subject=o["Subject"], course=o["Course Number"];
+				subject=o["Subject"];
+				course=o["Course Number"];
 			} else {
 				const split = o["Course"].length-5;
 				subject=o["Course"].slice(0,split);

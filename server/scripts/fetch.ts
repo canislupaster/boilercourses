@@ -1,13 +1,13 @@
 import * as cheerio from "cheerio";
-import { Cheerio } from "cheerio";
-import { readFile } from "node:fs/promises";
-import { ProxyAgent } from "undici";
+import {Cheerio} from "cheerio";
+import {readFile} from "node:fs/promises";
+import {ProxyAgent} from "undici";
 import cliProgress from "cli-progress";
 
 const userAgent = "boilercourses scraper";
 
-let dispatchers: (ProxyAgent|undefined)[] = [undefined];
-let waiters: (()=>void)[] = [];
+const dispatchers: (ProxyAgent|undefined)[] = [undefined];
+const waiters: (()=>void)[] = [];
 
 export function shuffle<T>(arr: T[]) {
 	for (let i=1; i<arr.length; i++) {
@@ -19,12 +19,20 @@ export function shuffle<T>(arr: T[]) {
 }
 
 export async function addProxies(proxiesPath: string) {
-	const prox: string[] = JSON.parse(await readFile(proxiesPath, "utf-8"));
+	dispatchers.splice(0,dispatchers.length);
+
+	let prox = JSON.parse(await readFile(proxiesPath, "utf-8")) as string[]|{proxyFetchUrl: string};
+	if ("proxyFetchUrl" in prox) {
+		console.log("fetching proxies...");
+		prox = (await (await fetch(prox.proxyFetchUrl)).text()).trim().split("\n");
+	}
+
 	console.log(`adding ${prox.length} proxies`);
+
 	for (const p of prox) {
 		const parts = p.split(":");
 		if (parts.length!=2 && parts.length!=4)
-			throw `expected 2 (host,port) or 4 parts (host,port,user,pass) for proxy ${p}`;
+			throw new Error(`expected 2 (host,port) or 4 parts (host,port,user,pass) for proxy ${p}`);
 		dispatchers.push(new ProxyAgent({
 			uri: `http://${parts[0]}:${parts[1]}`,
 			token: parts.length==2 ? undefined : `Basic ${Buffer.from(`${parts[2]}:${parts[3]}`).toString('base64')}`
@@ -35,11 +43,14 @@ export async function addProxies(proxiesPath: string) {
 
 const dispatcherWait = 1000, dispatcherErrorWait = 30_000;
 
-export async function fetchDispatcher<T>(transform: (r: Response) => Promise<T>, ...args: Parameters<typeof fetch>): Promise<T> {
-	let err: any;
+export async function fetchDispatcher<T>({ transform, handleErr }: {
+	transform: (r: Response) => Promise<T>,
+	handleErr?: (r: Response) => Promise<"retry"|T>
+}, ...args: Parameters<typeof fetch>): Promise<T> {
+	let err: Error;
 	for (let retryI=0; retryI<5; retryI++) {
 		while (dispatchers.length==0) {
-			await new Promise<void>((res,rej) => waiters.push(res));
+			await new Promise<void>((res) => waiters.push(res));
 		}
 
 		const d = dispatchers.pop();
@@ -56,29 +67,36 @@ export async function fetchDispatcher<T>(transform: (r: Response) => Promise<T>,
 				headers: hdrs
 			});
 
-			if (resp.status!=200) throw resp.statusText;
+			if (resp.status!=200) {
+				if (handleErr) {
+					const r = await handleErr(resp);
+					if (r!="retry") return r;
+				}
+
+				throw new Error(resp.statusText);
+			}
 			return await transform(resp)
 		} catch (e) {
-			err=e;
+			if (e instanceof Error) err=e;
 			wait = dispatcherErrorWait;
 			continue;
 		} finally {
 			setTimeout(() => {
-				dispatchers.push(d);
+				dispatchers.unshift(d);
 				const w = waiters.shift();
 				if (w!==undefined) w();
 			}, wait);
 		}
 	}
 
-	throw new Error(`ran out of retries during fetch:\n${err}`);
+	throw new Error(`ran out of retries during fetch:\n${err!}`);
 }
 
 //purdue catalog specific
 async function loadAndCheckRatelimit(x: Response): Promise<cheerio.CheerioAPI> {
 	const c = cheerio.load(await x.text());
 	if (c("body").text().trim()=="We are sorry, but the site has received too many requests. Please try again later.")
-		throw "ratelimited";
+		throw new Error("ratelimited");
 	return c;
 }
 
@@ -86,13 +104,13 @@ export async function getHTML(url: string, qparams: Record<string,string>={}) {
 	const u = new URL(url);
 	for (const [k,v] of Object.entries(qparams))
 		u.searchParams.append(k,v);
-	return await fetchDispatcher(loadAndCheckRatelimit, u);
+	return await fetchDispatcher({transform: loadAndCheckRatelimit}, u);
 }
 
 export async function postHTML(url: string, form: [string,string][]=[]) {
 	const d = new URLSearchParams();
 	for (const [k,v] of form) d.append(k,v);
-	return await fetchDispatcher(loadAndCheckRatelimit, url, {
+	return await fetchDispatcher({transform: loadAndCheckRatelimit}, url, {
 		body: d, method: "POST",
 		headers:{
       'Content-Type': 'application/x-www-form-urlencoded'
@@ -150,9 +168,7 @@ export function logArray<T, R>(x: T[], y: (x:T) => Promise<R>, name: (x:T,i:numb
 
 //like isdeepstrictequals but epsilon for floating point
 //also treats undefined as not a property
-export function deepEquals(x: any, y: any) {
-	if (typeof x != typeof y) return false;
-
+export function deepEquals(x: unknown, y: unknown) {
 	switch (typeof x) {
 		case "undefined": return true;
 		case "bigint":
@@ -161,18 +177,24 @@ export function deepEquals(x: any, y: any) {
 			return x==y;
 
 		case "object": {
+			if (typeof y != "object") return false;
+			if (x==null || y==null) return x==y;
+
 			for (const k in y)
-				if (y[k]!==undefined && x[k]===undefined) return false;
+				if (y[k as keyof typeof y]!==undefined && x[k as keyof typeof x]===undefined)
+					return false;
+
 			for (const k in x) {
-				if (x[k]===undefined) continue;
-				else if (y[k]===undefined) return false;
-				else if (!deepEquals(x[k], y[k])) return false;
+				if (x[k as keyof typeof x]===undefined) continue;
+				else if (y[k as keyof typeof y]===undefined) return false;
+				else if (!deepEquals(x[k as keyof typeof y], y[k as keyof typeof y])) return false;
 			}
 
 			return true;
 		}
 			
 		case "number":
+			if (typeof y != "number") return false;
 			// i think all numbers in data should be bounded so this should work
 			return Math.abs(x-y)<1e-4;
 

@@ -38,7 +38,6 @@ data class AddCoursePost(val showName: Boolean, val edit: Int?, val course: Int,
 data class CoursePostData(
     val posts: List<CoursePost>,
     val postLimit: Int,
-    val loggedIn: DB.UserData?,
     val edit: CoursePost?
 )
 
@@ -153,7 +152,7 @@ fun Kooby.posts(auth: Auth, db: DB, courses: Courses) = path("/posts") {
                                 if (subq==null) false else it[subq[didVote]]==1,
                             it[DB.CoursePost.submitted])
                     }.let {
-                        CoursePostData(it, POST_LIMIT, u, edit)
+                        CoursePostData(it, POST_LIMIT, edit)
                     }
             }
 

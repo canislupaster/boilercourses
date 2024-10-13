@@ -14,7 +14,7 @@ import java.security.interfaces.RSAPublicKey
 import java.util.concurrent.TimeUnit
 
 
-class Auth(val db: DB, val log: Logger, val env: Environment) {
+class Auth(val db: DB, log: Logger, env: Environment) {
     val tenant = env.getProperty("msalTenant")!!
     val clientId = env.getProperty("msalClientId")!!
     val provider: JwkProvider = JwkProviderBuilder(URI("https://login.microsoftonline.com/${tenant}/discovery/v2.0/keys?appid=${clientId}").toURL())

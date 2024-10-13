@@ -1,10 +1,8 @@
 package com.boilerclasses
 
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.random.Random
 
 //bored so i wrote suspending rwlock
 // ( kotlin doesn't have one D: )

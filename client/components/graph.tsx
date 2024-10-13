@@ -1,8 +1,11 @@
 "use client"
 
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
+import { BarElement, CategoryScale, Chart as ChartJS, Legend, LinearScale, Title, Tooltip } from 'chart.js';
+import { useContext } from "react";
 import { Bar } from 'react-chartjs-2';
-import { gradeGPA, CourseInstructor, InstructorGrade, Grade } from "../../shared/types";
+import { Grade, gradeGPA, InstructorGrade } from "../../shared/types";
+import { bgColor } from "./util";
+import { AppCtx } from "./wrapper";
 
 ChartJS.register(
 	CategoryScale,
@@ -19,13 +22,13 @@ const graphColors = [
 
 export const Graph = ({grades,title}: { grades: [string, InstructorGrade][], title:string }) => {
 	const allLetterGrades: Grade[]=[...new Set(grades.flatMap(x=>Object.entries(x[1].grade)
-		.filter(([k,v])=>k in gradeGPA && v>0).map(([k,v])=>k) as Grade[]))];
+		.filter(([k,v])=>k in gradeGPA && v>0).map(([k,])=>k) as Grade[]))];
 	allLetterGrades.sort((a,b) => gradeGPA[b]!-gradeGPA[a]!
 		-(a=="E"?0.1:0)+(b=='E'? 0.1:0)-(a=="A+"?0.1:0)+(b=='A+'? 0.1:0));
 
 	const datasets = grades.map((x,i) => {
 		const d = allLetterGrades.map(g=>x[1].grade[g] ?? 0);
-		const tot = d.reduce((a,b)=>a+b);
+		const tot = d.length==0 ? 1 : d.reduce((a,b)=>a+b);
 
 		return {
 			backgroundColor: graphColors[i%graphColors.length],
@@ -35,7 +38,11 @@ export const Graph = ({grades,title}: { grades: [string, InstructorGrade][], tit
 		};
 	});
 
-	return <div className="md:mt-4 mt-2 mb-4 w-full h-96 bg-zinc-900 mx-auto p-4 rounded-xl">
+	const dark = useContext(AppCtx).theme=="dark";
+	const color = dark ? "white" : "black";
+	const gray = dark ? "#d1d5db" : "#74777a";
+
+	return <div className={`md:mt-4 mt-2 mb-4 w-full h-96 mx-auto p-4 pt-0 rounded-xl ${bgColor.secondary}`} >
 		<div className="h-full w-full mb-4">
 			<Bar
 				options={{
@@ -44,9 +51,7 @@ export const Graph = ({grades,title}: { grades: [string, InstructorGrade][], tit
 					plugins: {
 						legend: {
 							position: 'top',
-							labels: {
-								color: "white",
-							}
+							labels: { color }
 						},
 						tooltip: {
 							callbacks: {
@@ -58,7 +63,7 @@ export const Graph = ({grades,title}: { grades: [string, InstructorGrade][], tit
 						title: {
 							display: true,
 							text: title,
-							color: "white"
+							color
 						},
 					},
 					scales: {
@@ -66,22 +71,14 @@ export const Graph = ({grades,title}: { grades: [string, InstructorGrade][], tit
 							title: {
 								display: true,
 								text: '% of Students',
-								color: "white"
+								color
 							},
-							grid: {
-								color: "#d1d5db"
-							},
-							ticks: {
-								color: "#d1d5db"
-							}
+							grid: { color: gray },
+							ticks: { color: gray }
 						},
 						x: {
-							grid: {
-								color: "#d1d5db"
-							},
-							ticks: {
-								color: "#d1d5db"
-							}
+							grid: { color: gray },
+							ticks: { color: gray }
 						}
 					}
 				}} data={{

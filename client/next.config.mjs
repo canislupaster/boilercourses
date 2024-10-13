@@ -1,9 +1,9 @@
-const { PHASE_DEVELOPMENT_SERVER } = require("next/constants");
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants.js";
 
 /** @type {import('next').NextConfig} */
-module.exports = (phase) => ({
+export default (phase) => ({
   reactStrictMode: true,
-  async rewrites() {
+  rewrites() {
     if (phase==PHASE_DEVELOPMENT_SERVER) return [
       { source: '/api/:path*', destination: `${process.env["SERVER_URL"]}/:path*` },
     ]

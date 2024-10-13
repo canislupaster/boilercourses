@@ -1,20 +1,27 @@
 import { nextui } from "@nextui-org/theme"
-import {Config} from "tailwindcss"
+import plugin from "tailwindcss/plugin"
+import { Config } from "tailwindcss/types/config"
 
-/** @type {Config} */
-export default {
+const config: Config = {
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./node_modules/@nextui-org/theme/dist/components/(checkbox|modal|pagination|popover|progress|slider|spinner|tabs|button|ripple).js"
   ],
+  darkMode: ["selector", "&:is(.dark *, .dark)"],
   theme: {
     extend: {
       fontFamily: {
         "display": "var(--chivo), sans",
         "body": "var(--inter), sans"
+      },
+      colors: {
+        zinc: { "150": "#f0f0f2", "850": "#1e1e21" }
+      },
+      borderWidth: {
+        "0.5": "0.5px"
       }
-    },
+    }
   },
   safelist: [
     ...["red-600", "rose-600", "orange-600", "amber-600", "cyan-600", "green-600", "white"]
@@ -33,5 +40,10 @@ export default {
     layout: {
       disabledOpacity: "1.0"
     }
+  }), plugin((cfg) => {
+    cfg.addVariant("theme", ["&:is(.dark *,.light *)"]);
+    cfg.addVariant("enabled", ["&:not(disabled)"]);
   })],
-}
+};
+
+export default config;

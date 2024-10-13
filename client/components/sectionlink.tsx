@@ -1,71 +1,74 @@
-import { useContext } from "react";
-import { Course, Day, Section, SmallCourse, Term, validDays } from "../../shared/types";
-import { AppTooltip, SelectionContext, useMd } from "./clientutil";
-import { InstructorList } from "./instructorlist";
-import { CatalogLinkButton } from "./util";
+import React, { useContext } from "react";
+import { Day, Section, SmallCourse, Term, validDays } from "../../shared/types";
+import { SectionNotifications } from "./availability";
 import { CourseLink } from "./card";
+import { AppTooltip, IsInTooltipContext, SelectionContext, useMd } from "./clientutil";
+import { InstructorList } from "./instructorlist";
+import { CatalogLinkButton, Text } from "./util";
 import { useInfo } from "./wrapper";
 
-export function SectionLink({term, course, children, section, className}: {
+export type SectionLinkProps = {
 	term: Term, course: SmallCourse, children: React.ReactNode, section: Section, className?: string
-}) {
-	const selCtx=useContext(SelectionContext);
+};
+
+function SectionLinkPopup({course, section, term}: {course: SmallCourse, section: Section, term: Term}) {
 	const byTimes = new Map<string,Day[]>();
 
 	for (const x of section.times)
 		byTimes.set(x.time, [...(byTimes.get(x.time) ?? []), x.day]);
 
-	let perm=null;
-	if (section.permissionOfDept) perm="department";
-	if (section.permissionOfInstructor)
-		perm=perm==null ? "instructor" : `${perm} and instructor`;
-	
+	const isInTooltip = useContext(IsInTooltipContext);
+
+	return <div className={`flex flex-col p-2 items-start ${isInTooltip ? "max-w-60" : ""}`} >
+		<Text v="bold"  >
+			<CourseLink type="course" course={course} />
+		</Text>
+		{section.name && <Text v="lg" >
+			{section.name}
+		</Text>} 
+		<Text v={section.name==undefined ? "lg" : "bold"} >
+			Section {section.section}
+		</Text>
+		<Text v="sm" className="text-sm mb-3" >CRN {section.crn}</Text>
+
+		{[...byTimes.entries()].map(([k,v]) =>
+			<p key={k} >
+				<b>{v.map(x=>validDays.indexOf(x)).sort().map(i=>validDays[i]).join("")}</b>, {k}
+			</p>
+		)}
+
+		<div className="flex flex-col gap-1 mt-3 items-start" >
+			<InstructorList whomst={section.instructors} course={course} term={term} />
+			<p>{section.dateRange.map(x => new Date(x).toLocaleDateString()).join(" to ")}</p>
+
+			{section.room && <p>
+				<Text v="smbold" className="mr-2" >Location{section.room.length>1 ? "s" : ""}:</Text>
+				{section.room.join(", ")}
+			</p>}
+
+			{section.seats && <p>
+				<Text v="smbold" className="mr-2" >Enrollment:</Text>
+				{section.seats.used}/{section.seats.left+section.seats.used}
+			</p>}
+
+			<SectionNotifications section={section} small={course} term={term} />
+
+			<CatalogLinkButton href={`https://selfservice.mypurdue.purdue.edu/prod/bwckschd.p_disp_detail_sched?term_in=${useInfo().terms[term]!.id}&crn_in=${section.crn}`} />
+		</div>
+	</div>;
+}
+
+export function SectionLink({children, section, className, ...rest}: SectionLinkProps) {
+	const selCtx=useContext(SelectionContext);
 	const mq = useMd();
+
 	return <AppTooltip placement={mq ? "right" : "top"}
 		onChange={x => {
 			if (x) selCtx.selSection(section);
 			else if (section==selCtx.section) selCtx.selSection(null);
 		}}
 		content={
-			<div className="flex flex-col p-2 items-start max-w-60" >
-				<h3 className="font-display font-bold text-lg" >
-					<CourseLink type="course" course={course} />
-				</h3>
-				{section.name && <h3 className="font-bold text-xl" >
-					{section.name}
-				</h3>} 
-				<h3 className={`font-display font-bold ${section.name==undefined ? "text-xl" : "text-lg"}`} >
-					Section {section.section}
-				</h3>
-				<p className="text-gray-300 text-sm mb-3" >CRN {section.crn}</p>
-
-				{[...byTimes.entries()].map(([k,v]) =>
-					<p key={k} >
-						<b>{v.map(x=>validDays.indexOf(x)).sort().map(i=>validDays[i]).join("")}</b>, {k}
-					</p>
-				)}
-
-				<div className="flex flex-col gap-3 mt-3 items-start" >
-					<InstructorList whomst={section.instructors} course={course} term={term} />
-					<p>{section.dateRange.map(x => new Date(x).toLocaleDateString()).join(" to ")}</p>
-
-					<p>
-						<span className="text-gray-400 font-bold text-xs mr-2">Enrollment:</span>
-						{section.seats.used}/{section.seats.left+section.seats.used}
-					</p>
-
-					{(section.waitlist.left>0 || section.waitlist.used>0) && <p>
-						<span className="text-gray-400 font-bold text-xs mr-2">Waitlist:</span>
-						{section.waitlist.used}/{section.waitlist.left+section.waitlist.used}
-					</p>}
-
-					{perm!=null && <p className="font-bold text-gray-200 text-sm" >
-						Permission of {perm} required
-					</p>}
-
-					<CatalogLinkButton href={`https://selfservice.mypurdue.purdue.edu/prod/bwckschd.p_disp_detail_sched?term_in=${useInfo().terms[term]!.id}&crn_in=${section.crn}`} />
-				</div>
-			</div>
+			<SectionLinkPopup {...rest} section={section} />
 		} className={className} >
 			{children}
 		</AppTooltip>;

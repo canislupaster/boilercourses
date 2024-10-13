@@ -1,17 +1,15 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { AppCtx, callAPI, isAuthSet, ModalAction, ModalActions, ModalCtx, ModalCtxType, redirectToSignIn, setAuth, useAPI } from "./wrapper";
-import { Anchor, Button, Chip, IconButton, Loading, Textarea } from "./util";
-import { Icon, IconArrowsSort, IconDotsVertical, IconEdit, IconFlag2, IconFlag2Filled, IconPaperclip, IconPhoto, IconPhotoOff, IconStar, IconStarFilled, IconThumbUp, IconThumbUpFilled, IconTrash, IconUserCircle, IconX } from "@tabler/icons-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/popover";
-import { AddPost, AdminPost, EditPost, Post, PostData, UserData } from "../../shared/posts";
-import { useRouter } from "next/navigation";
-import { Alert, AppTooltip, Dropdown, DropdownPart } from "./clientutil";
 import { Checkbox } from "@nextui-org/checkbox";
-import React from "react";
+import { Icon, IconArrowsSort, IconEdit, IconFlag2, IconPhoto, IconStar, IconStarFilled, IconThumbUp, IconThumbUpFilled, IconTrash, IconUserCircle, IconX } from "@tabler/icons-react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import Markdown, { Components } from "react-markdown";
+import remarkGfm from 'remark-gfm';
+import { twMerge } from "tailwind-merge";
+import { AddPost, AdminPost, EditPost, Post, PostData, UserData } from "../../shared/posts";
 import { SmallCourse } from "../../shared/types";
 import { CourseLink } from "./card";
-import Markdown, { Components } from "react-markdown";
-import remarkGfm from 'remark-gfm'
+import { Alert, AppTooltip, Dropdown } from "./clientutil";
+import { Anchor, bgColor, Button, Chip, containerDefault, IconButton, Loading, Text, Textarea, textColor } from "./util";
+import { AppCtx, callAPI, ModalAction, ModalActions, ModalCtx, redirectToSignIn } from "./wrapper";
 
 type PostSortBy = "ratingAsc" | "ratingDesc" | "newest" | "mostHelpful";
 
@@ -39,17 +37,20 @@ export function Stars({rating, setStar, sz}: {rating?: number, setStar?: (x: num
 			{React.createElement(x, {size: sz})}
 		</button> : React.createElement(x, {key: i, size: sz, className: "inline"});
 
-	return <div className="flex flex-col items-start whitespace-nowrap" ><div className="relative text-gray-200" style={{lineHeight: 0}} >
-		<div>
-			{[...new Array(5)].map((_,i)=>star(IconStar, i))}
+	return <div className="flex flex-col items-start whitespace-nowrap" >
+		<div className={`relative ${textColor.gray}`} style={{lineHeight: 0}} >
+			<div>
+				{[...new Array<void>(5)].map((_,i)=>star(IconStar, i))}
+			</div>
+			<div className={`left-0 top-0 absolute overflow-x-hidden whitespace-nowrap ${textColor.star}`}
+				style={{width: `${(previewStar ?? rating ?? 0)*20}%`, opacity: previewStar!=null ? "50%" : "100%"}} >
+				{[...new Array<void>(5)].map((_,i)=>star(IconStarFilled, i))}
+			</div>
 		</div>
-		<div className="left-0 top-0 absolute text-amber-400 overflow-x-hidden whitespace-nowrap" style={{width: `${(previewStar ?? rating ?? 0)*20}%`, opacity: previewStar!=null ? "50%" : "100%"}} >
-			{[...new Array(5)].map((_,i)=>star(IconStarFilled, i))}
-		</div>
-	</div></div>;
+	</div>;
 }
 
-function SafeLink({href, icon, children}: any) {
+function SafeLink({href, icon, children}: {href?: string, icon?: React.ReactNode, children?: React.ReactNode}) {
 	const app = useContext(AppCtx);
 
 	return <Anchor onClick={() => {
@@ -60,17 +61,17 @@ function SafeLink({href, icon, children}: any) {
 	}} className="items-start" >{icon}{children}</Anchor>;
 }
 
-function SafeImageLink({alt, src}: any) {
+function SafeImageLink({alt, src}: {alt?: string, src?: string}) {
 	return <p className="flex flex-row gap-2" >
 		<SafeLink icon={<IconPhoto/>} href={src} >{alt}</SafeLink>
 	</p>;
 }
 
-function Blockquote({children}: any) {
-	return <blockquote className="pl-4 border-l-3 border-l-zinc-400 py-2 [&>p]:whitespace-pre-wrap" >{children}</blockquote>;
+function Blockquote({children}: {children?: React.ReactNode}) {
+	return <blockquote className="pl-4 border-l-3 border-l-zinc-200 dark:border-l-zinc-400 py-2 [&>p]:whitespace-pre-wrap" >{children}</blockquote>;
 }
 
-const titleComponent = (ord: number) => ({children}: any) => {
+const titleComponent = (ord: number) => ({children}: {children: React.ReactNode}) => {
 	switch (ord) {
 		case 1: return <h1 className="font-extrabold text-2xl" >{children}</h1>;
 		case 2: return <h2 className="font-extrabold text-xl" >{children}</h2>;
@@ -86,10 +87,10 @@ export function TimeSince({t}: {t: string}) {
 	if (ts<60) return "just now";
 
 	let cnt, units;
-	if (ts<60*60) cnt=Math.floor(ts/60), units="minute";
-	else if (ts<60*60*24) cnt=Math.floor(ts/(60*60)), units="hour";
-	else if (ts<60*60*24*7) cnt=Math.floor(ts/(60*60*24)), units="day";
-	else cnt=Math.floor(ts/(60*60*24*7)), units="week";
+	if (ts<60*60) {cnt=Math.floor(ts/60); units="minute";}
+	else if (ts<60*60*24) {cnt=Math.floor(ts/(60*60)); units="hour";}
+	else if (ts<60*60*24*7) {cnt=Math.floor(ts/(60*60*24)); units="day";}
+	else {cnt=Math.floor(ts/(60*60*24*7)); units="week";}
 
 	return `${cnt} ${units}${cnt==1 ? "" : "s"} ago`
 }
@@ -103,14 +104,18 @@ const refreshPosts = () => {
 function PostCreator({postLimit, add: add2, setAdd: setAdd2}: {
 	postLimit: number, add: AddPost, setAdd: (x: AddPost)=>void
 }) {
-	const make = callAPI<{}, AddPost>("posts/submit", true);
+	const make = callAPI<unknown, AddPost>("posts/submit", true);
 	const [triedSubmit, setTriedSubmit] = useState(false);
 
 	//needs to keep track of own state, otherwise passed thru modal which is illegal...
-	const [add, setAdd] = useState(add2);
+	const [add, setAdd3] = useState(add2);
+	const setAdd = (add: AddPost) => {
+		setAdd2(add); setAdd3(add);
+	};
+
 	const empty = add.rating==null && (add.text==null || add.text.trim().length==0);
 
-	const ctx = useContext(ModalCtx);
+	const ctx = useContext(ModalCtx)!;
 
 	const formRef = useRef<HTMLFormElement>(null);
 	const textAreaRef = useRef<HTMLTextAreaElement>(null);
@@ -145,26 +150,26 @@ function PostCreator({postLimit, add: add2, setAdd: setAdd2}: {
 			placeholder={add.rating!=null ? "Optional content (markdown)" : "I thought the course..."} >
 		</Textarea>
 
-		<p className="text-xs text-gray-400" >{add.text?.trim()?.length ?? 0}/{postLimit} characters used</p>
+		<Text v="dim" >{add.text?.trim()?.length ?? 0}/{postLimit} characters used</Text>
 
 		<Checkbox onChange={(ev)=>setAdd({...add, showName: !ev.target.checked})} isSelected={!add.showName} >
 			Post anonymously
 		</Checkbox>
 
-		{!add.showName && <p className="text-xs text-gray-400" >
+		{!add.showName && <Text v="dim" >
 			You will still be associated with this post internally, but nothing (name/email/etc) will be made public.
-		</p>}
+		</Text>}
 
 		{triedSubmit && empty && <Alert bad title="Your post is empty" txt="First add a rating or some text!" />}
 
 		<ModalActions>
-			<Button disabled={make.loading} className="bg-blue-800" onClick={()=>formRef.current?.requestSubmit()} >Submit</Button>
+			<Button disabled={make.loading} className={bgColor.sky} onClick={()=>formRef.current?.requestSubmit()} >Submit</Button>
 		</ModalActions>
 	</form>;
 }
 
 function createPost(x: AddPost) {
-	const del = callAPI<{}, number>("posts/delete", true);
+	const del = callAPI<unknown, number>("posts/delete", true);
 	const app = useContext(AppCtx);
 
 	const ctx = useContext(PostRefreshHook);
@@ -174,7 +179,7 @@ function createPost(x: AddPost) {
 	return (postLimit: number) => {
 		const id = add.edit;
 
-		let acts: ModalAction[] = [];
+		const acts: ModalAction[] = [];
 		if (id!=null) {
 			acts.push({name: "Delete", status: "bad", act(c) {
 				if (del.loading) return;
@@ -210,9 +215,9 @@ function PostEditButton({post, course, postLimit}: {
 }
 
 function BanModal({user}: {user: number}) {
-	const ban = callAPI<{}, {id: number, removePosts: boolean, banned: boolean}>("ban", true);
+	const ban = callAPI<unknown, {id: number, removePosts: boolean, banned: boolean}>("ban", true);
 	const [removePosts, setRemovePosts] = useState(false);
-	const modal = useContext(ModalCtx);
+	const modal = useContext(ModalCtx)!;
 	const refresh = refreshPosts();
 
 	return <>
@@ -220,7 +225,7 @@ function BanModal({user}: {user: number}) {
 			Remove all posts
 		</Checkbox>
 		<ModalActions>
-			<Button className="bg-red-600" disabled={ban.loading} onClick={()=>
+			<Button className={bgColor.red} disabled={ban.loading} onClick={()=>
 				ban.run({refresh() {
 					refresh();
 					modal.closeModal();
@@ -238,7 +243,7 @@ function AdminUserPopup({user}: {user: UserData}) {
 	const v = data.current?.res ?? user;
 	useEffect(()=>data.run({data: user.id}), []);
 
-	const ban = callAPI<{}, {id: number, banned: boolean}>("ban", true);
+	const ban = callAPI<unknown, {id: number, banned: boolean}>("ban", true);
 	const ctx = useContext(PostRefreshHook);
 
 	return <div className="p-3 flex flex-col gap-2" >
@@ -253,7 +258,7 @@ function AdminUserPopup({user}: {user: UserData}) {
 			{v.admin && <Chip color="green" >Admin</Chip>}
 		</p>
 
-		<Button disabled={ban.loading || data.loading} className="bg-red-600" onClick={()=>{
+		<Button disabled={ban.loading || data.loading} className={bgColor.red} onClick={()=>{
 			if (!v.banned) app.open({
 				type: "other",
 				name: "Ban options",
@@ -275,8 +280,8 @@ function AdminUserPopup({user}: {user: UserData}) {
 export function PostCardAdminUser({user, className}: {user: UserData, className?: string}) {
 	return <AppTooltip content={<AdminUserPopup user={user} />} >
 		<Anchor className={className} >
-			<span className="text-white" >{user.name}</span>
-			<span className="text-sm text-gray-400" >{user.email}</span>
+			<Text>{user.name}</Text>
+			<Text v="dim" >{user.email}</Text>
 		</Anchor>
 	</AppTooltip>;
 }
@@ -285,19 +290,19 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 	post: Post, editButton?: React.ReactNode, adminPost?: AdminPost
 	deletePost?: ()=>void, dismissReports?: ()=>void, yours?: boolean
 }) {
-	const vote = callAPI<{}, {id: number, vote: boolean}>("posts/vote", true);
+	const vote = callAPI<unknown, {id: number, vote: boolean}>("posts/vote", true);
 	const report = callAPI<{alreadyReported: boolean}, number>("posts/report", true);
 
 	const [voted, setVoted] = useState(post.voted);
 	const app = useContext(AppCtx);
 	const ctx = useContext(PostRefreshHook);
 
-	return <div className="border border-zinc-600 bg-zinc-700 flex flex-col gap-3 p-5 rounded-md" >
+	return <div className={`border flex flex-col gap-3 p-5 ${containerDefault}`} >
 		<div className="flex flex-row gap-3 items-center w-full justify-start flex-wrap" >
-			{adminPost==null ? <h2 className="font-bold text-xl flex flex-row gap-1 items-center" >
+			{adminPost==null ? <Text v="bold" className="flex flex-row gap-1 items-center" >
 				<IconUserCircle/>
 				{yours ? "You" : post.name ?? "Anonymous"}
-			</h2> : <div className="flex flex-col gap-2 items-start" >
+			</Text> : <div className="flex flex-col gap-2 items-start" >
 				<div className="flex flex-row flex-wrap gap-2 items-center" >
 					<CourseLink type="course" course={adminPost.course} className="text-xl" />
 					{post.rating && <Stars sz={25} rating={post.rating} />}
@@ -315,7 +320,7 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 			</Button>}
 		</>} bad ></Alert>}
 
-		{adminPost ? <pre className="p-3 rounded-md max-h-52 overflow-y-scroll bg-zinc-800 whitespace-pre-wrap" >
+		{adminPost ? <pre className={`p-3 rounded-md max-h-52 overflow-y-auto whitespace-pre-wrap ${bgColor.secondary}`} >
 			{post.text}
 		</pre> : <Markdown remarkPlugins={[remarkGfm]} components={{
 			a: SafeLink, img: SafeImageLink,
@@ -330,16 +335,16 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 		</Markdown>}
 
 		<div className="flex flex-row justify-between w-full items-center flex-wrap gap-2" >
-			<p className="text-sm text-gray-400" >
+			<Text v="sm" >
 				submitted <TimeSince t={post.submitted} />{adminPost && `, id: ${post.id}`}
-			</p>
+			</Text>
 			<div className="flex flex-row gap-1 items-center" >
 				{deletePost && <IconButton icon={<IconTrash/>} onClick={deletePost} />}
 
 				<IconButton icon={voted ? <IconThumbUpFilled/> : <IconThumbUp/>} onClick={()=>{
 					if (!yours) {
 						vote.run({data: {id: post.id, vote: !voted}, refresh(r) {
-							setVoted(r.req!!.vote);
+							setVoted(r.req!.vote);
 						}});
 					}
 				}} />
@@ -379,8 +384,8 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 
 function CreatePostButton({postLimit, course, post}: {postLimit: number, course: number, post?: EditPost}) {
 	const create = createPost(post ? postToAddPost(post, course) : {text: "", rating: null, course, edit: null, showName: false});
-	const make = callAPI<{}, AddPost>("posts/submit", true);
-	const del = callAPI<{}, number>("posts/delete", true);
+	const make = callAPI<unknown, AddPost>("posts/submit", true);
+	const del = callAPI<unknown, number>("posts/delete", true);
 	const ctx = useContext(PostRefreshHook);
 
 	const ratingPost = (x: number): AddPost => ({
@@ -390,11 +395,11 @@ function CreatePostButton({postLimit, course, post}: {postLimit: number, course:
 	return <div className="flex flex-col gap-1 items-center" >
 		<Button onClick={()=>create(postLimit)} >{post && post.text!=null ? "Edit post" : "Create post"}</Button>
 		{(post==undefined || post.text==null) && <>
-			<p className="text text-sm text-gray-400" >or {post ? "update your" : "leave a"} rating</p>
+			<Text v="dim" >or {post ? "update your" : "leave a"} rating</Text>
 			{make.loading || del.loading
-				? <span className="text text-sm text-gray-400" >Updating...</span>
+				? <Text v="dim" >Updating...</Text>
 				: <div className="flex flex-row gap-3 items-center" >
-						<Stars rating={post==undefined ? undefined : post.rating!!}
+						<Stars rating={post==undefined ? undefined : post.rating!}
 						setStar={(r) => {
 							make.run({data: ratingPost(r), refresh() { ctx?.(); }});
 						}} sz={35} />
@@ -412,68 +417,23 @@ export function Community({course}: {course: SmallCourse}) {
 
 	const postsReq = callAPI<PostData, CoursePostsReq>("posts/course", "maybe");
 	const posts = postsReq.current;
-	const refresh = () => {
-		postsReq.run({data: {course: course.id, sortBy}})
-	};
-
-	useEffect(refresh, [sortBy]);
-
-	const isLoggedIn = posts?.res?.loggedIn!=null;
-	const logout = callAPI("logout", true);
-	const deleteUser = callAPI("deleteuser", true);
+	const refresh = () => postsReq.run({data: {course: course.id, sortBy}});
 
 	const redir = redirectToSignIn();
 	const app = useContext(AppCtx);
 
-	const drop: DropdownPart[] = [
-		{type: "txt", txt: <p>{posts?.res?.loggedIn ?
-			<>Logged in with <b>{posts.res.loggedIn.email}</b></>
-			: <>Not logged in</>
-		}</p>},
-		{type: "act", name: isLoggedIn ? "Logout" : "Sign in",
-			disabled: isLoggedIn==null || postsReq.loading || logout.loading, act() {
-			if (isLoggedIn) {
-				logout.run();
-				setAuth(null);
-				refresh();
-			} else redir();
-		}},
-	];
+	useEffect(refresh, [sortBy, app.hasAuth]);
 
-	if (isLoggedIn) drop.push({
-		type: "act",
-		name: <span className="text-red-400" >Delete all data</span>,
-		act() {
-			app.open({
-				type: "other", name: "Delete all your data?",
-				modal: <p>
-					This will remove all <b>posts/reviews and any other information across all courses</b> associated with your account and Purdue email.
-				</p>,
-				actions: [
-					{
-						name: "Delete everything", status: "bad",
-						act(c) {
-							c.setLoading();
-							deleteUser.run({refresh() { c.closeModal(); refresh(); }});
-							return false;
-						}
-					}
-				]
-			});
-		}
-	});
-
-	return <div className="flex items-stretch flex-col gap-2 border-zinc-600 bg-zinc-900 border-1 p-5 rounded-lg pt-2" ><PostRefreshHook.Provider value={refresh} >
+	return <div className={twMerge("flex items-stretch flex-col gap-2 border-1 p-5 pt-2", containerDefault, bgColor.secondary)} ><PostRefreshHook.Provider value={refresh} >
 		<div className="flex flex-col items-center gap-3 md:flex-row justify-between" >
 			<div className="flex flex-row gap-2 items-center flex-wrap" >
-				<h2 className="font-extrabold font-display text-2xl" >Community</h2>
+				<Text v="md" >Community</Text>
 
 				{course.avgRating!=null && <>
 					<Stars sz={24} rating={course.avgRating} /> <span className="font-display font-black text-xl" >{course.ratings}</span>
 				</>}
 			</div>
 			<div className="flex flex-row gap-2" >
-				<Dropdown trigger={<IconButton icon={<IconUserCircle/>} />} parts={drop} />
 				<Dropdown trigger={<Button icon={<IconArrowsSort/>} >Sort by</Button>} parts={
 					sortByNames.map(([a,b])=>
 						({type: "act", name: a, act() { setSortBy(b) }, active: sortBy==b}))
@@ -482,7 +442,7 @@ export function Community({course}: {course: SmallCourse}) {
 		</div>
 
 		<div className="py-3 md:px-7">
-			{posts==null ? <Loading/> : <div className="flex flex-col gap-2 overflow-y-scroll max-h-96 md:max-h-[40rem] mb-5" >
+			{posts==null ? <Loading/> : <div className="flex flex-col gap-2 overflow-y-auto max-h-96 md:max-h-[40rem] mb-5" >
 				{posts.res.edit?.text!=null && <PostCard
 					post={{...posts.res.edit, text: posts.res.edit.text}}
 					key={posts.res.edit.id} yours editButton={
@@ -492,7 +452,7 @@ export function Community({course}: {course: SmallCourse}) {
 			</div>}
 
 			<div className="flex flex-col items-center justify-center gap-2" >
-				{posts!=null && isLoggedIn ? (posts?.res.edit==null ? <>
+				{posts!=null && app.hasAuth ? (posts?.res.edit==null ? <>
 					{posts?.res.posts.length==0 && <p>Nobody has contributed to this course yet!</p>}
 					<CreatePostButton postLimit={posts.res.postLimit} course={course.id} />
 				</> : <>

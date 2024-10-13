@@ -2,10 +2,13 @@ package com.boilerclasses
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
 import java.time.LocalTime
 import java.time.format.DateTimeFormatterBuilder
-import java.util.Locale
+import java.util.*
 
 // just stowing the bodies here 🪦
 object Schema {
@@ -37,13 +40,11 @@ object Schema {
         val crn: Int,
         val section: String,
         val times: List<SectionTime>,
-        val seats: Seats,
-        val waitlist: Seats,
+        val seats: Seats?=null,
+        val room: List<String>?=null,
         val dateRange: List<String>,
         val scheduleType: String,
         val instructors: List<SectionInstructor>,
-        val permissionOfInstructor: Boolean,
-        val permissionOfDept: Boolean
     )
 
     @Serializable
@@ -232,6 +233,15 @@ object Schema {
     )
 
     @Serializable
+    data class Attachment(
+        val type: String,
+        val name: String,
+        val updated: String,
+        val href: String?=null,
+        val author: String
+    )
+
+    @Serializable
     data class Course(
         val name: String,
         val subject: String,
@@ -244,6 +254,7 @@ object Schema {
         val attributes: List<String>,
         val prereqs: JsonElement,
         val restrictions: List<Restriction>,
+        val attachments: Map<String, List<Attachment>>?=null
     ) {
         fun prereqs(): PreReqs? = when (prereqs) {
             is JsonObject -> Json.decodeFromJsonElement<PreReqs>(prereqs)
@@ -298,7 +309,7 @@ object Schema {
     ) {
         fun toSmall(varTitle: String?) = SmallCourse(
             id, course.name, varTitle, course.subject, course.course,
-            course.sections.mapValues {(k,v)->
+            course.sections.mapValues {(_,v)->
                 v.flatMap {it.instructors}.groupingBy {it.name}
                     .reduce { a,b,c-> SectionInstructor(a,b.primary||c.primary) }
                     .values.toList()

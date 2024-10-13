@@ -15,9 +15,7 @@ import java.io.File
 import java.security.MessageDigest
 import kotlin.time.Duration.Companion.seconds
 
-const val SESSION_MAXAGE = (3600*24*7).toLong()
-const val NONCE_MAXAGE = (60*5).toLong()
-
+@OptIn(ExperimentalSerializationApi::class)
 val json = Json {
     classDiscriminatorMode=ClassDiscriminatorMode.NONE
     encodeDefaults=true
@@ -35,7 +33,7 @@ enum class APIErrTy {
     SessionExpire,
     Other;
 
-    fun code() = when(this) {
+    fun code(): StatusCode = when(this) {
         NotFound -> StatusCode.NOT_FOUND
         SessionExpire, Unauthorized, Banned -> StatusCode.UNAUTHORIZED
         BadRequest -> StatusCode.BAD_REQUEST
@@ -92,14 +90,22 @@ suspend fun main(args: Array<String>) = coroutineScope {
     runApp(args) {
         val db = DB(environment)
         val auth = Auth(db,log,environment)
-        val courses = Courses(environment, log, db)
+        val availability = Availability(db, log, environment, auth)
+        val courses = Courses(environment, log, db, availability)
         val searchRateLimit = RateLimiter(10, 1.seconds)
         val dataRateLimit = RateLimiter(1, 5.seconds)
         val loginRateLimit = RateLimiter(3, 3.seconds)
         val allRateLimit = RateLimiter(25, 2.seconds)
         val isFF = environment.getProperty("useForwardedFor")=="true"
 
-        launch { courses.runScraper() }
+        launch {
+            courses.loadCourses()
+            courses.runScraper(coroutineContext)
+        }
+
+        launch {
+            courses.runUnitimeScraper(coroutineContext)
+        }
 
         before {
             if (isFF) ctx.header("X-Forwarded-For").valueOrNull()?.let {
@@ -120,7 +126,7 @@ suspend fun main(args: Array<String>) = coroutineScope {
             post("/random") { ctx.resp(courses.randomCourseId()) }
 
             post("/all") {
-                val courses = db.allCourses().map {
+                val allCourses = db.allCourses().map {
                     buildJsonObject {
                         put("id", it.id)
                         put("lastUpdated", it.course.lastUpdated)
@@ -135,7 +141,7 @@ suspend fun main(args: Array<String>) = coroutineScope {
                 }
 
                 ctx.resp(buildJsonObject {
-                    put("courses", Json.encodeToJsonElement(courses))
+                    put("courses", Json.encodeToJsonElement(allCourses))
                     put("instructors", Json.encodeToJsonElement(profs))
                 })
             }
@@ -215,13 +221,17 @@ suspend fun main(args: Array<String>) = coroutineScope {
 
             post("/logout", auth.withSession { it.remove() })
 
+            post("/user", auth.withUserMaybe { ctx.resp(it) })
+
             //deletes all user data via cascade
-            post("/deleteuser", auth.withUser {
-                courses.removeRatings(db.deleteUser(it.id))
+            post("/deleteuser", auth.withSession {
+                it.user?.id?.let { uid->courses.removeRatings(db.deleteUser(uid)) }
+                it.remove()
                 ctx.resp(Unit)
             })
 
             posts(auth, db, courses)
+            with(availability) { route(courses) }
 
             @Serializable
             data class SetAdmin(val email: String, val admin: Boolean)

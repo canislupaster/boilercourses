@@ -1,5 +1,5 @@
 {
-  "name": "boilerclasses",
+  "name": "boilercourses-client",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -19,7 +19,6 @@
     "@nextui-org/slider": "^2.2.15",
     "@nextui-org/spinner": "^2.0.33",
     "@nextui-org/system": "^2.2.5",
-    "@nextui-org/tabs": "^2.0.35",
     "@nextui-org/theme": "^2.2.9",
     "@nextui-org/tooltip": "^2.0.39",
     "@tabler/icons-react": "^3.11.0",

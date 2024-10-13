@@ -1,13 +1,16 @@
 {
 	"type": "module",
-	"name": "scraper",
+	"name": "boilercourses-scraper",
 	"private": true,
 	"dependencies": {
-		"@types/node": "^20.14.12",
 		"better-sqlite3": "^11.1.2",
 		"cheerio": "^1.0.0-rc.12",
 		"cli-progress": "^3.12.0",
 		"knex": "^3.1.0",
+		"papaparse": "^5.4.1",
+		"playwright": "^1.48.0",
+		"playwright-extra": "^4.3.6",
+		"puppeteer-extra-plugin-stealth": "^2.11.2",
 		"tsx": "^4.16.5",
 		"undici": "^6.19.4",
 		"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
@@ -20,6 +23,8 @@
 		"migrate:rollback": "node --import tsx/esm ./node_modules/.bin/knex migrate:rollback"
 	},
 	"devDependencies": {
+		"@types/node": "^20.14.12",
+		"@types/papaparse": "^5.3.14",
 		"@types/cli-progress": "^3.11.6"
 	}
 }

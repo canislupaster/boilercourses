@@ -38,7 +38,7 @@ object InstantSerializer: KSerializer<Instant> {
 
 class DB(env: Environment) {
     val dbFile = File("./data/db.sqlite")
-    val db = Database.connect("jdbc:sqlite:${dbFile.path.toString()}?foreign_keys=on", "org.sqlite.JDBC")
+    val db = Database.connect("jdbc:sqlite:${dbFile.path}?foreign_keys=on", "org.sqlite.JDBC")
     val rng = SecureRandom()
     val adminEmail = env.getProperty("adminEmail")
 
@@ -58,8 +58,6 @@ class DB(env: Environment) {
             SchemaUtils.createMissingTablesAndColumns()
         }
     }
-
-    val json = Json.Default
 
     // constraints and indices are created by migrations in scripts with knex so we don't worry about that here...
 
@@ -134,6 +132,23 @@ class DB(env: Environment) {
         val lastUpdated = timestamp("last_updated")
     }
 
+    object AvailabilityNotification: Table("availability_notification") {
+        val id = long("id").autoIncrement()
+        val term = text("term")
+        val course = integer("course").references(Course.id)
+        val user = integer("user").references(User.id)
+        val crn = integer("crn").nullable()
+        val threshold = integer("threshold")
+        val satisfied = bool("satisfied")
+        val sent = bool("sent")
+    }
+
+    object EmailBlock: Table("email_block") {
+        val email = text("email")
+        val key = binary("key")
+        val blocked = bool("blocked")
+    }
+
     object Subject: Table("subject") {
         val abbr = text("abbr")
         val name = text("name")
@@ -149,7 +164,7 @@ class DB(env: Environment) {
     }
 
     suspend fun<T> query(block: suspend Transaction.() -> T): T =
-        newSuspendedTransaction<T>(Dispatchers.IO,db,statement=block)
+        newSuspendedTransaction(Dispatchers.IO,db,statement=block)
 
     //this could be considered sucky, by some
     suspend fun getInfo(): Schema.Info = query {
@@ -257,7 +272,7 @@ class DB(env: Environment) {
             throw APIErrTy.Unauthorized.err("invalid session key")
 
         SessionDB(id, ses[Session.user]?.let { uid->
-            UserData(uid, ses[User.email], ses[User.name], ses[User.admin] ?: false, ses[User.banned])
+            UserData(uid, ses[User.email], ses[User.name], ses[User.admin], ses[User.banned])
         })
     }
 
@@ -268,9 +283,9 @@ class DB(env: Environment) {
         val skeyHash = hash(skey)
 
         Session.insert {
-            it[Session.created] = Instant.now()
-            it[Session.key] = skeyHash
-            it[Session.id] = sid
+            it[created] = Instant.now()
+            it[key] = skeyHash
+            it[id] = sid
         }
 
         MakeSession(SessionDB(sid, null), skey)
@@ -291,14 +306,14 @@ class DB(env: Environment) {
     data class BanRequest(val id: Int, val removePosts: Boolean?=null, val banned: Boolean)
 
     suspend fun banUser(req: BanRequest) = query {
-        if (DB.User.update({DB.User.id eq req.id}) { it[banned]=req.banned }==0)
+        if (User.update({User.id eq req.id}) { it[banned]=req.banned }==0)
             throw APIErrTy.NotFound.err("User to ban not found")
 
         if (req.removePosts==true) {
             val ratings = allRatingsFrom(req.id)
-            DB.CoursePost.deleteWhere { user eq req.id }
-            DB.PostVote.deleteWhere { user eq req.id }
-            DB.PostReport.deleteWhere { user eq req.id }
+            CoursePost.deleteWhere { user eq req.id }
+            PostVote.deleteWhere { user eq req.id }
+            PostReport.deleteWhere { user eq req.id }
             ratings
         } else {
             emptyList()
@@ -306,7 +321,7 @@ class DB(env: Environment) {
     }
 
     suspend fun getAdmins() = query {
-        DB.User.select(udataCols).where {User.admin eq true}.map { toUData(it) }
+        User.select(udataCols).where {User.admin eq true}.map { toUData(it) }
     }
 
     inner class SessionDB(val sesId: String, val user: UserData?) {

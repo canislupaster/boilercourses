@@ -1,12 +1,12 @@
-import { MetadataRoute } from 'next'
-import { api } from "./server";
+import { MetadataRoute } from 'next';
+import { api, catchAPIError } from "./server";
  
 type ServerAll = {
 	courses: {id: number, lastUpdated: string}[],
 	instructors: {id: number, lastUpdated: string}[]
 };
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+export default catchAPIError(async (): Promise<MetadataRoute.Sitemap> => {
 	const all: ServerAll = await api("all");
 
 	type X = ServerAll["courses"][0]&{type: "course"|"prof"};
@@ -16,7 +16,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	];
 
   return a.map(x => ({
-		url: new URL(`/${x.type}/${x.id}`, process.env.NEXT_PUBLIC_ROOT_URL!).href,
+		url: new URL(`/${x.type}/${x.id}`, process.env.NEXT_PUBLIC_ROOT_URL).href,
 		lastModified: new Date(x.lastUpdated)
 	}));
-}
+});

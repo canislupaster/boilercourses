@@ -89,7 +89,7 @@ export function toInstructorGrade(x: Partial<Record<Grade,number>>): InstructorG
 
 export function mergeGrades(arr: InstructorGrade[]): InstructorGrade {
   let gpa = 0, totSec=0, gpaTot=0;
-  let out: Partial<Record<Grade, number>> = {};
+  const out: Partial<Record<Grade, number>> = {};
 
   for (const x of arr) {
     for (const [k,v] of Object.entries(x.grade) as [Grade,number][]) {
@@ -126,16 +126,13 @@ export type Section = {
   crn: number,
   section: string,
 
-  permissionOfInstructor: boolean,
-  permissionOfDept: boolean,
-
   times: {
     day: Day,
     time: string
   }[],
 
-  seats: Seats,
-  waitlist: Seats,
+  seats?: Seats,
+  room?: string[],
 
   //utc for timezone independence...
   dateRange: [string, string],
@@ -147,6 +144,14 @@ export type Section = {
 export const validDays = ["M","T","W","R","F","S"];
 
 export type InstructorGrades = Record<Term, InstructorGrade>;
+
+export type Attachment = {
+  type: "web"|"doc",
+  name: string,
+  updated: string,
+  href?: string,
+  author: string
+};
 
 export type Course = {
   name: string,
@@ -161,7 +166,9 @@ export type Course = {
   credits: {type: "range", min: number, max: number}|{type: "fixed", values: number[]},
   attributes: string[],
   prereqs: PreReqs | "failed" | "none", //may fail to parse
-  restrictions: Restriction[]
+  restrictions: Restriction[],
+
+  attachments?: Record<Term, Attachment[]>
 };
 
 export type Instructor = {
@@ -205,6 +212,21 @@ export type ServerResponse<T> = {
     |"rateLimited"|"other"|"sessionExpire"|"banned",
   message: string|null
 } | {status: "ok", result: T}
+
+export function errorName(err: (ServerResponse<unknown>&{status:"error"})["error"]) {
+  let name = "Unknown error";
+  switch (err) {
+    case "badRequest": name = "Bad Request"; break;
+    case "loading": name = "Loading"; break;
+    case "notFound": name = "Not Found"; break;
+    case "other": name = "Other Error"; break;
+    case "rateLimited": name = "Rate Limited"; break;
+    case "banned": name = "You've been banned!"; break;
+    case "sessionExpire": name = "Session expired"; break;
+    case "unauthorized": name = "Unauthorized"; break;
+  }
+  return name;
+}
 
 export type ServerInfo = {
   terms: Partial<Record<Term,{ id: string, name: string, lastUpdated: string }>>,
@@ -280,7 +302,7 @@ export function creditStr(course: {credits: Course["credits"]}) {
 //latest section first
 export function sectionsByTerm(course: Course) {
   return ([...Object.entries(course.sections)] as [Term,Section[]][])
-    .sort(([a,x],[b,y]) => termIdx(b)-termIdx(a));
+    .sort(([a,],[b,]) => termIdx(b)-termIdx(a));
 }
 
 export function mergeInstructors(all: CourseInstructor[]) {
@@ -307,8 +329,9 @@ export function latestTermofTerms(terms: Term[], restrict?: Term[]): Term|null {
   let latest=null, idx=-1;
   for (const k of terms) {
     const v = termIdx(k);
-    if (v>idx && (restrict===undefined || restrict.includes(k)))
-      idx=v, latest=k;
+    if (v>idx && (restrict===undefined || restrict.includes(k))) {
+      idx=v; latest=k;
+    }
   }
 
   return latest;
@@ -322,3 +345,10 @@ export function trimCourseNum(num: number): number {
   if (num%100 == 0) return Math.floor(num/100);
   else return num;
 }
+
+export const scheduleAbbr = (schedule: string) =>
+  ({
+    Recitation: "Rec",
+    Lecture: "Lec",
+    Laboratory: "Lab",
+  })[schedule] ?? schedule;

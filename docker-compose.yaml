@@ -7,16 +7,21 @@ services:
       dockerfile: ./server/Dockerfile
     secrets:
       - proxies
+      - unitime_login
     environment:
-      - SCRAPE_ARGS=${SCRAPE_ARGS?SCRAPE_ARGS is required}
-      - SCRAPE_INTERVAL=${SCRAPE_INTERVAL}
-      - MSAL_CLIENT_ID=${MSAL_CLIENT_ID?MSAL client id required}
-      - MSAL_TENANT=${MSAL_TENANT?MSAL tenant required}
+      - SCRAPE_ARGS=${SCRAPE_ARGS-}
+      - UNITIME_ARGS=${UNITIME_ARGS-}
+      - SCRAPE_INTERVAL=${SCRAPE_INTERVAL-}
+      - UNITIME_INTERVAL=${UNITIME_INTERVAL-}
+      - MSAL_CLIENT_ID=${MSAL_CLIENT_ID:?MSAL client id required}
+      - MSAL_TENANT=${MSAL_TENANT:?MSAL tenant required}
+      - SENDGRID_KEY=${SENDGRID_KEY:?Sendgrid key is required}
       - ADMIN_EMAIL=${ADMIN_EMAIL-}
       - SERVER_PORT=8080
+      - ROOT_URL=${ROOT_URL:?ROOT_URL is required}
     volumes:
       - type: bind
-        source: ${DATA_SOURCE?DATA_SOURCE is required}
+        source: ${DATA_SOURCE:?DATA_SOURCE is required}
         target: /server/data
     ports:
       - 127.0.0.1:4000:8080
@@ -24,11 +29,11 @@ services:
     build:
       context: .
       dockerfile: ./client/Dockerfile
-      args: # nextjs uses at build time. these are public (in a sense)!
-        - NEXT_PUBLIC_ROOT_URL=${ROOT_URL?ROOT_URL is required}
+      args: # nextjs uses at build time. these are public (in a sense, they're written to the image, not just used at runtime)!
+        - NEXT_PUBLIC_ROOT_URL=${ROOT_URL:?ROOT_URL is required}
         - NEXT_PUBLIC_GOAT_COUNTER=${GOAT_COUNTER-}
-        - NEXT_PUBLIC_MSAL_CLIENT_ID=${MSAL_CLIENT_ID?MSAL client id required}
-        - NEXT_PUBLIC_MSAL_TENANT=${MSAL_TENANT?MSAL tenant required}
+        - NEXT_PUBLIC_MSAL_CLIENT_ID=${MSAL_CLIENT_ID:?MSAL client id required}
+        - NEXT_PUBLIC_MSAL_TENANT=${MSAL_TENANT:?MSAL tenant required}
     ports:
       - 127.0.0.1:8000:3000
     environment:
@@ -36,3 +41,5 @@ services:
 secrets:
   proxies:
     file: ${PROXIES_PATH-}
+  unitime_login:
+    file: ${UNITIME_LOGIN-}

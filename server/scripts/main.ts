@@ -1,13 +1,13 @@
-import { abort, exit } from "node:process";
-import { parseArgs } from "node:util";
-import { default as knexBuilder } from "knex";
-import { addProxies, fetchDispatcher, getHTML } from "./fetch";
-import { formatTerm, Term, termIdx } from "../../shared/types";
-import { getGrades, Grades } from "./grades";
-import { readFile } from "node:fs/promises";
-import { updateCourses } from "./course";
-import { DBInstructor, DBTerm } from "./db";
-import { updateInstructors } from "./prof";
+import {exit} from "node:process";
+import {parseArgs} from "node:util";
+import {addProxies, fetchDispatcher, getHTML} from "./fetch";
+import {formatTerm, Term, termIdx} from "../../shared/types";
+import {getGrades, Grades} from "./grades";
+import {readFile} from "node:fs/promises";
+import {updateCourses} from "./course";
+import {DBInstructor, DBTerm, loadDB} from "./db";
+import {updateInstructors} from "./prof";
+import {addAttachments} from "./attachments";
 
 const {values, positionals} = parseArgs({
 	options: {
@@ -21,17 +21,7 @@ const {values, positionals} = parseArgs({
 	allowPositionals: true
 });
 
-if (values.db==undefined) {
-	console.error("no database");
-	abort();
-}
-
-console.log("loading database...");
-const knex = knexBuilder({
-	client: "better-sqlite3",
-	connection: {filename: values.db},
-	useNullAsDefault: false
-});
+const knex = loadDB(values);
 
 console.log("loading terms...");
 const terms = await getHTML("https://selfservice.mypurdue.purdue.edu/prod/bwckschd.p_disp_dyn_sched");
@@ -43,7 +33,7 @@ const termList = terms("select[name=\"p_term\"]").children()
 if (values.proxies!==undefined) await addProxies(values.proxies);
 
 function tryOr<T>(f: () => T, d: T) {
-	try {return f();} catch(e) {return d;}
+	try {return f();} catch {return d;}
 }
 
 const gradePath = tryOr<{type:"online",url:string}|{type:"file", path:string}>(
@@ -55,8 +45,10 @@ console.log(`getting grades from ${values.grades!}`);
 
 let grades: Grades[];
 if (gradePath.type=="online")
-	grades=await getGrades(await fetchDispatcher(x=>x.arrayBuffer(), gradePath.url));
-else grades=await getGrades(await readFile(gradePath.path));
+	grades=getGrades(await fetchDispatcher({transform: x=>x.arrayBuffer()}, gradePath.url));
+else grades=getGrades(await readFile(gradePath.path) as unknown as ArrayBuffer);
+
+const courseIds = new Set<number>();
 
 async function scrape(term: Term|null) {
 	if (term==null)
@@ -66,18 +58,18 @@ async function scrape(term: Term|null) {
 	let idx: number=-1, termId: string|undefined;
 	if (term!=null) {
 		idx=termIdx(term);
-		termId = termList.find(([k,v]) => k.startsWith(formatTerm(term!)))?.at(1);
+		termId = termList.find(([k,]) => k.startsWith(formatTerm(term!)))?.at(1);
 	} else {
 		for (const [k,v] of termList) {
 			const t = k.split(" ").slice(0,2).join("").toLowerCase() as Term;
 			if (termIdx(t)>idx) {
-				term=t, idx=termIdx(t), termId=v;
+				term=t; idx=termIdx(t); termId=v;
 			}
 		}
 	}
 
 	if (term==undefined || termId==undefined)
-		throw "term not found";
+		throw new Error("term not found");
 
 	await knex<DBTerm>("term").insert({
 		id: term,
@@ -85,9 +77,11 @@ async function scrape(term: Term|null) {
 		last_updated: Date.now()
 	}).onConflict("id").merge();
 
-	let {instructors: courseInstructors} = await updateCourses({
+	const {instructors: courseInstructors, courseIds: newCourseIds} = await updateCourses({
 		term, termId, subjectArg: values.subject, knex, grades
 	});
+
+	for (const x of newCourseIds) courseIds.add(x);
 	
 	let updatedInstructors = new Set(courseInstructors.map(x=>x[0]));
 	if (values.allInstructors) updatedInstructors=updatedInstructors.union(new Set(
@@ -106,8 +100,8 @@ async function scrape(term: Term|null) {
 }
 
 if (values.after!==undefined) {
-	const i = termList.findIndex(([k,v]) => k.startsWith(formatTerm(values.after as Term)));
-	if (i==-1) throw `term ${values.after} not found`;
+	const i = termList.findIndex(([k,]) => k.startsWith(formatTerm(values.after as Term)));
+	if (i==-1) throw new Error(`term ${values.after} not found`);
 
 	const terms = termList.slice(0,i+1).map(v=>{
 		const p = v[0].split(/\s+/g).slice(0,2);
@@ -122,4 +116,6 @@ if (values.after!==undefined) {
 	await scrape(null);
 }
 
-exit(0);
+await addAttachments(knex, [...courseIds.values()]);
+console.log("done, exiting");
+exit(0)

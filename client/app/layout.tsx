@@ -1,10 +1,11 @@
-import React from "react";
-import { Chivo, Inter } from 'next/font/google';
-import { Metadata } from "next";
-import banner from "../public/banner.png";
-import "./style.css";
+import { textColor } from "@/components/util";
 import { AppWrapper, GoatCounter } from "@/components/wrapper";
-import { getInfo } from "./server";
+import { Metadata } from "next";
+import { Chivo, Inter } from 'next/font/google';
+import React from "react";
+import banner from "../public/banner.png";
+import { catchAPIError, getInfo } from "./server";
+import "./style.css";
 
 const chivo = Chivo({ subsets: ['latin'], display: 'swap', variable: "--chivo" });
 const inter = Inter({ subsets: ['latin'], display: 'swap', variable: "--inter" });
@@ -22,6 +23,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase: new URL(url),
+    alternates: { canonical: "/" },
     title: "BoilerCourses", description: desc,
     icons: { icon: "/icon-color.png" },
     keywords: [ 'Purdue', 'Purdue University', 'Purdue Courses', 'BoilerCourses', 'Boiler Courses',
@@ -41,9 +43,9 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default async function RootLayout({ children, }: { children: React.ReactNode }) {
+export default catchAPIError(async ({ children, }: { children: React.ReactNode }) => {
   return (
-    <html lang="en" className={`${inter.variable} ${chivo.variable} dark font-body bg-neutral-950 text-white`} >
+    <html lang="en" className={`${inter.variable} ${chivo.variable} font-body ${textColor.default} dark:bg-neutral-950 bg-neutral-100`} >
       <head>
         <meta name='og:locality' content='West Lafayette' />
         <meta name='og:region' content='IN' />
@@ -52,8 +54,6 @@ export default async function RootLayout({ children, }: { children: React.ReactN
 
         <meta property="twitter:domain" content={domain} />
         <meta property="twitter:url" content={url} />
-
-        <link rel="canonical" href={url} />
 
         {goatCounter && <GoatCounter goatCounter={goatCounter} />}
       </head>
@@ -64,4 +64,4 @@ export default async function RootLayout({ children, }: { children: React.ReactN
       </body>
     </html>
   )
-}
+});

@@ -1,7 +1,7 @@
 import { IconBan, IconCircleCheck } from "@tabler/icons-react";
-import { Restriction } from "../../shared/types";
-import { Anchor } from "./util";
 import React, { useState } from "react";
+import { Restriction } from "../../shared/types";
+import { Anchor, bgColor, borderColor, Text, textColor } from "./util";
 
 function RestrictionCard({mid,pre,post,exclusive}: {mid:string,pre:string,post:string,exclusive:boolean}) {
 	const maxMid = 80;
@@ -9,11 +9,11 @@ function RestrictionCard({mid,pre,post,exclusive}: {mid:string,pre:string,post:s
 	const [collapsed, setCollapsed] = useState(true);
 	
 	const collapser = <Anchor onClick={() => setCollapsed(!collapsed)}
-					className="text-blue-300 inline" >
+					className={`"${textColor.blueLink} inline"`} >
 					{collapsed ? `...show more` : "Show less"}</Anchor>;
 
-	return <div className={`flex flex-row gap-2 p-2 first:rounded-t-xl last:rounded-b-xl ${exclusive ? "bg-rose-900" : "bg-amber-900"}`} >
-		<span className="flex-shrink-0" >
+	return <div className={`flex flex-row gap-2 p-2 first:rounded-t-xl last:rounded-b-xl ${exclusive ? bgColor.rose : bgColor.restriction}`} >
+		<span className="flex-shrink-0 mt-px" >
 			{exclusive ? <IconBan size={20} /> : <IconCircleCheck size={20}/>}
 		</span>
 		<span>
@@ -33,7 +33,7 @@ function RestrictionCard({mid,pre,post,exclusive}: {mid:string,pre:string,post:s
 function RestrictionEl<T extends Restriction["type"], E extends boolean>({restriction: r, type, exclusive}: {restriction: Extract<Restriction,{type:T,exclusive:E}>[], type: T, exclusive: E}) {
 	let pre="",mid,post="";
 	const joinOr = <X,>(t: (x: Extract<Restriction,{type:X}>) => string) => {
-		const s = (r as any).map(t);
+		const s = (r as unknown as Extract<Restriction,{type:X}>[]).map(t);
 		return `${s.length>1 ? s.slice(0,-1).join(", ")+" or " : ""}${s[s.length-1]}`;
 	}
 
@@ -51,9 +51,8 @@ function RestrictionEl<T extends Restriction["type"], E extends boolean>({restri
 		case "level": mid=joinOr<"level">(x=>`${x.level}s`); break;
 		case "major": mid=joinOr<"major">(x=>`${x.major}`); post=` major${s}`; break;
 		case "program": pre=`Program${s} `; mid=joinOr<"program">(x=>`${x.program}`); break;
+		default: throw new Error("Unknown course restriction");
 	}
-
-	if (mid==null) throw "mid not initialized";
 
 	return <RestrictionCard mid={mid} pre={pre} post={post} exclusive={exclusive} />;
 }
@@ -71,10 +70,10 @@ export function Restrictions({restrictions}: {restrictions: Restriction[]}) {
 	}
 
 	return <>
-		<h2 className="text-2xl font-display font-extrabold" >
+		<Text v="md" >
 			Restrictions
-		</h2>
-		<div className={`flex flex-col relative border border-zinc-700 mt-2 rounded-xl`} >
+		</Text>
+		<div className={`flex flex-col relative border ${borderColor.default} mt-2 rounded-xl`} >
 			{Object.entries(byTy).map(([ty,v],i) => {
 				const exc = v.filter(x=>x.exclusive);
 				const nonExc = v.filter(x=>!x.exclusive);

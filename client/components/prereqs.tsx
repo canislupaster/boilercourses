@@ -1,22 +1,23 @@
 import { IconInfoTriangleFilled, IconSchool } from "@tabler/icons-react";
-import { CourseLikePreReq, PreReq, PreReqs } from "../../shared/types";
-import { CourseLink, CourseLinkPopup } from "./card";
-import { AppTooltip, useMd } from "./clientutil";
-import { Anchor } from "./util";
 import React from "react";
+import { CourseLikePreReq, PreReq, PreReqs } from "../../shared/types";
+import { CourseLinkPopup } from "./card";
+import { AppTooltip, useMd } from "./clientutil";
+import { Anchor, Text } from "./util";
 
 function PrereqCourseLikeLink({prereq}: {prereq: CourseLikePreReq}) {
-	let txt,extra=null,kind;
+	let txt,kind;
 	let courseLinkProps: {subject: string, num: number}|null=null;
 
 	switch (prereq.type) {
 		case "attribute": txt=prereq.attribute; kind="courses with this attribute"; break;
-		case "course":
+		case "course": {
 			txt=`${prereq.subject} ${prereq.course}`;
 			kind="this course";
 			const num = Number.parseInt(prereq.course);
 			if (isFinite(num)) courseLinkProps={subject: prereq.subject, num};
 			break;
+		}
 		case "courseRange": txt=`${prereq.subject} ${prereq.course}-${prereq.courseTo}`; kind="courses in this range"; break;
 		case "subject": txt=`${prereq.subject}`; kind="this subject"; break;
 	}
@@ -43,13 +44,13 @@ function PrereqCourseLikeLink({prereq}: {prereq: CourseLikePreReq}) {
 	const mq = useMd();
 	return <AppTooltip placement={mq ? "right" : "bottom"} content={
 		courseLinkProps==null ? <div className="p-3" >
-			<h2 className="text-2xl font-display font-extrabold mb-2" >{extra==null ? txt : extra}</h2>
+			<Text v="lg" className="mb-2" >{txt}</Text>
 			{courseExtra}
 		</div> : <CourseLinkPopup type="lookup" {...courseLinkProps} extra={courseExtra} />
 	} >
-		<Anchor className="text-white" >
+		<Anchor>
 			{what!=null ? <>
-				<span className="font-extrabold font-display" >{what}</span> in {txt}
+				<Text v="bold" >{what}</Text> in {txt}
 			</> : txt}
 		</Anchor>
 	</AppTooltip>
@@ -89,15 +90,35 @@ export function Prereqs({prereqs, isChild}: {prereqs: PreReqs, isChild?: boolean
 		</div>
 	}
 
-	return <div className={`flex flex-col relative border ${prereqs.type=="and" ? "border-amber-500 bg-amber-800" : "border-sky-300 bg-sky-900"} py-4 pl-3 mt-4 rounded-l-xl ${
-			isChild ? "border-r-0" : "rounded-r-xl" }`} >
-		<div className={`absolute left-10 top-0 transform -translate-y-1/2 py-1 px-4 rounded-t-md ${prereqs.type=="and" ? "bg-amber-800" : "bg-sky-900"}`} >
-		<div className={`absolute top-0 bottom-1/2 left-0 right-0 border-t border-l border-r rounded-t-md ${prereqs.type=="and" ? "border-amber-500" : "border-sky-300"}`} ></div>
-				<span>{prereqs.type=="and" ? "All of" : "One of"}</span>
+	return <div className={`flex flex-col relative border ${
+				prereqs.type == "and"
+					? "border-amber-400 bg-amber-100 dark:bg-amber-800"
+					: "border-sky-500 bg-sky-100 dark:bg-sky-900"
+			} py-4 pl-3 mt-4 rounded-l-xl ${
+				isChild ? "border-r-0" : "rounded-r-xl"
+			}`}
+		>
+		<div
+			className={`absolute left-10 top-0 transform -translate-y-1/2 py-1 px-4 rounded-t-md ${
+				prereqs.type == "and"
+					? "bg-amber-100 dark:bg-amber-800"
+					: "bg-sky-100 dark:bg-sky-900"
+			}`}
+		>
+			<div
+				className={`absolute top-0 bottom-1/2 left-0 right-0 border-t border-l border-r rounded-t-md ${
+					prereqs.type == "and"
+						? "border-amber-400"
+						: "border-sky-500"
+				}`}
+			></div>
+			<span>{prereqs.type == "and" ? "All of" : "One of"}</span>
 		</div>
 
-		<div className="flex flex-col gap-2" >
-			{prereqs.vs.map((v,i) => <Prereqs isChild key={i} prereqs={v} />)}
+		<div className="flex flex-col gap-2">
+			{prereqs.vs.map((v, i) => (
+				<Prereqs isChild key={i} prereqs={v} />
+			))}
 		</div>
-	</div>
+	</div>;
 }

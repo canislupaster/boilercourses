@@ -1,12 +1,14 @@
-import { Knex } from "knex";
-import { Instructor, normalizeName, RMPInfo } from "../../shared/types";
-import { deepEquals, fetchDispatcher, logArray, postHTML } from "./fetch";
-import { DBInstructor } from "./db";
-import { Grades } from "./grades";
-import { Element } from "cheerio";
+import {Knex} from "knex";
+import {Instructor, normalizeName, RMPInfo} from "../../shared/types";
+import {deepEquals, fetchDispatcher, logArray, postHTML} from "./fetch";
+import {DBInstructor} from "./db";
+import {Grades} from "./grades";
+import {Element} from "cheerio";
 
-async function RMPGraphQL(query: string, variables: Record<string,any>) {
-	return await fetchDispatcher(x => x.json(), "https://www.ratemyprofessors.com/graphql", {
+async function RMPGraphQL<T>(query: string, variables: object) {
+	return await fetchDispatcher<T>({
+		transform: x => x.json()
+	}, "https://www.ratemyprofessors.com/graphql", {
 		method: "POST",
 		body: JSON.stringify({ query, variables }),
 		headers: {
@@ -24,7 +26,9 @@ export async function updateInstructors({instructors,grades,knex}:{
 }) {
 	console.log(`retrieving professor ratings`);
 
-	const res = await RMPGraphQL(`query SearchSchool($query: SchoolSearchQuery!) {
+	const res = await RMPGraphQL<{
+		data: {newSearch: {schools: {edges: {node: {id: string, name: string}}[]}}}
+	}>(`query SearchSchool($query: SchoolSearchQuery!) {
 		newSearch {
 			schools(query: $query) {
 				edges {
@@ -39,9 +43,9 @@ export async function updateInstructors({instructors,grades,knex}:{
 		query: {text: schoolName}
 	});
 
-	const schoolCandidates: any[] = res.data.newSearch.schools.edges;
+	const schoolCandidates = res.data.newSearch.schools.edges;
 	if (schoolCandidates.length==0) {
-		throw `no schools found matching ${schoolName}`;
+		throw new Error(`no schools found matching ${schoolName}`);
 	}
 
 	const schoolID = schoolCandidates[0].node.id;
@@ -55,7 +59,12 @@ export async function updateInstructors({instructors,grades,knex}:{
 
 	await logArray(instructors.keys().toArray(), async (k) => {
 		//thanks https://github.com/Michigan-Tech-Courses/rate-my-professors/blob/master/src/queries.ts
-		const res = await RMPGraphQL(`query NewSearchTeachersQuery($text: String!, $schoolID: ID!) {
+		const res = await RMPGraphQL<{
+			data: {newSearch: {teachers: {edges: {node: {
+				id: string, firstName: string, lastName: string,
+				avgDifficulty: number, avgRating: number, numRatings: number, wouldTakeAgainPercent: number
+			}}[]}}}
+		}>(`query NewSearchTeachersQuery($text: String!, $schoolID: ID!) {
 			newSearch {
 				teachers(query: {text: $text, schoolID: $schoolID}) {
 					edges {
@@ -75,7 +84,7 @@ export async function updateInstructors({instructors,grades,knex}:{
 		}`, { text: k, schoolID });
 
 		const nname = normalizeName(k);
-		const candidate = (res.data.newSearch.teachers.edges as any[]).map(x => x.node).find(x => 
+		const candidate = res.data.newSearch.teachers.edges.map(x => x.node).find(x => 
 			normalizeName(`${x.firstName} ${x.lastName}`)==nname
 		);
 		
@@ -89,7 +98,7 @@ export async function updateInstructors({instructors,grades,knex}:{
 
 		if (candidate!==undefined) {
 			const rmpId = Number.parseInt(Buffer.from(candidate.id,"base64").toString("utf-8").trimIfStarts("Teacher-"));
-			if (!isFinite(rmpId)) throw "invalid RMP teacher id";
+			if (!isFinite(rmpId)) throw new Error("invalid RMP teacher id");
 
 			rmp={
 				avgDifficulty: candidate.avgDifficulty,
@@ -141,7 +150,7 @@ export async function updateInstructors({instructors,grades,knex}:{
 				.where("name", k).select("data").first();
 
 			if (d!=undefined) {
-				const old: Instructor = JSON.parse(d.data);
+				const old = JSON.parse(d.data) as Instructor;
 				if (deepEquals({...old, lastUpdated: undefined}, instructor))
 					return;
 			}

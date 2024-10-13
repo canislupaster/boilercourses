@@ -1,15 +1,14 @@
 "use client"
 
-import { Alert, msalClientId, searchState } from "@/components/clientutil";
-import { Button, ButtonPopover, Input, Loading } from "@/components/util";
-import { AppCtx, AppWrapper, callAPI, isAuthSet, redirectToSignIn, setAuth, useAPI } from "@/components/wrapper";
-import { useContext, useEffect, useMemo, useState } from "react";
-import { ServerInfo } from "../../../shared/types";
-import { AdminPost, UserData } from "../../../shared/posts"
-import { Checkbox } from "@nextui-org/checkbox";
+import { Alert, searchState } from "@/components/clientutil";
 import { PostCard, PostCardAdminUser, PostRefreshHook } from "@/components/community";
+import { Button, ButtonPopover, containerDefault, Input, Loading, Text } from "@/components/util";
+import { callAPI, isAuthSet, redirectToSignIn } from "@/components/wrapper";
+import { Checkbox } from "@nextui-org/checkbox";
 import { Pagination } from "@nextui-org/pagination";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { AdminPost, UserData } from "../../../shared/posts";
 
 type ListRequest = {
 	reported: boolean, new: boolean, page: number
@@ -46,11 +45,11 @@ function AdminPosts() {
 	}, [postsAPI.current!=null]);
 
 	const [adminInp, setAdminInp] = useState("");
-	const setAdmin = callAPI<{}, {email: string, admin: boolean}>("setadmin", true);
+	const setAdmin = callAPI<unknown, {email: string, admin: boolean}>("setadmin", true);
 	
-	const del = callAPI<{}, number>("posts/delete", true);
-	const dismiss = callAPI<{}, number[]>("posts/admin/dismissreports", true);
-	const markRead = callAPI<{}, number[]>("posts/admin/markread", true);
+	const del = callAPI<unknown, number>("posts/delete", true);
+	const dismiss = callAPI<unknown, number[]>("posts/admin/dismissreports", true);
+	const markRead = callAPI<unknown, number[]>("posts/admin/markread", true);
 
 	const router = useRouter();
 
@@ -72,9 +71,9 @@ function AdminPosts() {
 		</div>
 
 		<div>
-			<h2 className="font-display text-2xl font-bold mb-2" >Admins</h2>
+			<Text v="lg" className="mb-2" >Admins</Text>
 			{admins.current==null ? <Loading/> : <div className="flex flex-col gap-2" >
-				{admins.current.res.map(v => <div className="p-3 rounded-md bg-gray-600" >
+				{admins.current.res.map(v => <div className={`p-3 ${containerDefault}`} >
 					<PostCardAdminUser user={v} />
 				</div>)}
 			</div>}
@@ -86,7 +85,7 @@ function AdminPosts() {
 		</div>
 
 		<div className="w-full flex flex-row items-center justify-between gap-4 flex-wrap" >
-			<h3 className="font-bold font-display text-2xl" >Posts</h3>
+			<Text v="lg" >Posts</Text>
 			<ButtonPopover title="Filter" >
 				<div className="flex flex-col items-start" >
 					<Checkbox isSelected={req.reported} onChange={(v)=>setReq({...req, reported: v.target.checked})} >Reported</Checkbox>

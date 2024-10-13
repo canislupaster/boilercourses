@@ -1,10 +1,10 @@
 "use client"
 
-import { useContext } from "react";
-import { Anchor } from "./util";
 import { IconBrandGithubFilled, IconInfoCircleFilled } from "@tabler/icons-react";
-import { AppCtx } from "./wrapper";
+import { useContext } from "react";
 import { twMerge } from "tailwind-merge";
+import { Anchor, Text } from "./util";
+import { AppCtx } from "./wrapper";
 
 function InfoModal() {
 	return <div className="pt-5 flex flex-col gap-3" >
@@ -24,8 +24,8 @@ function InfoModal() {
 export const Footer = ({className}: {className?: string}) => {
 	const ctx = useContext(AppCtx);
 	return (
-		<div className={twMerge('grid justify-center py-5 mt-4', className)} >
-			<h1 className='mx-2 text-gray-400 text-sm text-center'>
+		<div className={twMerge('grid justify-center py-4 mt-2', className)} >
+			<Text v="dim" className='mx-2 text-center' >
 				<span className='flex items-center justify-center'>
 					<Anchor target="_blank" onClick={()=>ctx.open({type: "other", modal: <InfoModal/>})} className="items-center align-middle" >
 						<IconInfoCircleFilled />
@@ -33,7 +33,7 @@ export const Footer = ({className}: {className?: string}) => {
 					</Anchor>
 				</span>
 				is an unofficial catalog for Purdue courses <br/> made by Purdue students.
-			</h1>
+			</Text>
 		</div>
 	);
 };

@@ -1,14 +1,16 @@
 "use client"
 
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { Course, CourseId, ServerInfo, ServerResponse } from "../../shared/types";
 import { Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@nextui-org/modal";
 import { NextUIProvider } from "@nextui-org/system";
-import { Button, Loading } from "./util";
 import { usePathname, useRouter } from "next/navigation";
-import { twMerge } from "tailwind-merge";
 import Script from "next/script";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import { Collapse } from "react-collapse";
 import { createPortal } from "react-dom";
+import { twMerge } from "tailwind-merge";
+import { CourseId, errorName, ServerInfo, ServerResponse } from "../../shared/types";
+import { useMediaQuery } from "./clientutil";
+import { bgColor, borderColor, Button, Loading } from "./util";
 
 export type ModalCtxType = {
 	extraActions: Element|null,
@@ -47,23 +49,29 @@ export type AuthErr = ServerResponse<unknown>&{status: "error", error: "unauthor
 export function redirectToSignIn() {
 	const router = useRouter();
 	const app = useContext(AppCtx);
-	return (err?: AuthErr) => {
-		app.forward();
+	return (err?: AuthErr, back?: string) => {
+		app.forward(back);
 		window.localStorage.setItem("signIn", JSON.stringify({err, redirect: window.location.href}));
 		router.push("/signin");
 	};
 }
 
+export type Theme = "dark"|"light";
+
 export type AppCtx = {
 	open: (m: AppModal) => void,
-	tooltipCount: number, incTooltipCount: ()=>void,
-	forward: ()=>void, back: ()=>void,
-	info: ServerInfo
+	popupCount: number, incPopupCount: ()=>void,
+	forward: (back?: string)=>void, back: ()=>void,
+	info: ServerInfo,
+	theme: Theme, setTheme: (x: Theme)=>void,
+	hasAuth: boolean|null,
+	setHasAuth: (x: boolean)=>void,
+	restoreScroll: ()=>void
 };
 
-export const AppCtx = React.createContext<AppCtx>("context not initialized" as any)
+export const AppCtx = React.createContext<AppCtx>("context not initialized" as unknown as AppCtx)
 
-const cache: Record<string, Promise<any>> = {};
+const cache: Record<string, Promise<ServerResponse<unknown>>> = {};
 
 export type APICallResult<T,R> = {res: R, endpoint: string, req: T|undefined};
 
@@ -78,7 +86,12 @@ export type APIOptions<T,R> = {
 	refresh?: (resp: APICallResult<T,R>)=>void
 };
 
-export function callAPI<R,T extends any=null>(endpoint: string, auth?: boolean|"maybe") {
+function getBodyKey<T,R>(endpoint: string, x: APIOptions<T,R>) {
+	const body = JSON.stringify(x.data); //hehe, cursed
+	return [body, `${x.method ?? "POST"} ${endpoint}\n${body}`];
+};
+
+export function callAPI<R,T=null>(endpoint: string, auth?: boolean|"maybe") {
 	const c = useContext(AppCtx);
 	const i = useRef(0);
 	const redir = auth ? redirectToSignIn() : null;
@@ -90,17 +103,17 @@ export function callAPI<R,T extends any=null>(endpoint: string, auth?: boolean|"
 		while (!cacheBad) {
 			try {
 				const t = cache[k];
-				const r=await t;
+				const r = await t;
 				if (t!=cache[k]) continue;
 				if (r.status!="ok") cacheBad=true;
-			} catch (e) {
+			} catch {
 				cacheBad=true;
 			};
 
 			break;
 		}
 
-		let headers: Record<string,string>={};
+		const headers: Record<string,string> = {};
 		if (auth) {
 			const x = window.localStorage.getItem("auth");
 			if (x!=null) {
@@ -109,7 +122,7 @@ export function callAPI<R,T extends any=null>(endpoint: string, auth?: boolean|"
 			} else if (auth===true) {
 				c.open({type: "other", name: "You need to login to access this feature",
 					actions: [
-						{name: "Continue to sign in", status: "primary", act() {redir!!();}}
+						{name: "Continue to sign in", status: "primary", act() {redir!();}}
 					]
 				});
 
@@ -122,7 +135,7 @@ export function callAPI<R,T extends any=null>(endpoint: string, auth?: boolean|"
 				method: method ?? "POST",
 				body: data==undefined ? undefined : body,
 				headers
-			}).then(x=>x.json());
+			}).then(x=>x.json()) as Promise<ServerResponse<R>>;
 		}
 
 		const resp = await cache[k] as ServerResponse<R>;
@@ -134,22 +147,13 @@ export function callAPI<R,T extends any=null>(endpoint: string, auth?: boolean|"
 			};
 
 			if (auth && (resp.error=="unauthorized" || resp.error=="sessionExpire") && recover!==null) {
-				redir!!({...resp, error: resp.error});
+				redir!({...resp, error: resp.error});
 			} else if (recover!==null) {
-				let name = "Unknown error";
-				switch (resp.error) {
-					case "badRequest": name = "Bad Request"; break;
-					case "loading": name = "Loading"; break;
-					case "notFound": name = "Not Found"; break;
-					case "other": name = "Other Error"; break;
-					case "rateLimited": name = "Rate Limited"; break;
-					case "banned": name = "You've been banned!"; break;
-					case "sessionExpire": name = "Session expired"; break;
-					case "unauthorized": name = "Unauthorized"; break;
-				}
-
 				console.error(resp);
-				c.open({type: "error", name, msg: resp.message ?? "Error performing API request.", retry: rerun })
+				c.open({
+					type: "error", name: errorName(resp.error),
+					msg: resp.message ?? "Error performing API request.", retry: rerun
+				});
 			}
 
 			return null;
@@ -163,8 +167,7 @@ export function callAPI<R,T extends any=null>(endpoint: string, auth?: boolean|"
 
 	return {
 		call(x: APIOptions<T,R> ={}) {
-			const body = JSON.stringify(x.data); //hehe, cursed
-			const k = `${x.method ?? "POST"} ${endpoint}\n${body}`;
+			const [body, k] = getBodyKey(endpoint, x);
 
 			const attempt = () => {
 				const oi = ++i.current;
@@ -195,48 +198,56 @@ export function callAPI<R,T extends any=null>(endpoint: string, auth?: boolean|"
 		run(x: APIOptions<T,R> ={}) {
 			this.call(x).attempt();
 		},
+		clearCache(x: APIOptions<T,R> ={}) {
+			const [,k] = getBodyKey(endpoint, x);
+			delete cache[k];
+		},
 		current: v,
 		loading
 	};
 }
 
-export function setAPI<R,T extends any=null>(endpoint: string, {data,method,result}: {
+export function setAPI<R,T=null>(endpoint: string, {data,method,result}: {
 	data?: T, method?: string, result: R
 }) {
 	const r: ServerResponse<R> = { status: "ok", result };
 	cache[`${method ?? "POST"} ${endpoint}\n${JSON.stringify(data)}`] = Promise.resolve(r);
 }
 
-export function useAPI<R,T extends any=null>(endpoint: string, {
+export function useAPI<R,T=null>(endpoint: string, {
 	auth, debounceMs, ...x
 }: APIOptions<T,R>&{auth?: boolean|"maybe", debounceMs?: number} = {}) {
-	const {call,current} = callAPI<R,T>(endpoint, auth);
-	const y = call(x);
+	const api = callAPI<R,T>(endpoint, auth);
+	const y = api.call(x);
 
+	const [latest, setLatest] = useState(false);
 	useEffect(()=>{
 		if (debounceMs) {
-			const tm = setTimeout(()=>y.attempt(), debounceMs);
+			setLatest(false);
+
+			const tm = setTimeout(()=>{
+				y.attempt();
+				setLatest(true);
+			}, debounceMs);
+
 			return () => clearTimeout(tm);
 		} else {
 			y.attempt();
+			setLatest(true);
 		}
 	}, [y.k]);
 
-	return current;
+	return api.current ? {...api.current, loading: !latest || api.loading} : null;
 }
 
 export const useInfo = (): ServerInfo => useContext(AppCtx).info;
 export const useCourse = (id: number): CourseId|null =>
 	useAPI<CourseId,number>("course", {data:id})?.res ?? null;
 
-export const ModalCtx = createContext<ModalCtxType>({
-	extraActions: null,
-	closeModal: ()=>{},
-	setLoading: (loading?: boolean)=>{}
-});
+export const ModalCtx = createContext<ModalCtxType|null>(null);
 
 export function ModalActions({children}: {children?: React.ReactNode}) {
-	const ctx = useContext(ModalCtx);
+	const ctx = useContext(ModalCtx)!;
 	return <>
 		{children && ctx.extraActions && createPortal(children, ctx.extraActions)}
 	</>;
@@ -253,9 +264,9 @@ function ModalContentInner({closeAll, close, x}: {x: AppModal&{type: "other"}, c
 		setLoading: (x?: boolean)=>setLd(x===undefined || x===true)
 	};
 
-	useEffect(()=>setExtra(extraRef.current), []);
+	useEffect(()=>setExtra(extraRef.current), [x]);
 
-	return <>
+	return <Collapse isOpened >
 		{x.name && <ModalHeader className="font-display font-extrabold text-2xl" >{x.name}</ModalHeader>}
 		{x.modal && <ModalBody>
 			<ModalCtx.Provider value={ctx} >
@@ -269,16 +280,27 @@ function ModalContentInner({closeAll, close, x}: {x: AppModal&{type: "other"}, c
 					<Button key={i} onClick={()=>{
 						const ret = x.act(ctx);
 						if (ret===undefined || ret===true) close();
-					}} className={x.status==null ? "" : (x.status=="primary" ? "bg-blue-900" : "bg-red-800")}
+					}} className={x.status==null ? "" : (x.status=="primary" ? bgColor.sky : bgColor.red)}
 						icon={x.icon} >
 						{x.name}
 					</Button>
 				)}
 				<Button onClick={close} >Close</Button>
-				{closeAll && <Button onClick={closeAll} className="bg-red-800" >Close all</Button>}
+				{closeAll && <Button onClick={closeAll} className={bgColor.red} >Close all</Button>}
 			</>}
 		</ModalFooter>
-	</>;
+	</Collapse>;
+}
+
+declare global {
+	interface Window {
+		goatcounter: {
+			count: (x: {path: string})=>void,
+			no_onload: boolean,
+			allow_local: boolean,
+			endpoint: string
+		}
+	}
 }
 
 export function GoatCounter({goatCounter}: {goatCounter: string}) {
@@ -287,20 +309,23 @@ export function GoatCounter({goatCounter}: {goatCounter: string}) {
 	useEffect(() => {
 		if (initPath.current==path) return;
 
-		const gt = (window as any).goatcounter;
+		const gt = window.goatcounter;
 		if (gt) gt.count({path});
 	}, [path]);
 
 	return <Script strategy="lazyOnload" src="/count.js" onLoad={() => {
-		const wind = window as any;
-
-		wind.goatcounter.no_onload = true;
-		wind.goatcounter.allow_local = true;
-		wind.goatcounter.endpoint = `https://${goatCounter}.goatcounter.com/count`;
+		window.goatcounter.no_onload = true;
+		window.goatcounter.allow_local = true;
+		window.goatcounter.endpoint = `https://${goatCounter}.goatcounter.com/count`;
 		
-		wind.goatcounter.count({path});
+		window.goatcounter.count({path});
 	}} />;
 }
+
+type Back = {
+	url: string,
+	scrollPos?: number
+};
 
 export function AppWrapper({children, className, info}: {children: React.ReactNode, className?: string, info: ServerInfo}) {
 	//😒
@@ -321,7 +346,9 @@ export function AppWrapper({children, className, info}: {children: React.ReactNo
 			if (activeNormals.length>1)
 				setActiveModals(activeModals.filter(y=>y!=x));
 			else setVis("other", false);
-		}} backdrop="blur" placement="center" >
+		}} backdrop="blur" placement="center" classNames={{
+			base: "overflow-visible"
+		}} >
 			<ModalContent>
 				{(close) => <ModalContentInner close={close}
 						closeAll={activeNormals.length>1 ? ()=>setVis("other", false) : undefined}
@@ -337,7 +364,7 @@ export function AppWrapper({children, className, info}: {children: React.ReactNo
 		m = <>{m}<Modal isOpen={modalExtra["error"]} onClose={() => {
 			if (activeErrors.length>1) setActiveModals(activeModals.filter(y=>y!=x));
 			else setVis("error", false);
-		}} className="bg-red-900" backdrop="blur"
+		}} className={`border ${bgColor.red} ${borderColor.red}`} backdrop="blur"
 			placement="bottom-center" >
 			<ModalContent>
 				{(close) => (
@@ -356,41 +383,76 @@ export function AppWrapper({children, className, info}: {children: React.ReactNo
 
 	const [count, setCount] = useState(0);
 
-	const [backUrls, setBackUrls] = useState<string[]>([]);
+	const [backUrls, setBackUrls] = useState<Back[]>([]);
+	const [restoreScroll, setRestoreScroll] = useState<number|undefined>();
 	const router = useRouter();
 
-	const path = usePathname();
-	useEffect(() => {
-		// after using back button
-		let i=backUrls.length-1;
-		while (i>=0 && new URL(backUrls[i]).pathname==path) i--;
-		if (i<backUrls.length-1) setBackUrls(backUrls.slice(0,i+1));
+	const [theme, setTheme] = useState<Theme>("dark");
 
-		setActiveModals([]);
-	}, [path]);
+	const updateTheme = ()=>{
+		const t: Theme = (window.localStorage.getItem("theme") as Theme) ?? (isDark ? "dark" : "light");
+		setTheme(t);
+	};
+
+	const isDark = useMediaQuery("(prefers-color-scheme: dark)");
+	useEffect(updateTheme, [isDark]);
+
+	useEffect(()=>{
+		const html = document.getElementsByTagName("html")[0];
+		html.classList.add(theme);
+		return () => html.classList.remove(theme);
+	}, [theme]);
+
+	const path = usePathname();
+
+	const [hasAuth, setHasAuth] = useState<boolean|null>(null);
+	useEffect(()=>setHasAuth(isAuthSet()), []);
 
   return (<NextUIProvider>
-		<AppCtx.Provider value={{open: (m) => {
+		<AppCtx.Provider value={{
+			restoreScroll() {
+				if (restoreScroll) {
+					window.scrollTo({top: restoreScroll, behavior: "instant"});
+					setRestoreScroll(undefined);
+				}
+			},
+			open: (m) => {
+				setCount(x=>x+1);
 				if (!modalExtra[m.type]) {
 					setActiveModals((active) => [...active.filter(x=>x.type!=m.type), m]);
 					setVis(m.type, true);
 				} else setActiveModals((active) => [...active, m]);
-			}, tooltipCount: count,
-				incTooltipCount: () => setCount(x=>x+1),
-				forward() {
-					setBackUrls([...backUrls, window.location.href]);
-				}, back() {
-					if (backUrls.length==0) router.push("/");
-					else {
-						const nb = backUrls.slice(0,-1);
-						router.push(backUrls[backUrls.length-1]);
-						setBackUrls(nb);
-					}
-				}, info
-			}}>
+			},
+			popupCount: count,
+			incPopupCount: () => setCount(x=>x+1),
+			forward(back) {
+				setBackUrls([...backUrls, {
+					url: back ? new URL(back, window.location.href).href : window.location.href,
+					scrollPos: back ? undefined : window.scrollY
+				}]);
+				setRestoreScroll(undefined);
+				setActiveModals([]);
+				setCount(x=>x+1);
+			}, back() {
+				let i=backUrls.length;
+				while (i>0 && new URL(backUrls[i-1].url).pathname==path) i--;
+
+				if (i==0) router.push("/");
+				else {
+					const nb = backUrls.slice(0,i-1);
+					router.push(backUrls[i-1].url);
+					setRestoreScroll(backUrls[i-1].scrollPos);
+					setBackUrls(nb);
+				}
+			}, info, theme, setTheme(x) {
+				window.localStorage.setItem("theme", x);
+				updateTheme();
+			},
+			hasAuth, setHasAuth
+		}}>
 
 			{m}
-			<div id="parent" className={twMerge("flex flex-col bg-neutral-950 container mx-auto p-4 lg:px-14 lg:mt-5 max-w-screen-xl", className)}>
+			<div id="parent" className={twMerge("flex flex-col container mx-auto p-4 lg:px-14 lg:mt-5 max-w-screen-xl", className)}>
 				{children}
 			</div>
 		</AppCtx.Provider>

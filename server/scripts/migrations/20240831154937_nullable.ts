@@ -1,4 +1,4 @@
-import type { Knex } from "knex";
+import type {Knex} from "knex";
 
 export async function up(knex: Knex) {
 		await knex.schema.createTable("course_post_copy", tb=>{

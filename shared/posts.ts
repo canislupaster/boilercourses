@@ -34,7 +34,6 @@ export type UserData = {
 export type PostData = {
 	posts: Post[],
 	postLimit: number,
-	loggedIn: UserData|null,
 	edit: EditPost|null
 };
 

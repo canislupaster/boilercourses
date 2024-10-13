@@ -4,6 +4,7 @@ import io.jooby.Environment
 import io.jooby.FileDownload
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -30,12 +31,13 @@ import org.apache.lucene.store.MMapDirectory
 import org.apache.lucene.util.BytesRef
 import org.slf4j.Logger
 import java.io.File
-import java.time.Duration
 import java.time.Instant
 import java.time.LocalTime
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.CoroutineContext
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
 val termTypes = listOf("fall", "summer", "spring", "winter")
@@ -47,6 +49,9 @@ fun parseTerm(term: String): Pair<Int,Int> {
     throw IllegalArgumentException("invalid term")
 }
 
+fun formatCourse(subject: String, course: Int) =
+    "$subject ${if (course%100 == 0) course/100 else course}"
+
 fun formatTerm(term: String): String = parseTerm(term).let {
     "${termTypes[it.first].replaceFirstChar {x->x.uppercase()}} ${it.second}"
 }
@@ -54,7 +59,7 @@ fun formatTerm(term: String): String = parseTerm(term).let {
 fun termIdx(term: String) = parseTerm(term).let { it.second*termTypes.size + it.first }
 fun timeToMin(x: LocalTime) = x.toSecondOfDay()/60
 
-class Courses(val env: Environment, val log: Logger, val db: DB) {
+class Courses(val env: Environment, val log: Logger, val db: DB, val availability: Availability) {
     val numResults = 30
     val maxResults = 1000
 
@@ -88,9 +93,12 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
         val ms: Double
     )
 
-    val scrapeInterval = env.getProperty("scrapeInterval")
-        ?.ifBlank {null}?.toInt()?.minutes
-    val scrapeArgs = env.getProperty("scrapeArgs") ?: ""
+    fun getDur(name: String) = env.getProperty(name)?.ifBlank {null}?.toInt()?.minutes
+    val scrapeInterval = getDur("scrapeInterval")
+    val unitimeInterval = getDur("unitimeInterval")
+
+    val scrapeArgs = env.getProperty("scrapeArgs")
+    val unitimeArgs = env.getProperty("unitimeArgs")
 
     private val indexFile = File("./data/index")
     private val indexSwapFile = File("./data/index-tmp")
@@ -416,6 +424,8 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
                     fieldNames=similarFields.toTypedArray()
                 }
             }
+
+            availability.update(this)
         } catch (e: Throwable) {
             log.error("error parsing/indexing course data:", e)
         } finally {
@@ -423,7 +433,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
         }
     }
 
-    suspend fun randomCourseId() =
+    fun randomCourseId() =
         (courseIds.randomOrNull() ?: throw APIErrTy.Loading.err("Courses are still indexing")).id
 
     private fun setSmallCoursesRating(course: Int, numRating: Int, avgRating: Double?) =
@@ -563,7 +573,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
             res.scoreDocs.takeLast((res.scoreDocs.size-1)%numResults +1)
                 .let { scoreDocsToCourses(it) },
             intHits, max(1,min(intHits+numResults-1, maxResults)/numResults),
-            Duration.between(startTime, Instant.now()).toNanos().toDouble()/1e6
+            java.time.Duration.between(startTime, Instant.now()).toNanos().toDouble()/1e6
         )
     }
 
@@ -583,34 +593,40 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
         }
     }
 
-    suspend fun runScraper() {
-        loadCourses()
+    suspend fun CoroutineContext.runEvery(interval: Duration?, name: String, vararg args: String) {
+        if (interval==null) return
 
-        while (scrapeInterval!=null) {
-            delay(scrapeInterval)
+        while (isActive) {
+            delay(interval)
 
-            log.info("starting scrape")
+            log.info("starting $name")
             val (res,proc) = withContext(Dispatchers.IO) {
-                val args = mutableListOf(
-                    "./scripts/node_modules/.bin/tsx",
-                    "./scripts/main.ts",
-                    "-d", db.dbFile.absolutePath
-                )
-
-                val proc = ProcessBuilder().command(
-                    args + scrapeArgs.split(" ").filterNot {it.isEmpty()}
-                ).inheritIO().start()
+                val procArgs = listOf("./scripts/node_modules/.bin/tsx") + args
+                val proc = ProcessBuilder().command(procArgs).inheritIO().start()
 
                 proc.waitFor(1, TimeUnit.HOURS) to proc
             }
 
             if (!res) {
-                log.error("scraper took too long")
+                log.error("$name took too long")
                 continue
             }
 
-            log.info("scraper exited with ${proc.exitValue()}")
+            log.info("$name exited with ${proc.exitValue()}")
             loadCourses()
         }
     }
+
+    private fun parseArgs(x: String?) =
+        x?.split(" ")?.filterNot {it.isEmpty()} ?: emptyList()
+
+    suspend fun runScraper(ctx: CoroutineContext) = ctx.runEvery(
+        scrapeInterval, "scraper", "./scripts/main.ts", "-d", db.dbFile.absolutePath,
+        *parseArgs(scrapeArgs).toTypedArray()
+    )
+
+    suspend fun runUnitimeScraper(ctx: CoroutineContext) = ctx.runEvery(
+        unitimeInterval, "unitime scraper", "./scripts/unitime.ts", "-d", db.dbFile.absolutePath,
+        *parseArgs(unitimeArgs).toTypedArray()
+    )
 }

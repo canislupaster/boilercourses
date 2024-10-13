@@ -1,8 +1,8 @@
-import { useContext, useState } from "react"
-import { Anchor } from "./util"
-import { formatTerm, CourseInstructor, SmallCourse, Term } from "../../shared/types";
-import { ProfLink } from "./proflink";
+import { useState } from "react";
 import { twMerge } from "tailwind-merge";
+import { CourseInstructor, formatTerm, SmallCourse, Term } from "../../shared/types";
+import { ProfLink } from "./proflink";
+import { Anchor, Text, textColor } from "./util";
 
 export function InstructorList({term, short, className, whomst: instructors, course}: {
 	term: Term, short?: boolean, className?: string,
@@ -14,7 +14,7 @@ export function InstructorList({term, short, className, whomst: instructors, cou
 	const curInstructors = showMoreInstructors ? instructors : instructors.slice(0,3);
 
 	return <div className={twMerge("flex flex-wrap flex-row lg:text-sm text-sm mt-1 font-medium items-center gap-1", className)} >
-		{!short && <span className="text-gray-400 font-bold text-xs mr-2">{formatTerm(term)} Instructors: </span>}
+		{!short && <Text v="smbold" className="mr-px" >{formatTerm(term)} Instructors: </Text>}
 
 		{curInstructors.map((prof, i) => (
 			<span key={i}>
@@ -25,7 +25,7 @@ export function InstructorList({term, short, className, whomst: instructors, cou
 
 		{instructors.length>3 && (short ? <span> and {instructors.length-3} more</span> :
 			<Anchor onClick={() => setShowMoreInstructors(!showMoreInstructors)}
-				className="text-blue-300" >
+				className={textColor.blueLink} >
 				{curInstructors.length<instructors.length ? `...show ${instructors.length-3} more` : "Show less"}</Anchor>)}
 	</div>;
 }
