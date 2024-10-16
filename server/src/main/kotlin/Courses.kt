@@ -59,7 +59,7 @@ fun formatTerm(term: String): String = parseTerm(term).let {
 fun termIdx(term: String) = parseTerm(term).let { it.second*termTypes.size + it.first }
 fun timeToMin(x: LocalTime) = x.toSecondOfDay()/60
 
-class Courses(val env: Environment, val log: Logger, val db: DB, val availability: Availability) {
+class Courses(val env: Environment, val log: Logger, val db: DB) {
     val numResults = 30
     val maxResults = 1000
 
@@ -92,13 +92,6 @@ class Courses(val env: Environment, val log: Logger, val db: DB, val availabilit
         val numHits: Int, val npage: Int,
         val ms: Double
     )
-
-    fun getDur(name: String) = env.getProperty(name)?.ifBlank {null}?.toInt()?.minutes
-    val scrapeInterval = getDur("scrapeInterval")
-    val unitimeInterval = getDur("unitimeInterval")
-
-    val scrapeArgs = env.getProperty("scrapeArgs")
-    val unitimeArgs = env.getProperty("unitimeArgs")
 
     private val indexFile = File("./data/index")
     private val indexSwapFile = File("./data/index-tmp")
@@ -424,8 +417,6 @@ class Courses(val env: Environment, val log: Logger, val db: DB, val availabilit
                     fieldNames=similarFields.toTypedArray()
                 }
             }
-
-            availability.update(this)
         } catch (e: Throwable) {
             log.error("error parsing/indexing course data:", e)
         } finally {
@@ -592,41 +583,4 @@ class Courses(val env: Environment, val log: Logger, val db: DB, val availabilit
             FileDownload(FileDownload.Mode.INLINE, json.toByteArray(), "courses.json")
         }
     }
-
-    suspend fun CoroutineContext.runEvery(interval: Duration?, name: String, vararg args: String) {
-        if (interval==null) return
-
-        while (isActive) {
-            delay(interval)
-
-            log.info("starting $name")
-            val (res,proc) = withContext(Dispatchers.IO) {
-                val procArgs = listOf("./scripts/node_modules/.bin/tsx") + args
-                val proc = ProcessBuilder().command(procArgs).inheritIO().start()
-
-                proc.waitFor(1, TimeUnit.HOURS) to proc
-            }
-
-            if (!res) {
-                log.error("$name took too long")
-                continue
-            }
-
-            log.info("$name exited with ${proc.exitValue()}")
-            loadCourses()
-        }
-    }
-
-    private fun parseArgs(x: String?) =
-        x?.split(" ")?.filterNot {it.isEmpty()} ?: emptyList()
-
-    suspend fun runScraper(ctx: CoroutineContext) = ctx.runEvery(
-        scrapeInterval, "scraper", "./scripts/main.ts", "-d", db.dbFile.absolutePath,
-        *parseArgs(scrapeArgs).toTypedArray()
-    )
-
-    suspend fun runUnitimeScraper(ctx: CoroutineContext) = ctx.runEvery(
-        unitimeInterval, "unitime scraper", "./scripts/unitime.ts", "-d", db.dbFile.absolutePath,
-        *parseArgs(unitimeArgs).toTypedArray()
-    )
 }

@@ -20,13 +20,13 @@ import java.security.MessageDigest
 
 const val USER_NOTIFICATION_LIMIT = 10
 
-class Availability(val db: DB, val log: Logger, env: Environment, val auth: Auth) {
+class Availability(val db: DB, val log: Logger, env: Environment, val courses: Courses, val auth: Auth) {
     val sg = SendGrid(env.getProperty("sendGridKey"))
     var currentEmail: String? = null
     val send = env.getProperty("noSend")!="true"
     val root = env.getProperty("rootUrl")!!
 
-    suspend fun update(courses: Courses) {
+    suspend fun update() {
         log.info("checking notifications")
 
         data class ToNotify(val c: Schema.CourseId, val userId: Int, val email: String, val name: String, val sections: List<EmailAvailability>)
@@ -136,7 +136,7 @@ class Availability(val db: DB, val log: Logger, env: Environment, val auth: Auth
         log.info("done checking availability")
     }
 
-    fun Kooby.route(courses: Courses) = path("notifications") {
+    fun Kooby.route() = path("notifications") {
         if (!send) get("/email") {
             ctx.setResponseType(MediaType.HTML)
             return@get currentEmail ?: "No email"

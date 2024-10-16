@@ -1,17 +1,24 @@
 "use client"
 
-import { Alert, searchState } from "@/components/clientutil";
+import { Alert, BackButton, searchState, TermSelect } from "@/components/clientutil";
 import { PostCard, PostCardAdminUser, PostRefreshHook } from "@/components/community";
 import { Button, ButtonPopover, containerDefault, Input, Loading, Text } from "@/components/util";
-import { callAPI, isAuthSet, redirectToSignIn } from "@/components/wrapper";
+import { AppCtx, callAPI, isAuthSet, redirectToSignIn, useAPI } from "@/components/wrapper";
 import { Checkbox } from "@nextui-org/checkbox";
 import { Pagination } from "@nextui-org/pagination";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { AdminPost, UserData } from "../../../shared/posts";
+import { latestTermofTerms, ServerInfo, Term } from "../../../shared/types";
+import { LogoBar } from "@/components/logo";
 
 type ListRequest = {
 	reported: boolean, new: boolean, page: number
+};
+
+type ScrapeStatus = {
+	status: "busy"|"ok"|"fail"|"notStarted",
+	lastScrape: string|null
 };
 
 function AdminPosts() {
@@ -27,15 +34,16 @@ function AdminPosts() {
 		return new URLSearchParams(parms);
 	});
 
-	const postsAPI = callAPI<{posts: AdminPost[], npage: number}, ListRequest>("posts/admin/list", true);
+	const postsAPI = callAPI<{posts: AdminPost[], npage: number}, ListRequest>("posts/admin/list", "redirect");
 	const refresh = () => postsAPI.run({ data: req });
 	useEffect(()=>refresh(), [req]);
 
 	const posts = postsAPI.current?.res;
 
-	const reindex = callAPI("reindex", true);
-	const logout = callAPI("logout", true);
-	const admins = callAPI<UserData[]>("admins", true)
+	const reindex = callAPI("admin/reindex", "redirect");
+	const scrape = callAPI<void, {term: Term|null, type: "unitime"|"catalog"}>("admin/scrape", "redirect");
+	const logout = callAPI("logout", "redirect");
+	const admins = callAPI<UserData[]>("admins", "redirect")
 
 	//pretty bad way to chain requests
 	//(only fetch once posts has succeeded)
@@ -44,24 +52,38 @@ function AdminPosts() {
 		if (postsAPI.current!=null) admins.run()
 	}, [postsAPI.current!=null]);
 
+	const status = callAPI<ScrapeStatus>("admin/status", "redirect");
+	useEffect(()=>{
+		status.run();
+	}, [scrape.current, reindex.current]);
+
 	const [adminInp, setAdminInp] = useState("");
-	const setAdmin = callAPI<unknown, {email: string, admin: boolean}>("setadmin", true);
+	const setAdmin = callAPI<void, {email: string, admin: boolean}>("setadmin", "redirect");
 	
-	const del = callAPI<unknown, number>("posts/delete", true);
-	const dismiss = callAPI<unknown, number[]>("posts/admin/dismissreports", true);
-	const markRead = callAPI<unknown, number[]>("posts/admin/markread", true);
+	const del = callAPI<void, number>("posts/delete", "redirect");
+	const dismiss = callAPI<void, number[]>("posts/admin/dismissreports", "redirect");
+	const markRead = callAPI<void, number[]>("posts/admin/markread", "redirect");
 
 	const router = useRouter();
 
 	const runSetAdmin = (x: boolean) =>
 		setAdmin.run({data: {email: adminInp, admin: x}, refresh() { admins.run(); }});
 
+	const terms = Object.keys(useContext(AppCtx).info.terms) as Term[];
+	const [term, setTerm] = useState<Term|null>(latestTermofTerms(terms));
+
 	if (posts==null) return <Loading/>;
 
-	return <div className="max-w-screen-md flex flex-col gap-3" ><PostRefreshHook.Provider value={refresh} >
+	const stat = status?.current?.res;
+	const lastScrape = stat?.lastScrape ? `Last scrape: ${new Date(stat.lastScrape).toLocaleString()}` : "";
+	const busy = stat?.status=="busy" || reindex.loading || scrape.loading;
+
+	return <div className="flex flex-col gap-3" ><PostRefreshHook.Provider value={refresh} >
+		<BackButton noOffset >Admin Panel</BackButton>
+
 		<div className="flex flex-row flex-wrap gap-2" >
-			<Button disabled={reindex.loading} onClick={()=>reindex.run()} >
-				Reindex{reindex.loading && "ing..."}
+			<Button disabled={busy} onClick={()=>reindex.run()} >
+				Reindex
 			</Button>
 			<Button onClick={()=>logout.run({refresh() {
 				router.push("/");
@@ -69,6 +91,26 @@ function AdminPosts() {
 				Logout
 			</Button>
 		</div>
+
+		{term && <div className="flex flex-col gap-1 my-2" >
+			<Text v="lg" >Scrape term</Text>
+			<TermSelect term={term} setTerm={setTerm} terms={terms} />
+			<div className="flex flex-row flex-wrap gap-2" >
+				<Button disabled={busy}
+					onClick={()=>scrape.run({data: {term, type: "unitime"}})} >
+					Scrape UniTime
+				</Button>
+				<Button disabled={busy}
+					onClick={()=>scrape.run({data: {term, type: "catalog"}})} >
+					Scrape catalog
+				</Button>
+			</div>
+		</div>}
+
+		{stat==null ? <Loading/> :
+			stat.status=="busy" ? <Alert txt="Currently scraping" />
+			: stat.status=="fail" ? <Alert bad title="Failed to scrape" txt={lastScrape} />
+			: stat.status=="ok" && <Alert title="Scrape succeeded" txt={lastScrape} />}
 
 		<div>
 			<Text v="lg" className="mb-2" >Admins</Text>

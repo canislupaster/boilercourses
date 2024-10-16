@@ -6,13 +6,14 @@ COPY --from=nodejs /usr/lib /usr/lib/
 COPY --from=nodejs /usr/local/lib /usr/local/lib/
 COPY --from=nodejs /usr/local/include /usr/local/include/
 COPY --from=nodejs /usr/local/bin /usr/local/bin/
+RUN apk add --no-cache curl bash chromium
 
 FROM base AS builder
 
 WORKDIR /server
 
 COPY server/scripts/package.json server/scripts/package-lock.json ./scripts/
-RUN cd ./scripts && npm install && npx playwright install chromium
+RUN cd ./scripts && npm install
 
 COPY server/gradlew server/settings.gradle ./
 COPY server/gradle ./gradle
@@ -24,8 +25,6 @@ COPY server .
 RUN ./gradlew installDist
 
 FROM base AS runner
-
-RUN apk add --no-cache curl bash
 
 WORKDIR /server
 

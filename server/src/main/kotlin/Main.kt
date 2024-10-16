@@ -7,7 +7,6 @@ import io.jooby.exception.NotFoundException
 import io.jooby.kt.runApp
 import io.jooby.netty.NettyServer
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
@@ -90,22 +89,15 @@ suspend fun main(args: Array<String>) = coroutineScope {
     runApp(args) {
         val db = DB(environment)
         val auth = Auth(db,log,environment)
-        val availability = Availability(db, log, environment, auth)
-        val courses = Courses(environment, log, db, availability)
+        val courses = Courses(environment, log, db)
+        val availability = Availability(db, log, environment, courses, auth)
+        val scrape = Scrape(log, db, environment, courses, availability, auth)
+
         val searchRateLimit = RateLimiter(10, 1.seconds)
         val dataRateLimit = RateLimiter(1, 5.seconds)
         val loginRateLimit = RateLimiter(3, 3.seconds)
         val allRateLimit = RateLimiter(25, 2.seconds)
         val isFF = environment.getProperty("useForwardedFor")=="true"
-
-        launch {
-            courses.loadCourses()
-            courses.runScraper(coroutineContext)
-        }
-
-        launch {
-            courses.runUnitimeScraper(coroutineContext)
-        }
 
         before {
             if (isFF) ctx.header("X-Forwarded-For").valueOrNull()?.let {
@@ -117,6 +109,10 @@ suspend fun main(args: Array<String>) = coroutineScope {
         }
 
         install(NettyServer())
+
+        posts(auth, db, courses)
+        with(availability) { route() }
+        with(scrape) { route(this@coroutineScope) }
 
         coroutine {
             post("/info") {
@@ -200,11 +196,6 @@ suspend fun main(args: Array<String>) = coroutineScope {
                 })
             }
 
-            post("/reindex", auth.withUser(admin=true) {
-                courses.loadCourses()
-                ctx.resp(Unit)
-            })
-
             post("/admins", auth.withUser(admin=true) {
                 ctx.resp(db.getAdmins())
             })
@@ -221,7 +212,7 @@ suspend fun main(args: Array<String>) = coroutineScope {
 
             post("/logout", auth.withSession { it.remove() })
 
-            post("/user", auth.withUserMaybe { ctx.resp(it) })
+            post("/user", auth.withUser { ctx.resp(it) })
 
             //deletes all user data via cascade
             post("/deleteuser", auth.withSession {
@@ -229,9 +220,6 @@ suspend fun main(args: Array<String>) = coroutineScope {
                 it.remove()
                 ctx.resp(Unit)
             })
-
-            posts(auth, db, courses)
-            with(availability) { route(courses) }
 
             @Serializable
             data class SetAdmin(val email: String, val admin: Boolean)

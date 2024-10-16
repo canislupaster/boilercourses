@@ -2,16 +2,16 @@
 
 import { IconMoonStars, IconSunFilled, IconUserCircle } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
-import { useContext, useEffect } from "react";
+import { useContext, useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { UserData } from "../../shared/posts";
 import { Dropdown, DropdownPart } from "./clientutil";
 import { IconButton, Loading, Text, textColor } from "./util";
-import { AppCtx, callAPI, redirectToSignIn, setAuth } from "./wrapper";
+import { AppCtx, callAPI, redirectToSignIn, setAuth, useAPI } from "./wrapper";
 
 function useLogout() {
 	const app = useContext(AppCtx);
-	const logout = callAPI("logout", true);
+	const logout = callAPI("logout", "unset");
 
 	return {
 		logout: () => logout.run({
@@ -24,21 +24,19 @@ function useLogout() {
 	}
 }
 
-function UserEmail() {
-	const u = callAPI<UserData|null>("user", "maybe");
-	const app = useContext(AppCtx);
-	const logout = useLogout();
-	const email = u.loading ? null : {email: u.current?.res?.email};
-	
-	useEffect(()=>{
-		if (app.hasAuth) u.run({
-			refresh(x) {
-				if (x.res==null) logout.logout();
-			}
-		});
-	}, [app.hasAuth])
+function UserEmail({setAdmin}: {setAdmin: (x: boolean)=>void}) {
+	// yeah so i should probably create a variant of useAPI for this case
+	// instead of checking app.hasAuth to see if its loading....
+	const u = useAPI<UserData>("user", {auth: "unset"});
 
-	return email==null ? <Loading/> : (email.email!=null ? <>Logged in with <b>{email.email}</b></> : "Not logged in");
+	useEffect(()=>{
+		if (u) setAdmin(u.res.admin);
+	}, [u]);
+
+	const app = useContext(AppCtx);
+	
+	return app.hasAuth && u==null ? <Loading/>
+		: u!=null ? <>Logged in with <b>{u.res.email}</b></> : "Not logged in";
 }
 
 export function UserButton() {
@@ -46,17 +44,26 @@ export function UserButton() {
 	const logout = useLogout();
 	const redir = redirectToSignIn();
 
-	const deleteUser = callAPI("deleteuser", true);
+	const deleteUser = callAPI("deleteuser", "redirect");
 	const router = useRouter();
+	const [admin, setAdmin] = useState(false);
 
 	const drop: DropdownPart[] = [
-		{type: "txt", txt: <p><UserEmail/></p>},
+		{type: "txt", txt: <p><UserEmail setAdmin={setAdmin} /></p>},
 		{type: "act", name: app.hasAuth ? "Logout" : "Sign in",
 			disabled: app.hasAuth==null || logout.loading, act() {
 
 			if (app.hasAuth) logout.logout(); else redir();
 		}},
 	];
+
+	if (admin) drop.push({
+		type: "act",
+		name: "Admin panel",
+		act() {
+			router.push("/admin");
+		}
+	});
 
 	if (app.hasAuth) drop.push({
 		type: "act",

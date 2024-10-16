@@ -149,7 +149,7 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
   }, []);
 
 	return <>
-		{scrollToTop && <IconButton className="fixed z-50 w-12 h-12 rounded-full right-12 bottom-20 shadow-black shadow-sm hover:-tranzinc-y-0.5 transition"
+		{scrollToTop && <IconButton className="fixed z-50 w-12 h-12 rounded-full right-12 bottom-20 dark:shadow-black shadow-white shadow-sm hover:-tranzinc-y-0.5 transition"
 			onClick={() => searchBarRef.current?.scrollIntoView({ behavior: "smooth" })} 
 			icon={<IconArrowUp className="mx-auto my-auto" />} />}
 

@@ -15,7 +15,8 @@ const {values, positionals} = parseArgs({
 		db: { type: "string", short: "d" },
 		secret: { type: "string", short: "s" },
 		show: {type: "boolean", short: "x"},
-		key: {type: "string", short: "k"}
+		key: {type: "string", short: "k"},
+		browser: {type: "string", short: "b"}
 	},
 	allowPositionals: true
 });
@@ -35,7 +36,7 @@ type CSVRecord = {
 
 type SectionData = {
 	room: string[],
-	seats: Seats,
+	seats?: Seats,
 	courses: Set<string>,
 	crn: number
 }
@@ -62,15 +63,19 @@ async function handleCSV(term: Term, path: string) {
 			const crn = Number.parseInt(secs[i][1]);
 			const secData: Partial<SectionData> = sectionData.get(crn) ?? {};
 			const toN = (x: string) => {
-				if (x.length==0) return 0;
+				if (x.length==0) return null;
 				const n = Number.parseInt(x);
 				if (isNaN(n)) throw new Error("invalid number");
 				return n;
 			}
 
-			const enrollment = toN(rec.Enrollment);
-			const seats: Seats = {used: enrollment, left: toN(rec.Limit) - enrollment};
-			if (secData.seats && (seats.left!=secData.seats.left || seats.used!=secData.seats.used))
+			const enrollment = toN(rec.Enrollment), limit=toN(rec.Limit);
+			const seats: Seats|undefined = enrollment==null || limit==null ? undefined
+				: {used: enrollment, left: limit - enrollment};
+
+			if (seats==undefined && secData.seats!=undefined) continue;
+			if (seats!=undefined && secData.seats!=undefined
+				&& (seats.left!=secData.seats.left || seats.used!=secData.seats.used))
 				throw new Error("inconsistent enrollment count");
 
 			sectionData.set(crn, {
@@ -98,33 +103,28 @@ async function handleCSV(term: Term, path: string) {
 			s.room.sort();
 
 			const c = crnToCourse.get(s.crn);
-			if (!c) continue;
+			if (!c || !(term in c.parsed.sections)) continue;
 			// basic safeguard
 			if (!s.courses.has(`${c.subject} ${c.course}`))
 				throw new Error("mismatched CRN");
 
-			let changed=false;
-			for (const [k,v] of Object.entries(c.parsed.sections)) {
-				if (k!=term) continue;
+			const v = c.parsed.sections[term];
 
-				const sec = v.find(sec=>sec.crn==s.crn);
-				if (sec==undefined
-					|| (deepEquals(sec.seats, s.seats) && deepEquals(sec.room, s.room)))
-					continue;
+			const sec = v.find(sec=>sec.crn==s.crn);
+			if (sec==undefined
+				|| (deepEquals(sec.seats, s.seats) && deepEquals(sec.room, s.room)))
+				continue;
 
-				sec.seats = s.seats;
-				sec.room = s.room;
-				changed=true;
-			}
+			sec.seats = s.seats;
+			sec.room = s.room;
 
-			if (changed) {
-				changedCourses.set(c.id, c.parsed);
+			changedCourses.set(c.id, c.parsed);
 
+			if (s.seats!=undefined)
 				await trx<DBAvailabilityNotification>("availability_notification")
 					.where({course: c.id, sent:false, term, crn: s.crn})
 					.andWhere("threshold", "<=", s.seats.left)
 					.update({satisfied: true});
-			}
 		}
 
 		for (const [cid, c] of changedCourses.entries()) {
@@ -159,7 +159,11 @@ if (signCount!=undefined) {
 	if (isNaN(secret.signCount)) throw new Error("NaN sign count");
 }
 
-const browser = await chromium.use(StealthPlugin()).launch({headless: !values.show});
+const browser = await chromium.use(StealthPlugin()).launch({
+	headless: !values.show,
+	executablePath: values.browser
+});
+
 const ctx = await browser.newContext({
 	...devices["Desktop Chrome"],
 	locale: "en-US",
@@ -226,20 +230,25 @@ if (positionals.length==0) {
 	activeTerms.push(latest);
 }
 
+let init=false;
 for (const t of activeTerms) {
 	if (t==null) continue;
+
+	if (init)
+		await pg.goto("https://timetable.mypurdue.purdue.edu/Timetabling/main.action", {waitUntil: "load"});
+	init=true;
+
 	console.log(`downloading timetable for ${formatTerm(t.id)}`);
 
-	const dl = pg.waitForEvent("download", {
-		timeout: 1000*60*15
-	});
+	const timeout = 1000*60*15;
+	const dl = pg.waitForEvent("download", { timeout });
 
 	await pg.evaluate((termName)=>{
 		document.write(`<a href="https://timetable.mypurdue.purdue.edu/Timetabling/export?output=events.csv&type=room&term=${termName}PWL&flags=96" id="xd" >click me!</a>`);
 	}, t.name.replaceAll(" ", ""));
 
-	await pg.click("#xd");
-
+	await pg.click("#xd", { timeout });
+	
 	const path = await (await dl).path();
 	console.log(`reading room schedule from ${path}`);
 

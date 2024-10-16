@@ -91,7 +91,9 @@ function getBodyKey<T,R>(endpoint: string, x: APIOptions<T,R>) {
 	return [body, `${x.method ?? "POST"} ${endpoint}\n${body}`];
 };
 
-export function callAPI<R,T=null>(endpoint: string, auth?: boolean|"maybe") {
+type APIAuth = "redirect"|"maybe"|"unset";
+
+export function callAPI<R,T=null>(endpoint: string, auth?: APIAuth) {
 	const c = useContext(AppCtx);
 	const i = useRef(0);
 	const redir = auth ? redirectToSignIn() : null;
@@ -119,7 +121,9 @@ export function callAPI<R,T=null>(endpoint: string, auth?: boolean|"maybe") {
 			if (x!=null) {
 				const v = JSON.parse(x) as Auth;
 				headers["Authorization"] = `Basic ${v.id} ${v.key}`;
-			} else if (auth===true) {
+			} else if (auth=="unset") {
+				return null;
+			} else if (auth=="redirect") {
 				c.open({type: "other", name: "You need to login to access this feature",
 					actions: [
 						{name: "Continue to sign in", status: "primary", act() {redir!();}}
@@ -147,7 +151,12 @@ export function callAPI<R,T=null>(endpoint: string, auth?: boolean|"maybe") {
 			};
 
 			if (auth && (resp.error=="unauthorized" || resp.error=="sessionExpire") && recover!==null) {
-				redir!({...resp, error: resp.error});
+				if (auth=="unset") {
+					setAuth(null);
+					c.setHasAuth(false);
+				} else {
+					redir!({...resp, error: resp.error});
+				}
 			} else if (recover!==null) {
 				console.error(resp);
 				c.open({
@@ -216,7 +225,7 @@ export function setAPI<R,T=null>(endpoint: string, {data,method,result}: {
 
 export function useAPI<R,T=null>(endpoint: string, {
 	auth, debounceMs, ...x
-}: APIOptions<T,R>&{auth?: boolean|"maybe", debounceMs?: number} = {}) {
+}: APIOptions<T,R>&{auth?: APIAuth, debounceMs?: number} = {}) {
 	const api = callAPI<R,T>(endpoint, auth);
 	const y = api.call(x);
 

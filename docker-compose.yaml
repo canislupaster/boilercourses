@@ -19,6 +19,7 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL-}
       - SERVER_PORT=8080
       - ROOT_URL=${ROOT_URL:?ROOT_URL is required}
+      - DEFAULT_TERMS=${DEFAULT_TERMS-}
     volumes:
       - type: bind
         source: ${DATA_SOURCE:?DATA_SOURCE is required}

@@ -104,7 +104,7 @@ const refreshPosts = () => {
 function PostCreator({postLimit, add: add2, setAdd: setAdd2}: {
 	postLimit: number, add: AddPost, setAdd: (x: AddPost)=>void
 }) {
-	const make = callAPI<unknown, AddPost>("posts/submit", true);
+	const make = callAPI<void, AddPost>("posts/submit", "redirect");
 	const [triedSubmit, setTriedSubmit] = useState(false);
 
 	//needs to keep track of own state, otherwise passed thru modal which is illegal...
@@ -169,7 +169,7 @@ function PostCreator({postLimit, add: add2, setAdd: setAdd2}: {
 }
 
 function createPost(x: AddPost) {
-	const del = callAPI<unknown, number>("posts/delete", true);
+	const del = callAPI<void, number>("posts/delete", "redirect");
 	const app = useContext(AppCtx);
 
 	const ctx = useContext(PostRefreshHook);
@@ -215,7 +215,7 @@ function PostEditButton({post, course, postLimit}: {
 }
 
 function BanModal({user}: {user: number}) {
-	const ban = callAPI<unknown, {id: number, removePosts: boolean, banned: boolean}>("ban", true);
+	const ban = callAPI<void, {id: number, removePosts: boolean, banned: boolean}>("ban", "redirect");
 	const [removePosts, setRemovePosts] = useState(false);
 	const modal = useContext(ModalCtx)!;
 	const refresh = refreshPosts();
@@ -239,11 +239,11 @@ function BanModal({user}: {user: number}) {
 
 function AdminUserPopup({user}: {user: UserData}) {
 	const app = useContext(AppCtx);
-	const data = callAPI<UserData, number>("userdata", true);
+	const data = callAPI<UserData, number>("userdata", "redirect");
 	const v = data.current?.res ?? user;
 	useEffect(()=>data.run({data: user.id}), []);
 
-	const ban = callAPI<unknown, {id: number, banned: boolean}>("ban", true);
+	const ban = callAPI<void, {id: number, banned: boolean}>("ban", "redirect");
 	const ctx = useContext(PostRefreshHook);
 
 	return <div className="p-3 flex flex-col gap-2" >
@@ -290,8 +290,8 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 	post: Post, editButton?: React.ReactNode, adminPost?: AdminPost
 	deletePost?: ()=>void, dismissReports?: ()=>void, yours?: boolean
 }) {
-	const vote = callAPI<unknown, {id: number, vote: boolean}>("posts/vote", true);
-	const report = callAPI<{alreadyReported: boolean}, number>("posts/report", true);
+	const vote = callAPI<void, {id: number, vote: boolean}>("posts/vote", "redirect");
+	const report = callAPI<{alreadyReported: boolean}, number>("posts/report", "redirect");
 
 	const [voted, setVoted] = useState(post.voted);
 	const app = useContext(AppCtx);
@@ -384,8 +384,8 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 
 function CreatePostButton({postLimit, course, post}: {postLimit: number, course: number, post?: EditPost}) {
 	const create = createPost(post ? postToAddPost(post, course) : {text: "", rating: null, course, edit: null, showName: false});
-	const make = callAPI<unknown, AddPost>("posts/submit", true);
-	const del = callAPI<unknown, number>("posts/delete", true);
+	const make = callAPI<void, AddPost>("posts/submit", "redirect");
+	const del = callAPI<void, number>("posts/delete", "redirect");
 	const ctx = useContext(PostRefreshHook);
 
 	const ratingPost = (x: number): AddPost => ({

@@ -338,7 +338,7 @@ export const msalApplication = new PublicClientApplication({
 
 export const Alert = ({title, txt, bad, className}: {title?: React.ReactNode, txt: React.ReactNode, bad?: boolean, className?: string}) =>
 	<div className={twMerge(`border ${bad ? `${bgColor.red} ${borderColor.red}` : `${bgColor.default} ${borderColor.default}`} p-2 px-4 rounded-md flex flex-row gap-2`, className)} >
-		<div className="flex-shrink-0 mt-1" >
+		<div className={`flex-shrink-0 ${title ? "mt-1" : ""}`} >
 			{bad ? <IconInfoTriangleFilled/> : <IconInfoCircle/>}
 		</div>
 		<div>

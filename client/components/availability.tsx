@@ -13,7 +13,7 @@ import { AppCtx, callAPI, ModalActions, ModalCtx, redirectToSignIn, useAPI, useC
 const AvailabilityUpdateCtx = createContext<()=>void>(()=>{});
 
 function Notification({id, course, satisfied, section, sent, term}: Notification) {
-	const del = callAPI<void, number>("notifications/delete", true);
+	const del = callAPI<void, number>("notifications/delete", "redirect");
 	const ctx = useContext(AvailabilityUpdateCtx);
 
 	return <div className={twMerge(containerDefault, "border p-2 flex flex-col gap-1 px-4")} >
@@ -48,12 +48,13 @@ function Notification({id, course, satisfied, section, sent, term}: Notification
 function NotificationCreator({course, section, fixTerm, update}: {
 	course: CourseId, section?: Section, fixTerm?: Term, update: ()=>void
 }) {
-	const register = callAPI<void, RegisterNotificationRequest>("notifications/register", true);
+	const register = callAPI<void, RegisterNotificationRequest>("notifications/register", "redirect");
 	const terms = Object.keys(course.course.sections) as Term[];
-	const [term, setTerm] = useState(()=>fixTerm ?? latestTerm(course.course)!);
+	const latest = latestTerm(course.course)!;
+	const [term, setTerm] = useState(fixTerm ?? latest);
 	const ctx = useContext(ModalCtx)!;
 	const sm = useMemo(()=>toSmallCourse(course), []);
-	const email = useAPI<UserData>("user", {auth: true});
+	const email = useAPI<UserData>("user", {auth: "redirect"});
 
 	const isOpen = (section ? [section] : course.course.sections[term])
 		.some(v=>v.seats && v.seats.left>0);
@@ -71,6 +72,8 @@ function NotificationCreator({course, section, fixTerm, update}: {
 		: <Text>
 			You will be notified for openings in <b>{formatTerm(term)}</b>.
 		</Text>}
+
+		{term!=latest && <Alert txt={`The term you selected is older than the latest term (${formatTerm(latest)}) and will be updated very infrequently, so you may not get notifications. Use the latest term for frequent updates.`} title="Outdated term" />}
 
 		{email && <Text>Notifications will be sent to <b>{email.res.email}</b></Text>}
 
@@ -98,7 +101,7 @@ function NotificationCreator({course, section, fixTerm, update}: {
 }
 
 export function Notifications({course, className}: {course?: CourseId, className?: string}) {
-	const notifs = callAPI<Notification[]>("notifications/list", true);
+	const notifs = callAPI<Notification[]>("notifications/list", "unset");
 	useEffect(()=>notifs.run(), []);
 	const app = useContext(AppCtx);
 
@@ -146,8 +149,9 @@ function NotificationCreatorId({courseId,...props}: {courseId: number}&Omit<Reac
 }
 
 export function SectionNotifications({section, small, term}: {section: Section, small: SmallCourse, term: Term}) {
-	const notifs = callAPI<Notification[]>("notifications/list", true);
-	const del = callAPI<void, number>("notifications/delete", true);
+	const notifs = callAPI<Notification[]>("notifications/list", "unset");
+	const del = callAPI<void, number>("notifications/delete", "redirect");
+
 	useEffect(()=>notifs.run(), []);
 	const app = useContext(AppCtx);
 	const redir = redirectToSignIn();

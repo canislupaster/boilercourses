@@ -14,7 +14,7 @@ export default function NotificationPage() {
 	useEffect(()=>{if (app.hasAuth==false) redir(undefined, "/");}, [app.hasAuth]);
 
 	if (!app.hasAuth) return <Loading/>;
-	return <div className="flex flex-col gap-2 w-[min(35rem,100%)] self-center">
+	return <div className="flex flex-col gap-2 max-w-screen-sm w-full self-center">
 		<LogoBar onClick={()=>{
 			router.push("/");
 		}} />
