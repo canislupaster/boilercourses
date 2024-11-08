@@ -65,7 +65,7 @@ function Landing({setSearch}: {setSearch: (s: string) => void}) {
 	}, []);
 
 	return <div className="flex flex-col items-center mx-4" >
-		<div className={`flex flex-col items-center gap-2 max-w-md`} >
+		<div className={`flex flex-col items-center gap-2 max-w-md w-full`} >
 			{activeMessages.map((msg,i)=>
 				<div key={i} className={twMerge(containerDefault, msg.type=="normal" ? chipColors.blue : `${bgColor.rose} ${borderColor.red}`, "flex flex-col gap-2 px-4 w-full py-2")} >
 					{msg.title && <Text v="lg" >{msg.title}</Text>}
@@ -105,16 +105,16 @@ function Landing({setSearch}: {setSearch: (s: string) => void}) {
 			</div>
 		</div>
 
-		<div className="w-full" >
+		<div className="w-full mt-[10dvh]" >
 			<Collapse isOpened >
-				{mostViewed!=null && mostViewed.res.length>0 && <div className="flex flex-col mt-[10dvh] items-start w-full gap-2" >
+				{mostViewed!=null && mostViewed.res.length>0 && <div className="flex flex-col items-start w-full gap-2" >
 					<Text v="big" className="flex flex-row items-center gap-2" ><IconEye size={40} /> Most viewed courses</Text>
 					<Carousel items={mostViewed.res.map(c=><Card course={c} className="h-full" />)} />
 				</div>}
 			</Collapse>
 		</div>
 
-		<Footer className="mt-[9dvh]" />
+		<Footer/>
 	</div>;
 }
 
