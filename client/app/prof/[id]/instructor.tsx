@@ -11,7 +11,7 @@ import { abbr, Anchor, capitalize, RedditButton, selectProps, Text, textColor } 
 import { AppCtx, setAPI } from "@/components/wrapper";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { MultiValue, default as Select } from "react-select";
-import { CourseId, emptyInstructorGrade, InstructorGrade, InstructorId, latestTermofTerms, mergeGrades, Section, SmallCourse, Term, termIdx, toInstructorGrade, toSmallCourse, trimCourseNum } from "../../../../shared/types";
+import { CourseId, emptyInstructorGrade, formatTerm, InstructorGrade, InstructorId, latestTermofTerms, mergeGrades, Section, SmallCourse, Term, termIdx, toInstructorGrade, toSmallCourse, trimCourseNum } from "../../../../shared/types";
 
 export function Instructor({instructor}: {instructor: InstructorId}) {
 	useEffect(() => {
@@ -20,10 +20,11 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 	}, []);
 
 	const i = instructor.instructor;
-	const total = mergeGrades(i.grades.map(x=>toInstructorGrade(x.data)));
+	const total = useMemo(()=>mergeGrades(i.grades.map(x=>toInstructorGrade(x.data))),[]);
 
+	type SelCourse = CourseId|{id: "avg"};
 	const [courseSearch, setCourseSearch] = useState("");
-	const [selCourse, setSelCourses] = useState<CourseId[]>([]);
+	const [selCourse, setSelCourses] = useState<SelCourse[]>([{id: "avg"}]);
 
 	const statProps = {search:courseSearch, setSearch:setCourseSearch, searchName: "courses"};
 
@@ -58,35 +59,39 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 	const allTerms = useMemo(()=>[...new Set(allSecs.map(x=>x[1]))],[]);
 	const termSecs = allSecs.filter(x=>x[1]==term);
 
-	const termCourses = useMemo(() => 
-		 instructor.courses.filter(c=>
-			(Object.keys(c.course.sections) as Term[]).includes(term)), [term]);
+	const allCourses = useMemo(() => 
+		 instructor.courses.map((c): [CourseId, Term]=>{
+			const ts = Object.keys(c.course.sections) as Term[];
+			return [c, ts.includes(term) ? term : latestTermofTerms(ts)!];
+		}), [term]);
 
-	const courseGrades = useMemo(() => new Map(termCourses.map(c=> {
+	const courseGrades = useMemo(() => new Map(allCourses.map(([c])=> {
 		const x = c.course.instructor[i.name];
 		return [c.id,x==undefined ? emptyInstructorGrade : mergeGrades(Object.values(x))];
-	})), [termCourses]);
+	})), [allCourses]);
 
 	const searchCourses = useMemo(() => {
 		const simpQ = simp(courseSearch);
-		return termCourses.filter(c=>
-			(Object.keys(c.course.sections) as Term[]).includes(term)
-				&& simp(`${c.course.subject} ${c.course.course}\n${c.course.name}`).includes(simpQ)
+		return allCourses.filter(([c])=>
+			simp(`${c.course.subject} ${c.course.course}\n${c.course.name}`).includes(simpQ)
 		);
-	}, [termCourses, courseSearch]);
+	}, [allCourses, courseSearch]);
 
 	const graphGrades: [string,InstructorGrade][] = useMemo(() =>
-		selCourse.map((c)=>[`${c.course.subject} ${trimCourseNum(c.course.course)}`, courseGrades.get(c.id)!])
-	, [selCourse]);
+		selCourse.map((c)=>[
+			c.id=="avg" ? "Average" : `${c.course.subject} ${trimCourseNum(c.course.course)}`,
+			c.id=="avg" ? total : courseGrades.get(c.id)!
+		]), [selCourse]);
 	
 	const semGPA = useMemo(() => 
-		searchCourses.map((x): [CourseId, [Term,number|null,number][]]=>{
+		searchCourses.map(([x, inTerm]): [[CourseId, Term], [Term,number|null,number][],boolean]=>{
 			const y = x.course.instructor[i.name];
-			if (y==undefined) return [x,[]];
+			if (y==undefined) return [[x, inTerm], [], inTerm==term];
 			return [
-				x,
+				[x, inTerm],
 				Object.entries(y).filter(([term,])=>termIdx(term as Term)<=idx)
-						.map(([term,g]) => [term as Term, g.gpa, g.numSections])
+						.map(([term,g]) => [term as Term, g.gpa, g.numSections]),
+				inTerm==term
 			];
 		}), [searchCourses, term]);
 
@@ -104,6 +109,12 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 		<TermSelect term={term} setTerm={setTerm} terms={allTerms} label="Schedule for" />
 		<Calendar sections={calSecs} term={term} />
 	</>;
+
+	const renderLHS = (big: boolean) => (x: [CourseId, Term], b: boolean) =>
+		<CourseLink type="course" course={smallCourses.get(x[0].id)!} className="flex-nowrap whitespace-nowrap" >
+			<span className={`font-display font-extrabold ${big ? "text-lg" : "text-md"}`} >{x[0].course.subject} {trimCourseNum(x[0].course.course)}</span>
+			{!b && <Text v="dim" >({formatTerm(x[1])})</Text>}
+		</CourseLink>;
 
 	const main=<MainLayout title={<>
 		{i.name}
@@ -131,7 +142,7 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 			</p>}
 
 			{i?.site && <p className="text-lg mb-2" >
-				<Anchor href={i.site} className={textColor.blueLink} >{i.site}</Anchor>
+				<Anchor href={i.site} className={textColor.blueLink} target="_blank" >{i.site}</Anchor>
 			</p>}
 		</div>
 
@@ -139,29 +150,26 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 	</div>} rightTabs={[{
 		title: "GPA", key: "gpa",
 		body: <WrapStat title="GPA by course" {...statProps} >
-			<BarsStat vs={searchCourses.map(x=>[x, courseGrades.get(x.id)!.gpa])}
-				type="gpa"
-				lhs={x=> <CourseLink type="course" course={smallCourses.get(x.id)!} /> } />
+			<BarsStat vs={searchCourses.map(x=>[x, courseGrades.get(x[0].id)!.gpa, x[1]==term])}
+				type="gpa" lhs={renderLHS(false)} />
 		</WrapStat>
 	}, {
 		title: "GPA Breakdown", key: "gpaSemester",
 		body: <WrapStat title="GPA by semester" {...statProps} >
-			<NameSemGPA vs={semGPA}
-				lhs={x=> <div className="text-lg font-bold" >
-					<CourseLink type="course" course={smallCourses.get(x.id)!} />
-				</div>} />
+			<NameSemGPA vs={semGPA} lhs={renderLHS(true)} />
 		</WrapStat>
 	}, {
 		title: "Grade distribution", key: "grades",
 		body: <>
-			<Select isMulti options={termCourses} value={selCourse} placeholder="Select courses"
-				getOptionLabel={(x: CourseId) => `${x.course.subject}${trimCourseNum(x.course.course)}`}
+			<Select isMulti options={[{id: "avg"}, ...allCourses.map(x=>x[0])]}
+				value={selCourse} placeholder="Select courses"
+				getOptionLabel={(x: SelCourse) =>
+					x.id=="avg" ? "Average" : `${x.course.subject}${trimCourseNum(x.course.course)}`}
 				getOptionValue={x=>x.id.toString()}
-				isOptionDisabled={(x:CourseId)=>courseGrades.get(x.id)!.gpa == null}
-				onChange={(x: MultiValue<CourseId>)=>
-					setSelCourses(x as CourseId[])
-				}
-				{...selectProps<CourseId, true>()}
+				isOptionDisabled={(x:SelCourse)=>
+					total.gpa==null || (x.id!="avg" && courseGrades.get(x.id)?.gpa==undefined)}
+				onChange={(x: MultiValue<SelCourse>)=>setSelCourses(x as CourseId[])}
+				{...selectProps<SelCourse, true>()}
 			/>
 
 			<Graph title={`Average grades by course for ${abbr(i.name, 35)}`} grades={graphGrades} />

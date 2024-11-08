@@ -3,8 +3,6 @@ package com.boilerclasses
 import io.jooby.Environment
 import io.jooby.FileDownload
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -33,15 +31,12 @@ import org.slf4j.Logger
 import java.io.File
 import java.time.Instant
 import java.time.LocalTime
-import java.util.concurrent.TimeUnit
-import kotlin.coroutines.CoroutineContext
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.minutes
 
 val termTypes = listOf("fall", "summer", "spring", "winter")
 const val SEARCH_LIMIT = 50
+const val MOST_VIEWED_LIMIT = 50
 
 fun parseTerm(term: String): Pair<Int,Int> {
     for ((i,x) in termTypes.withIndex())
@@ -209,6 +204,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
     private var courseById = emptyMap<Int,Schema.CourseId>()
     private var smallCourseBySearchId = emptyMap<Int,Schema.SmallCourse>()
     private var sortedCourses = emptyList<Schema.CourseId>()
+    private var mostViewedCourses = emptyList<Schema.CourseId>()
     private var smallCourseByCourseId = emptyMap<Int, List<Schema.SmallCourse>>()
 
     private val fieldAnalyzer = PerFieldAnalyzerWrapper(EnglishAnalyzer(), mapOf(
@@ -227,7 +223,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
     private val weights = mapOf(
         //uh idk lemme just type some random numbers
         "subject" to 130,
-        "course" to 150,
+        "course" to 180,
         "subjectName" to 150,
         "title" to 100,
         "postContent" to 40,
@@ -255,9 +251,8 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
             val subjectMap = info.subjects.associateBy { it.abbr }
 
             val newCourseById = c.associateBy { it.id }
-            val newSortedCourses = c.sortedWith(
-                compareBy<Schema.CourseId>({it.course.subject}, {it.course.course})
-            )
+            val newSortedCourses = c.sortedWith(compareBy({it.course.subject}, {it.course.course}))
+            val newMostViewedCourses = c.filter { it.views>0 }.sortedByDescending { it.views }
 
             data class IndexCourse(val searchId: Int, val cid: Schema.CourseId, val small: Schema.SmallCourse)
             val indexCourses = c.flatMap {
@@ -405,6 +400,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
 
                 courseIds = c
                 sortedCourses = newSortedCourses
+                mostViewedCourses = newMostViewedCourses
                 courseById = newCourseById
                 smallCourseBySearchId = newSmallCourses
                 smallCourseByCourseId = newSmallCourseByCID
@@ -476,6 +472,9 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
             }.let { scoreDocsToCourses(it) }
         }
     }
+
+    suspend fun mostViewed(): List<Schema.SmallCourse> = mostViewedCourses
+        .take(MOST_VIEWED_LIMIT).map { it.toSmall(null) }
 
     suspend fun searchCourses(req: SearchReq): SearchOutput = lock.read {
         if (searcher==null) throw APIErrTy.Loading.err("courses not indexed yet")

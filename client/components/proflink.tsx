@@ -3,7 +3,7 @@ import { useContext } from "react";
 import { Collapse } from "react-collapse";
 import { twMerge } from "tailwind-merge";
 import { CourseInstructor, formatTerm, InstructorGrade, InstructorId, mergeGrades, RMPInfo, scheduleAbbr, Section, SmallCourse, Term, termIdx } from "../../shared/types";
-import { AppTooltip, SelectionContext, StyleClasses, useMd, gpaColor } from "./clientutil";
+import { AppTooltip, SelectionContext, StyleClasses, useMd, useGpaColor } from "./clientutil";
 import { SectionLink } from "./sectionlink";
 import { Anchor, capitalize, Chip, chipColorKeys, firstLast, Loading, shitHash, Text } from "./util";
 import { useAPI, useCourse } from "./wrapper";
@@ -26,6 +26,8 @@ export const CircProg = ({cssColor,...props}: CircularProgressProps&{cssColor?: 
 	}} />;
 
 export const Meter = ({v,type}: {v:number|null, type: "gpa"|"rmp"}) => {
+	const gpaColor = useGpaColor();
+
 	if (v==null) {
 		return <>
 			<div className="relative w-full" >
@@ -162,12 +164,16 @@ function ProfData({x, course, term}: {x: CourseInstructor, course: SmallCourse, 
 	</div>;
 }
 
-export function ProfLink({x, label, className, course, term}: {x: CourseInstructor, label?: string, className?: string, course: SmallCourse, term: Term}) {
+export function ProfLink({x, label, className, course, term, labelTerm}: {
+	x: CourseInstructor, label?: string, className?: string,
+	course: SmallCourse, term: Term, labelTerm?: boolean
+}) {
 	return <AppTooltip placement={useMd() ? "left" : "bottom"} content={
 		<ProfData x={x} course={course} term={term} />
 	} >
 		<div className={twMerge("inline-block", className)} >
 			<Anchor className={className} >{label ?? x.name}</Anchor>
+			{labelTerm && <Text v="dim" className="ml-1" >({formatTerm(term)})</Text>}
 		</div>
 	</AppTooltip>;
 }

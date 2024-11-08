@@ -159,6 +159,8 @@ if (signCount!=undefined) {
 	if (isNaN(secret.signCount)) throw new Error("NaN sign count");
 }
 
+console.log("starting browser");
+
 const browser = await chromium.use(StealthPlugin()).launch({
 	headless: !values.show,
 	executablePath: values.browser

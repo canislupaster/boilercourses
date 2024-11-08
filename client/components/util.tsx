@@ -32,7 +32,7 @@ export const bgColor = {
 	green: "dark:enabled:bg-green-600 enabled:bg-green-400",
 	sky: "dark:enabled:bg-sky-600 enabled:bg-sky-300",
 	red: "dark:enabled:bg-red-800 enabled:bg-red-300",
-	rose: "dark:enabled:bg-rose-900 enabled:bg-rose-400",
+	rose: "dark:enabled:bg-rose-900 enabled:bg-rose-300",
 	highlight: "dark:bg-amber-600 bg-amber-200",
 	restriction: "dark:bg-amber-900 bg-amber-100",
 	divider: "dark:bg-zinc-500 bg-zinc-400",
@@ -45,8 +45,8 @@ export const borderColor = {
 	defaultInteractive: "focus:outline-none border-zinc-300 hover:border-zinc-400 dark:border-zinc-600 dark:hover:border-zinc-500 disabled:bg-zinc-300 aria-expanded:border-blue-500 focus:border-blue-500 active:border-blue-500 dark:focus:border-blue-500 dark:active:border-blue-500 data-[selected=true]:border-blue-500 outline-none",
 };
 
-export const containerDefault = `${textColor.default} ${bgColor.default} ${borderColor.default} rounded-md`;
-export const interactiveContainerDefault = `${textColor.default} ${bgColor.default} ${borderColor.defaultInteractive}`;
+export const containerDefault = `${textColor.default} ${bgColor.default} ${borderColor.default} rounded-md border-1`;
+export const interactiveContainerDefault = `${textColor.default} ${bgColor.default} ${borderColor.defaultInteractive} border-1`;
 
 export const Anchor: React.FC<(AnchorHTMLAttributes<HTMLAnchorElement>)&Partial<LinkProps>> = ({className,href,...props}) => {
 	const classN = twMerge(
@@ -88,7 +88,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, JSX.IntrinsicElements["t
 });
 
 export const Button = ({className, disabled, icon, ...props}: HTMLAttributes<HTMLButtonElement>&{icon?: React.ReactNode, disabled?: boolean}) =>
-	<button disabled={disabled} className={twMerge("flex flex-row justify-center gap-1.5 px-4 py-1.5 items-center rounded-xl border group", interactiveContainerDefault, icon ? "pl-3" : "", className)} {...props} >
+	<button disabled={disabled} className={twMerge("flex flex-row justify-center gap-1.5 px-4 py-1.5 items-center rounded-xl group", interactiveContainerDefault, icon ? "pl-3" : "", className)} {...props} >
 		{icon}
 		{props.children}
 	</button>;
@@ -99,12 +99,12 @@ export const HiddenInput = ({className, ...props}: React.InputHTMLAttributes<HTM
 		{...props} ></input>
 
 export const IconButton = ({className, icon, disabled, ...props}: {icon?: React.ReactNode, disabled?: boolean}&Omit<JSX.IntrinsicElements["button"],"children">) =>
-	<button className={twMerge("rounded-full p-2 border flex items-center justify-center", interactiveContainerDefault, className)} disabled={disabled} {...props} >
+	<button className={twMerge("rounded-full p-2 flex items-center justify-center", interactiveContainerDefault, className)} disabled={disabled} {...props} >
 		{icon}
 	</button>;
 
 export const LinkButton = ({className, icon, ...props}: React.AnchorHTMLAttributes<HTMLAnchorElement>&{icon?: React.ReactNode}) =>
-	<a className={twMerge('border flex flex-row gap-2 px-3 py-1.5 items-center rounded-xl text-sm',interactiveContainerDefault,className)} rel="noopener noreferrer" {...props} >
+	<a className={twMerge('flex flex-row gap-2 px-3 py-1.5 items-center rounded-xl text-sm',interactiveContainerDefault,className)} rel="noopener noreferrer" {...props} >
 		{icon &&
 			<span className="inline-block h-4 w-auto" >{icon}</span> }
 		{props.children}
@@ -240,7 +240,7 @@ export function capitalize(s: string) {
 type TextVariants = "big"|"lg"|"md"|"dim"|"bold"|"normal"|"err"|"sm"|"smbold";
 export function Text({className, children, v, ...props}: HTMLAttributes<HTMLParagraphElement>&{v?: TextVariants}) {
 	switch (v) {
-		case "big": return <h1 className={twMerge("text-3xl font-display font-black", textColor.contrast, className)} {...props} >{children}</h1>;
+		case "big": return <h1 className={twMerge("md:text-3xl text-2xl font-display font-black", textColor.contrast, className)} {...props} >{children}</h1>;
 		case "bold": return <b className={twMerge("text-lg font-display font-extrabold", textColor.contrast, className)} {...props} >{children}</b>;
 		case "smbold": return <b className={twMerge("text-sm font-display font-bold text-gray-700 dark:text-gray-300", className)} {...props} >{children}</b>;
 		case "md": return <h3 className={twMerge("text-xl font-display font-bold", textColor.contrast, className)} {...props} >{children}</h3>;

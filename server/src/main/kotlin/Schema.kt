@@ -228,6 +228,7 @@ object Schema {
 
         val grades: InstructorGrade,
 
+        val views: Long,
         var ratings: Int,
         var avgRating: Double?
     )
@@ -304,6 +305,7 @@ object Schema {
         val id: Int,
         val course: Course,
 
+        val views: Long,
         var ratings: Int,
         var avgRating: Double?
     ) {
@@ -317,7 +319,7 @@ object Schema {
             course.lastUpdated, course.description, course.credits,
             course.attributes,
             course.sections.values.flatten().map {it.scheduleType}.distinct(),
-            course.grades(null), ratings, avgRating
+            course.grades(null), views, ratings, avgRating
         )
     }
 

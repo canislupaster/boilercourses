@@ -3,14 +3,12 @@
 import { Alert, BackButton, searchState, TermSelect } from "@/components/clientutil";
 import { PostCard, PostCardAdminUser, PostRefreshHook } from "@/components/community";
 import { Button, ButtonPopover, containerDefault, Input, Loading, Text } from "@/components/util";
-import { AppCtx, callAPI, isAuthSet, redirectToSignIn, useAPI } from "@/components/wrapper";
+import { AppCtx, callAPI, isAuthSet, redirectToSignIn } from "@/components/wrapper";
 import { Checkbox } from "@nextui-org/checkbox";
 import { Pagination } from "@nextui-org/pagination";
-import { useRouter } from "next/navigation";
 import { useContext, useEffect, useState } from "react";
 import { AdminPost, UserData } from "../../../shared/posts";
-import { latestTermofTerms, ServerInfo, Term } from "../../../shared/types";
-import { LogoBar } from "@/components/logo";
+import { latestTermofTerms, Term } from "../../../shared/types";
 
 type ListRequest = {
 	reported: boolean, new: boolean, page: number
@@ -64,12 +62,11 @@ function AdminPosts() {
 	const dismiss = callAPI<void, number[]>("posts/admin/dismissreports", "redirect");
 	const markRead = callAPI<void, number[]>("posts/admin/markread", "redirect");
 
-	const router = useRouter();
-
 	const runSetAdmin = (x: boolean) =>
 		setAdmin.run({data: {email: adminInp, admin: x}, refresh() { admins.run(); }});
 
-	const terms = Object.keys(useContext(AppCtx).info.terms) as Term[];
+	const app = useContext(AppCtx);
+	const terms = Object.keys(app.info.terms) as Term[];
 	const [term, setTerm] = useState<Term|null>(latestTermofTerms(terms));
 
 	if (posts==null) return <Loading/>;
@@ -86,7 +83,7 @@ function AdminPosts() {
 				Reindex
 			</Button>
 			<Button onClick={()=>logout.run({refresh() {
-				router.push("/");
+				app.goto("/");
 			}})} disabled={logout.loading} >
 				Logout
 			</Button>

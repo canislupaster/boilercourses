@@ -258,11 +258,16 @@ export type SmallCourse = {
   scheduleTypes: string[],
 
   grades: InstructorGrade,
+
+  views: number,
   ratings: number, avgRating: number|null
 };
 
 // course after indexing / server processing, normal course is used during scraping
-export type CourseId = {course: Course, id: number, ratings: number, avgRating: number|null};
+export type CourseId = {
+  course: Course, id: number,
+  views: number, ratings: number, avgRating: number|null
+};
 
 export const toSmallCourse = (cid: CourseId): SmallCourse => ({
   id: cid.id, ...cid.course, varTitle: null,
@@ -270,7 +275,7 @@ export const toSmallCourse = (cid: CourseId): SmallCourse => ({
     .map(([k,v]) => [k as Term, mergeInstructors(v.flatMap(x=>x.instructors))])),
   grades: mergeGrades(Object.values(cid.course.instructor).flatMap(x=>Object.values(x))),
   scheduleTypes: [...new Set(Object.values(cid.course.sections).flat().map(s=>s.scheduleType))],
-  ratings: cid.ratings, avgRating: cid.avgRating
+  views: cid.views, ratings: cid.ratings, avgRating: cid.avgRating
 });
 
 export type ServerSearch = {
@@ -305,10 +310,27 @@ export function sectionsByTerm(course: Course) {
     .sort(([a,],[b,]) => termIdx(b)-termIdx(a));
 }
 
-export function mergeInstructors(all: CourseInstructor[]) {
-  const primary = new Map(all.filter(x => x.primary).map(x=>[x.name,x]));
-  return [...primary.values(), ...new Map(all.filter(x => !primary.has(x.name))
-    .map(x=>[x.name,x])).values()];
+export function mergeInstructors(xs: CourseInstructor[]) {
+  const primarySet = new Set(xs.filter(x=>x.primary).map(x=>x.name));
+  return xs.map(x=>({name: x.name, primary: primarySet.has(x.name)}));
+}
+
+export function allCourseInstructors(course: Course, term?: Term) {
+  //looks complicated but im bent on having this specific behavior...
+  //lmfao what's wrong with me
+  const isPrimary = new Map<string, boolean>();
+  for (const [,v] of Object.entries(course.sections).sort(([t1], [t2])=>{
+    if (t2==term && t1!=term) return -1;
+    else if (t1==term && t2!=term) return 1;
+
+    return termIdx(t1 as Term)-termIdx(t2 as Term);
+  })) {
+    for (const i of mergeInstructors(v.flatMap(x=>x.instructors))) {
+      isPrimary.set(i.name, i.primary);
+    }
+  }
+
+  return [...isPrimary.entries()].map(x=>({name: x[0], primary: x[1]}));
 }
 
 export function instructorStr(course: Course) {
@@ -351,4 +373,14 @@ export const scheduleAbbr = (schedule: string) =>
     Recitation: "Rec",
     Lecture: "Lec",
     Laboratory: "Lab",
+    "Practice Study Observation": "PSO"
   })[schedule] ?? schedule;
+
+export function minutesInDay(t: string) {
+	const re = /(\d+):(\d+) (am|pm)/;
+	const m = t.match(re);
+	if (m==null) throw new Error("invalid time");
+
+	return 60*(Number.parseInt(m[1])%12)+Number.parseInt(m[2])+(m[3]=="pm" ? 12*60 : 0);
+}
+

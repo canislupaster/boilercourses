@@ -62,6 +62,7 @@ export type AppCtx = {
 	open: (m: AppModal) => void,
 	popupCount: number, incPopupCount: ()=>void,
 	forward: (back?: string)=>void, back: ()=>void,
+	goto: (to: string)=>void,
 	info: ServerInfo,
 	theme: Theme, setTheme: (x: Theme)=>void,
 	hasAuth: boolean|null,
@@ -244,7 +245,7 @@ export function useAPI<R,T=null>(endpoint: string, {
 			y.attempt();
 			setLatest(true);
 		}
-	}, [y.k]);
+	}, [y.k, debounceMs]);
 
 	return api.current ? {...api.current, loading: !latest || api.loading} : null;
 }
@@ -336,59 +337,20 @@ type Back = {
 	scrollPos?: number
 };
 
+type ModalState = {
+	active: AppModal[],
+	visible: Record<"error"|"other", boolean>
+};
+
+const defaultModalState: ModalState = {
+	active: [], visible: {error: false, other: false}
+};
+
 export function AppWrapper({children, className, info}: {children: React.ReactNode, className?: string, info: ServerInfo}) {
 	//😒
-	const [activeModals, setActiveModals] = useState<AppModal[]>([]);
-	const [modalExtra, setModalVisible] = useState<Record<"error"|"other", boolean>>({
-		error: false, other: false
-	});
-	const activeNormals = activeModals.filter(x=>x.type=="other");
-	const activeErrors = activeModals.filter(x=>x.type=="error");
-	const setVis = (x: "error"|"other", y: boolean) =>
-		setModalVisible((vis) => ({...vis, [x]:y}));
-
-	let m = <></>;
-	if (activeNormals.length>0) {
-		const x = activeNormals[activeNormals.length-1];
-		m = <Modal isOpen={modalExtra["other"]} onClose={() => {
-			x.onClose?.();
-			if (activeNormals.length>1)
-				setActiveModals(activeModals.filter(y=>y!=x));
-			else setVis("other", false);
-		}} backdrop="blur" placement="center" classNames={{
-			base: "overflow-visible"
-		}} >
-			<ModalContent>
-				{(close) => <ModalContentInner close={close}
-						closeAll={activeNormals.length>1 ? ()=>setVis("other", false) : undefined}
-						x={x} />}
-			</ModalContent>
-		</Modal>;
-	}
-	
-	if (activeErrors.length>0) {
-		const x = activeErrors[activeErrors.length-1];
-		const retry = x.retry!=undefined ? x.retry : null;
-
-		m = <>{m}<Modal isOpen={modalExtra["error"]} onClose={() => {
-			if (activeErrors.length>1) setActiveModals(activeModals.filter(y=>y!=x));
-			else setVis("error", false);
-		}} className={`border ${bgColor.red} ${borderColor.red}`} backdrop="blur"
-			placement="bottom-center" >
-			<ModalContent>
-				{(close) => (
-					<>
-						{x.name && <ModalHeader className="font-display font-extrabold text-2xl" >{x.name}</ModalHeader>}
-						<ModalBody> <p>{x.msg}</p> </ModalBody>
-						<ModalFooter className="py-2" >
-							{retry ? <Button onClick={() => {close(); retry();}} >Retry</Button>
-								: <Button onClick={close} >Close</Button>}
-						</ModalFooter>
-					</>
-				)}
-			</ModalContent>
-		</Modal></>;
-	}
+	const [modals, setModals] = useState<ModalState>(defaultModalState);
+	const activeNormals = modals.active.filter(x=>x.type=="other");
+	const activeErrors = modals.active.filter(x=>x.type=="error");
 
 	const [count, setCount] = useState(0);
 
@@ -417,51 +379,109 @@ export function AppWrapper({children, className, info}: {children: React.ReactNo
 	const [hasAuth, setHasAuth] = useState<boolean|null>(null);
 	useEffect(()=>setHasAuth(isAuthSet()), []);
 
-  return (<NextUIProvider>
-		<AppCtx.Provider value={{
-			restoreScroll() {
-				if (restoreScroll) {
-					window.scrollTo({top: restoreScroll, behavior: "instant"});
-					setRestoreScroll(undefined);
-				}
-			},
-			open: (m) => {
-				setCount(x=>x+1);
-				if (!modalExtra[m.type]) {
-					setActiveModals((active) => [...active.filter(x=>x.type!=m.type), m]);
-					setVis(m.type, true);
-				} else setActiveModals((active) => [...active, m]);
-			},
-			popupCount: count,
-			incPopupCount: () => setCount(x=>x+1),
-			forward(back) {
-				setBackUrls([...backUrls, {
-					url: back ? new URL(back, window.location.href).href : window.location.href,
-					scrollPos: back ? undefined : window.scrollY
-				}]);
+	const appCtx: AppCtx = {
+		restoreScroll() {
+			if (restoreScroll) {
+				window.scrollTo({top: restoreScroll, behavior: "instant"});
 				setRestoreScroll(undefined);
-				setActiveModals([]);
-				setCount(x=>x+1);
-			}, back() {
-				let i=backUrls.length;
-				while (i>0 && new URL(backUrls[i-1].url).pathname==path) i--;
+			}
+		},
+		open: (m) => {
+			setCount(x=>x+1);
+			setModals(modals => {
+				if (!modals.visible[m.type]) return {
+					active: [...modals.active.filter(x=>x.type!=m.type), m],
+					visible: {...modals.visible, [m.type]: true}
+				};
+				else return {active: [...modals.active, m], visible: modals.visible};
+			});
+		},
+		popupCount: count,
+		incPopupCount: () => setCount(x=>x+1),
+		forward(back) {
+			setBackUrls([...backUrls, {
+				url: back ? new URL(back, window.location.href).href : window.location.href,
+				scrollPos: back ? undefined : window.scrollY
+			}]);
+			setRestoreScroll(undefined);
+			setModals(defaultModalState);
+			setCount(x=>x+1);
+		},
+		goto(to) {
+			this.forward();
+			router.push(to);
+		},
+		back() {
+			let i=backUrls.length;
+			while (i>0 && new URL(backUrls[i-1].url).pathname==path) i--;
 
-				if (i==0) router.push("/");
-				else {
-					const nb = backUrls.slice(0,i-1);
-					router.push(backUrls[i-1].url);
-					setRestoreScroll(backUrls[i-1].scrollPos);
-					setBackUrls(nb);
-				}
-			}, info, theme, setTheme(x) {
-				window.localStorage.setItem("theme", x);
-				updateTheme();
-			},
-			hasAuth, setHasAuth
-		}}>
+			if (i==0) router.push("/");
+			else {
+				const nb = backUrls.slice(0,i-1);
+				router.push(backUrls[i-1].url);
+				setRestoreScroll(backUrls[i-1].scrollPos);
+				setBackUrls(nb);
+			}
+		}, info, theme, setTheme(x) {
+			window.localStorage.setItem("theme", x);
+			updateTheme();
+		},
+		hasAuth, setHasAuth
+	};
 
+	let m = <></>;
+	const closeModal = (x: AppModal) => setModals(modals=>{
+		const remaining = modals.active.filter(y=>y!=x);
+		if (remaining.some(y=>y.type==x.type)) return {
+			active: remaining, visible: modals.visible
+		}; else return {
+			active: remaining, visible: {...modals.visible, [x.type]: false}
+		};
+	});
+
+	if (activeNormals.length>0) {
+		const x = activeNormals[activeNormals.length-1];
+		m = <Modal isOpen={modals.visible["other"]} onClose={() => {
+			x.onClose?.();
+			closeModal(x);
+		}} backdrop="blur" placement="center" classNames={{
+			base: "overflow-visible"
+		}} >
+			<ModalContent>
+				{(close) => <ModalContentInner close={close}
+					closeAll={activeNormals.length>1 ? ()=>setModals(modals=>(
+						{...modals, visible: {...modals.visible, other: false}}
+					)) : undefined}
+					x={x} />}
+			</ModalContent>
+		</Modal>;
+	}
+	
+	if (activeErrors.length>0) {
+		const x = activeErrors[activeErrors.length-1];
+		const retry = x.retry!=undefined ? x.retry : null;
+
+		m = <>{m}<Modal isOpen={modals.visible["error"]} onClose={()=>closeModal(x)}
+			className={`border ${bgColor.red} ${borderColor.red}`} backdrop="blur" placement="bottom-center" >
+			<ModalContent>
+				{(close) => (
+					<>
+						{x.name && <ModalHeader className="font-display font-extrabold text-2xl" >{x.name}</ModalHeader>}
+						<ModalBody> <p>{x.msg}</p> </ModalBody>
+						<ModalFooter className="py-2" >
+							{retry ? <Button onClick={() => {close(); retry();}} >Retry</Button>
+								: <Button onClick={close} >Close</Button>}
+						</ModalFooter>
+					</>
+				)}
+			</ModalContent>
+		</Modal></>;
+	}
+
+  return (<NextUIProvider>
+		<AppCtx.Provider value={appCtx} >
 			{m}
-			<div id="parent" className={twMerge("flex flex-col container mx-auto p-4 lg:px-14 lg:mt-5 max-w-screen-xl", className)}>
+			<div id="parent" className={twMerge("flex flex-col container mx-auto p-4 lg:px-14 lg:pt-9 max-w-screen-xl h-dvh", className)}>
 				{children}
 			</div>
 		</AppCtx.Provider>

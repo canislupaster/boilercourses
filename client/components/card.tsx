@@ -1,11 +1,12 @@
 import { twMerge } from "tailwind-merge";
 import { CourseId, creditStr, formatTerm, InstructorGrade, latestTermofTerms, SmallCourse, Term, toSmallCourse, trimCourseNum } from "../../shared/types";
 import attributeToGenEd from "../app/attributeToGenEd.json";
-import { AppLink, AppTooltip, useMd, gpaColor } from "./clientutil";
+import { AppLink, AppTooltip, useGpaColor, useMd } from "./clientutil";
 import { Stars } from "./community";
 import { InstructorList } from "./instructorlist";
-import { abbr, Anchor, bgColor, borderColor, Chip, Loading, Text, textColor } from "./util";
+import { abbr, Anchor, bgColor, borderColor, Chip, containerDefault, Loading, Text, textColor } from "./util";
 import { useAPI } from "./wrapper";
+import { IconEye } from "@tabler/icons-react";
 
 //ideally maybe have term inherited from search semester filter.............?????
 //causes hydration errors due to nested links (card and professors, gpa, etc)
@@ -16,7 +17,10 @@ export function Card({ course, frameless, termFilter, className, extra }: {frame
 
   const body = <>
     <Text v="sm" className="flex flex-row flex-wrap items-center gap-1">
-      {creditStr(course)} {<GPAIndicator grades={course.grades} smol />}
+      {creditStr(course)} <GPAIndicator grades={course.grades} smol />
+      <div className={`${containerDefault} flex flex-row gap-0.5 px-1 py-0.5 pr-1.5 items-center`} >
+        <IconEye/> <span className="font-display font-bold" >{course.views}</span>
+      </div>
     </Text>
     {course.avgRating!=null && <div className="flex flex-row gap-2 font-display font-black text-md items-center" >
       <Stars sz={18} rating={course.avgRating} /> {course.ratings}
@@ -47,7 +51,7 @@ export function Card({ course, frameless, termFilter, className, extra }: {frame
   );
   else return (
     <AppLink href={url}
-      className={twMerge("flex flex-col gap-1 p-6 rounded-md shadow-md hover:scale-105 transition hover:transition cursor-pointer", bgColor.secondary, className)} >
+      className={twMerge("flex flex-col gap-1 p-6 rounded-md shadow-md hover:scale-[101%] md:hover:scale-[103%] transition hover:transition cursor-pointer", bgColor.secondary, className)} >
         <Text v="lg" >{course.subject} {trimCourseNum(course.course)}: {course.name}</Text>
         {course.varTitle && 
           <Text v="bold" >{course.varTitle}</Text>}
@@ -96,12 +100,12 @@ export function CourseLinkPopup({extra, ...props}: LookupOrCourse&{extra?: React
   }</div>;
 }
 
-export function CourseLink({className,...props}: {className?: string}&LookupOrCourse) {
+export function CourseLink({className,children,...props}: {className?: string,children?:React.ReactNode}&LookupOrCourse) {
   const [cid, subject, num] = useLookupOrCourse(props);
 
   return <AppTooltip placement={useMd() ? "right" : "bottom"} content={<CourseLinkPopup {...props} />} >
     <Anchor className={twMerge("font-display", cid=="notFound" || cid==null ? "no-underline" : "", className)} >
-      {subject} {num}
+      {children ?? `${subject} ${trimCourseNum(num)}`}
     </Anchor>
   </AppTooltip>
 }
@@ -130,7 +134,7 @@ export function CourseChips({course}: {course: SmallCourse}) {
 export function GPAIndicator({grades,smol,tip}:{grades: InstructorGrade, smol?:boolean, tip?:string}) {
   return <AppTooltip content={tip ?? (grades.gpaSections==0 ? "No data" : `Averaged over ${grades.gpaSections} section${grades.gpaSections==1?"":"s"} (all time)`)} >
     <div className={`${textColor.contrast} flex flex-row cursor-pointer font-display ${smol ? "font-bold gap-1" : "font-extrabold gap-2"} items-center m-1 p-1 rounded-md px-3 ${grades.gpa==null ? bgColor.default : ""} border ${borderColor.default}`}
-      style={{backgroundColor: gpaColor(grades.gpa)}} >
+      style={{backgroundColor: useGpaColor()(grades.gpa)}} >
       <span className={smol ? "text-xs font-light" : "font-normal"} >GPA</span>
       <h2 className={smol ? "text-sm" : "text-2xl"} >{grades.gpa?.toFixed(2) ?? "?"}</h2>
     </div>

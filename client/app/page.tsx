@@ -2,27 +2,86 @@
 
 import { Footer } from "@/components/footer";
 
-import { Button, textColor } from "@/components/util";
+import { textColor, Text, bgColor, borderColor, chipColors, containerDefault } from "@/components/util";
 import { decodeQueryToSearchState, encodeSearchState, Search, SearchState } from "./search";
 
-import { searchState } from "@/components/clientutil";
+import { AppTooltip, Carousel, searchState, useGpaColor } from "@/components/clientutil";
 import { Logo, LogoText } from "@/components/logo";
 import { ButtonRow } from "@/components/settings";
-import { AppCtx, callAPI } from "@/components/wrapper";
-import { IconDice5Filled } from "@tabler/icons-react";
-import { useRouter } from "next/navigation";
-import { useContext } from "react";
+import { AppCtx, callAPI, useAPI } from "@/components/wrapper";
+import { IconEye } from "@tabler/icons-react";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { SmallCourse } from "../../shared/types";
+import { Collapse } from "react-collapse";
+import { Card } from "@/components/card";
+
+import messages from "./messages.json";
+import { twMerge } from "tailwind-merge";
+import { LuckyBox } from "@/components/lucky";
+
+type Message = {
+	type: "normal"|"deadline", title?: string, message: string,
+	start?: number, end?: number
+};
+
+function Countdown({until}: {until: number}) {
+	const [time, setTime] = useState<null|number>(null);
+	useEffect(()=>{
+		let curTimeout: NodeJS.Timeout|null = null;
+		const untilNext = () => {
+			const nxt = 1001-(Date.now()%1000); //should be strictly in the next second... 1ms delay
+			setTime(Math.floor(until-Date.now()/1000));
+			curTimeout = setTimeout(untilNext, nxt);
+		};
+
+		untilNext();
+		return ()=>{
+			if (curTimeout!=null) clearTimeout(curTimeout);
+		};
+	}, [])
+
+	const gpaColor = useGpaColor();
+
+	if (time==null || time<0) return [];
+	const day = Math.floor(time/(3600*24)), hr=Math.floor(time/3600)%24, min=Math.floor(time/60)%60, sec=time%60;
+	
+	return ([[day, "Day"], [hr, "Hour"], [min, "Minute"], [sec, "Second"]] satisfies [number,string][])
+		.map(([qty,name],i) => <div className="flex flex-col gap-1 items-center justify-between" key={name} >
+			<div style={{backgroundColor: gpaColor(4-i)}} className="p-2 px-3 rounded-md shadow-md" >
+				<Text v="md" >{qty<10 ? `0${qty}` : qty}</Text>
+			</div>
+			<Text v="sm" >{name}{qty>1 ? "s" : ""}</Text>
+		</div>)
+}
 
 function Landing({setSearch}: {setSearch: (s: string) => void}) {
 	const randomCourse = callAPI<number, object>("random");
-	const router = useRouter();
 	const ctx = useContext(AppCtx);
+	const mostViewed = useAPI<SmallCourse[]>("mostviewed");
 
-	return <>
-		<div className="flex-col z-40 grid place-content-center mx-4 h-[80dvh] items-center">
-			<ButtonRow className="w-full justify-end" />
-			<div className='flex flex-col items-center my-2 gap-6 md:my-4 lg:my-0 lg:mt-4 lg:mb-6'>
-				<Logo onClick={() => setSearch("")} className='my-auto max-h-52 cursor-pointer w-auto' />
+	const activeMessages = useMemo(()=>{
+		const now = Date.now()/1000;
+		return (messages as Message[]).filter(msg=>(msg.start==undefined || now>=msg.start) && (msg.end==undefined || now<=msg.end));
+	}, []);
+
+	return <div className="flex flex-col items-center mx-4" >
+		<div className={`flex flex-col items-center gap-2 max-w-md`} >
+			{activeMessages.map((msg,i)=>
+				<div key={i} className={twMerge(containerDefault, msg.type=="normal" ? chipColors.blue : `${bgColor.rose} ${borderColor.red}`, "flex flex-col gap-2 px-4 w-full py-2")} >
+					{msg.title && <Text v="lg" >{msg.title}</Text>}
+					<Text>
+						{msg.message}
+					</Text>
+					{msg.type=="deadline" && msg.end && <Collapse isOpened >
+						<div className="grid grid-cols-4 gap-4 items-stretch self-center" >
+							<Countdown until={msg.end} />
+						</div>
+					</Collapse>}
+				</div>
+			)}
+			<div className='flex flex-col items-center w-full md:w-auto my-2 !mt-[8dvh] gap-2 md:gap-6 md:my-4 lg:mb-6 relative'>
+				<ButtonRow className="absolute top-0 right-0" />
+				<Logo onClick={() => setSearch("")} className='my-auto max-h-24 cursor-pointer w-auto' />
 				<LogoText onClick={() => setSearch("")} />
 			</div>
 			<input
@@ -30,26 +89,33 @@ function Landing({setSearch}: {setSearch: (s: string) => void}) {
 				type="text" autoFocus
 				placeholder="I want to take a class about..."
 				onChange={(e) => setSearch(e.target.value) }
-				className={`${textColor.contrast} text-lg md:text-xl bg-transparent w-full pb-2 border-b-2 focus:outline-none focus:border-blue-500 transition duration-300`}
+				className={`${textColor.contrast} text-lg md:text-xl bg-transparent w-full max-w-72 md:max-w-none pb-2 border-b-2 focus:outline-none focus:border-blue-500 transition duration-300`}
 			/>
-			<div className="mt-4 flex flex-col items-center">
-				<Button icon={<IconDice5Filled className="group-hover:rotate-180 transition-transform duration-1000" />} disabled={randomCourse.loading} onClick={() => {
-					randomCourse.run({noCache: true, refresh(r) { router.push(`/course/${r.res}`); }})
-				}} >
-					I{"'"}m feeling lucky
-				</Button>
+			<div className="flex flex-row items-center justify-center mt-5">
+				<AppTooltip content={"I'm feeling lucky"} >
+					<button className="bg-none border-none outline-none" onClick={() => {
+						randomCourse.run({noCache: true, refresh(r) { ctx.goto(`/course/${r.res}`); }})
+					}} ><LuckyBox/></button>
+				</AppTooltip>
 
-				<div className="mt-5 text-center px-5" >
+				<div className="text-center px-3" >
 					Featuring <b className="font-black font-display px-0.5 mx-0.5 py-0.5 bg-amber-300 text-black" >{ctx.info.nCourses}</b> courses<br/>and
 					{" "}<b className="font-black font-display px-0.5 mx-0.5 py-0.5 bg-orange-300 text-black" >{ctx.info.nInstructor}</b> instructors.
 				</div>
 			</div>
-
-			<div className="absolute bottom-0 left-0 top-0 right-0 flex flex-col items-center justify-end -z-10 min-h-[40rem]" >
-				<Footer/>
-			</div>
 		</div>
-	</>;
+
+		<div className="w-full" >
+			<Collapse isOpened >
+				{mostViewed!=null && mostViewed.res.length>0 && <div className="flex flex-col mt-[10dvh] items-start w-full gap-2" >
+					<Text v="big" className="flex flex-row items-center gap-2" ><IconEye size={40} /> Most viewed courses</Text>
+					<Carousel items={mostViewed.res.map(c=><Card course={c} className="h-full" />)} />
+				</div>}
+			</Collapse>
+		</div>
+
+		<Footer className="mt-[9dvh]" />
+	</div>;
 }
 
 export default function App() {

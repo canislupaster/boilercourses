@@ -9,9 +9,9 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.plus
 import org.jetbrains.exposed.sql.javatime.timestamp
 import org.jetbrains.exposed.sql.json.jsonb
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
@@ -67,6 +67,7 @@ class DB(env: Environment) {
         val subject = text("subject")
         val course = integer("course")
         val name = text("name")
+        val views = long("views")
 
         val data = jsonb<Schema.Course>("data", json)
     }
@@ -145,8 +146,10 @@ class DB(env: Environment) {
 
     object EmailBlock: Table("email_block") {
         val email = text("email")
-        val key = binary("key")
+        val key = text("key")
         val blocked = bool("blocked")
+        val verified = bool("verified")
+        val verification_count = integer("verification_count")
     }
 
     object Subject: Table("subject") {
@@ -191,18 +194,18 @@ class DB(env: Environment) {
     private val courseWithRating = Course.join(agg, JoinType.LEFT, Course.id, agg[CoursePost.course])
 
     private fun toCourseId(it: ResultRow) =
-        Schema.CourseId(it[Course.id], it[Course.data],
+        Schema.CourseId(it[Course.id], it[Course.data], it[Course.views],
             it[agg[ratingCount]]?.toInt() ?: 0, it[agg[avgRating]])
 
     suspend fun lookupCourses(sub: String, num: Int) = query {
         courseWithRating
-            .select(Course.id, Course.data, agg[ratingCount], agg[avgRating])
+            .select(Course.id, Course.data, Course.views, agg[ratingCount], agg[avgRating])
                 .where { (Course.subject eq sub) and (Course.course eq num) }
                 .map { toCourseId(it) }
     }
 
     suspend fun allCourses() = query {
-        courseWithRating.select(Course.id, Course.data, agg[avgRating], agg[ratingCount])
+        courseWithRating.select(Course.id, Course.data, Course.views, agg[avgRating], agg[ratingCount])
             .map { toCourseId(it) }
     }
 
@@ -222,6 +225,12 @@ class DB(env: Environment) {
             .where { Instructor.name inList profs }
             .associate { it[Instructor.name] to it[Instructor.rmp] }
         profs.map { m[it] }
+    }
+
+    suspend fun addCourseView(id: Int) = query {
+        if (Course.update({ Course.id eq id }) {
+            it[Course.views] = Course.views+1
+        }==0) throw APIErrTy.NotFound.err()
     }
 
     data class DBInstructor(val id: Int, val data: Schema.Instructor, val rmp: Schema.RMPInfo?, val courseIds: List<Int>)

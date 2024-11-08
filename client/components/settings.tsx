@@ -1,12 +1,11 @@
 "use client"
 
 import { IconMoonStars, IconSunFilled, IconUserCircle } from "@tabler/icons-react";
-import { useRouter } from "next/navigation";
 import { useContext, useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { UserData } from "../../shared/posts";
 import { Dropdown, DropdownPart } from "./clientutil";
-import { IconButton, Loading, Text, textColor } from "./util";
+import { IconButton, Text, textColor } from "./util";
 import { AppCtx, callAPI, redirectToSignIn, setAuth, useAPI } from "./wrapper";
 
 function useLogout() {
@@ -35,7 +34,7 @@ function UserEmail({setAdmin}: {setAdmin: (x: boolean)=>void}) {
 
 	const app = useContext(AppCtx);
 	
-	return app.hasAuth && u==null ? <Loading/>
+	return app.hasAuth && u==null ? "..."
 		: u!=null ? <>Logged in with <b>{u.res.email}</b></> : "Not logged in";
 }
 
@@ -45,7 +44,6 @@ export function UserButton() {
 	const redir = redirectToSignIn();
 
 	const deleteUser = callAPI("deleteuser", "redirect");
-	const router = useRouter();
 	const [admin, setAdmin] = useState(false);
 
 	const drop: DropdownPart[] = [
@@ -60,17 +58,13 @@ export function UserButton() {
 	if (admin) drop.push({
 		type: "act",
 		name: "Admin panel",
-		act() {
-			router.push("/admin");
-		}
+		act() { app.goto("/admin"); }
 	});
 
 	if (app.hasAuth) drop.push({
 		type: "act",
 		name: "Notifications",
-		act() {
-			router.push("/notifications");
-		}
+		act() { app.goto("/notifications"); }
 	}, {
 		type: "act",
 		name: <Text className={textColor.red} >Delete all data</Text>,

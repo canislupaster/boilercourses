@@ -3,7 +3,7 @@ import { Alert, MoreButton } from "@/components/clientutil";
 import { Footer } from "@/components/footer";
 import { LogoBar } from "@/components/logo";
 import { Button, ButtonPopover, Divider, IconButton, Loading, selectProps, Text, textColor } from "@/components/util";
-import { AppCtx, useAPI, useInfo } from "@/components/wrapper";
+import { APICallResult, AppCtx, useAPI, useInfo } from "@/components/wrapper";
 import { Checkbox, CheckboxGroup } from "@nextui-org/checkbox";
 import { Pagination } from "@nextui-org/pagination";
 import { Slider } from "@nextui-org/slider";
@@ -42,7 +42,7 @@ const spec: Partial<Record<keyof SearchState, "array"|"number"|"string">> = {
 function encodeToQuery(x: object) {
 	const u = new URLSearchParams();
 	for (const [k,v] of Object.entries(x)) {
-		if (typeof v=="string" && v.length>0) u.append(k,v);
+		if (typeof v=="string") u.append(k,v);
 		else if (typeof v=="number") u.append(k,v.toString());
 		else if (Array.isArray(v))
 			for (const el of v as string[]) u.append(k,el);
@@ -74,7 +74,54 @@ export function decodeQueryToSearchState(query: URLSearchParams) {
 	return x;
 }
 
-export function Search({init, autoFocus, clearSearch, setSearchState, includeLogo}: {init: Partial<SearchState>, autoFocus?:boolean, clearSearch?: ()=>void, setSearchState: (s:SearchState)=>void, includeLogo?: boolean}) {
+function SearchResults({api, page, terms, filtering, setPage}: {
+	api: APICallResult<SearchState, ServerSearch>|null, page: number,
+	filtering: boolean, terms: Term[], setPage: (x: number)=>void
+}) {
+	const [scrollToTop, setScrollToTop] = useState(false);
+	const resultsRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		const onScroll = () => {
+			if (resultsRef.current!==null)
+				setScrollToTop(window.scrollY>resultsRef.current.offsetTop+400);
+		};
+
+		window.addEventListener('scroll', onScroll);
+		return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+	return <div className="contents" ref={resultsRef} >
+		{api==null || api.req!.page!=page ? <Loading/> : (api.res.results.length>0 ? //:)
+				<>
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-8" >
+						{api.res.results.map(x => <Card key={`${x.course.id}\n${x.course.varTitle}`}
+							termFilter={terms.length==0 ? undefined : terms}
+							course={x.course} />)}
+					</div>
+					<div className="w-full flex flex-col items-center" >
+						<Pagination total={api.res.npage} initialPage={api.req!.page+1} onChange={
+							(page) => setPage(page-1)
+						} ></Pagination>
+					</div>
+				</>
+				:
+				<div className='flex flex-col h-full w-full items-center justify-center align-center gap-2 mt-5 mb-11'>
+					<IconMoodLookDown size={50} color='#DAAA00' />
+					<Text v="bold" >No results found!</Text>
+					{filtering && <Text v="sm" >Maybe try changing the filters?</Text>}
+				</div>)}
+
+		{scrollToTop && <IconButton className="fixed z-50 w-12 h-12 rounded-full right-12 bottom-20 dark:shadow-black shadow-white shadow-sm move-in-bottom group"
+			onClick={() => window.scrollTo({ behavior: "smooth", top: 0 })} 
+			icon={<IconArrowUp className="mx-auto my-auto group-hover:-translate-y-0.5 transition" />} />}
+	</div>;
+}
+
+export function Search({init, autoFocus, clearSearch, setSearchState, includeLogo}: {
+	init: Partial<SearchState>, autoFocus?:boolean,
+	clearSearch?: ()=>void, setSearchState: (s:SearchState)=>void,
+	includeLogo?: boolean
+}) {
 	const searchState = {...defaultSearchState, ...init};
 	const info = useInfo();
 
@@ -136,27 +183,10 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 
 	const [filtersCollapsed, setFiltersCollapsed] = useState(true);
 
-	const [scrollToTop, setScrollToTop] = useState(false);
-	const searchBarRef = useRef<HTMLDivElement>(null);
-	useEffect(() => {
-		const onScroll = () => {
-			if (searchBarRef.current!==null)
-				setScrollToTop(window.scrollY>searchBarRef.current.offsetTop+400);
-		};
-
-		window.addEventListener('scroll', onScroll);
-		return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
 	return <>
-		{scrollToTop && <IconButton className="fixed z-50 w-12 h-12 rounded-full right-12 bottom-20 dark:shadow-black shadow-white shadow-sm hover:-tranzinc-y-0.5 transition"
-			onClick={() => searchBarRef.current?.scrollIntoView({ behavior: "smooth" })} 
-			icon={<IconArrowUp className="mx-auto my-auto" />} />}
+		{includeLogo && <LogoBar onClick={clearSearch} />}
 
-		{includeLogo && <LogoBar ref={searchBarRef} onClick={clearSearch} />}
-
-		{/* Search Bar */}
-		<div className="mb-3" ref={includeLogo ? undefined : searchBarRef} >
+		<div className="mb-3" >
 			<input
 				maxLength={info.searchLimit}
 				autoFocus={autoFocus} id="search" type="text"
@@ -309,27 +339,9 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 			</Collapse>
 		</div>
 
-		{api==null || api.req!.page!=searchState.page
-			? <Loading/> : (api.res.results.length>0 ? //:)
-				<>
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-8">
-						{api.res.results.map(x => <Card key={`${x.course.id}\n${x.course.varTitle}`}
-							termFilter={searchState.terms.length==0 ? undefined : searchState.terms}
-							course={x.course} />)}
-					</div>
-					<div className="w-full flex flex-col items-center" >
-						<Pagination total={api.res.npage} initialPage={api.req!.page+1} onChange={
-							(page) => mod({page: page-1})
-						} ></Pagination>
-					</div>
-				</>
-				:
-				<div className='flex flex-col h-full w-full items-center justify-center align-center gap-2 mt-5 mb-11'>
-					<IconMoodLookDown size={50} color='#DAAA00' />
-					<Text v="bold" >No results found!</Text>
-					{activeFilters.length>0 && <Text v="sm" >Maybe try changing the filters?</Text>}
-				</div>)}
+		<SearchResults api={api} page={searchState.page} setPage={(page)=>mod({page})}
+			filtering={activeFilters.length>0} terms={searchState.terms} />
 
-		<Footer />
+		{includeLogo && <Footer />}
 	</>;
 }

@@ -1,7 +1,7 @@
 import { IconBell, IconMail } from "@tabler/icons-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { twMerge } from "tailwind-merge";
-import { RegisterNotificationRequest, type Notification } from "../../shared/availability";
+import { RegisterNotificationRequest, RegisterNotificationResponse, type Notification } from "../../shared/availability";
 import { UserData } from "../../shared/posts";
 import { CourseId, formatTerm, latestTerm, Section, SmallCourse, Term, toSmallCourse, trimCourseNum } from "../../shared/types";
 import { CourseLink } from "./card";
@@ -16,7 +16,7 @@ function Notification({id, course, satisfied, section, sent, term}: Notification
 	const del = callAPI<void, number>("notifications/delete", "redirect");
 	const ctx = useContext(AvailabilityUpdateCtx);
 
-	return <div className={twMerge(containerDefault, "border p-2 flex flex-col gap-1 px-4")} >
+	return <div className={twMerge(containerDefault, "p-2 flex flex-col gap-1 px-4")} >
 		<div className="flex flex-row items-center" >
 			<Text v="bold" >
 				<CourseLink course={course} type="course" />
@@ -48,11 +48,12 @@ function Notification({id, course, satisfied, section, sent, term}: Notification
 function NotificationCreator({course, section, fixTerm, update}: {
 	course: CourseId, section?: Section, fixTerm?: Term, update: ()=>void
 }) {
-	const register = callAPI<void, RegisterNotificationRequest>("notifications/register", "redirect");
+	const register = callAPI<RegisterNotificationResponse, RegisterNotificationRequest>("notifications/register", "redirect");
 	const terms = Object.keys(course.course.sections) as Term[];
 	const latest = latestTerm(course.course)!;
 	const [term, setTerm] = useState(fixTerm ?? latest);
 	const ctx = useContext(ModalCtx)!;
+	const app = useContext(AppCtx);
 	const sm = useMemo(()=>toSmallCourse(course), []);
 	const email = useAPI<UserData>("user", {auth: "redirect"});
 
@@ -73,7 +74,7 @@ function NotificationCreator({course, section, fixTerm, update}: {
 			You will be notified for openings in <b>{formatTerm(term)}</b>.
 		</Text>}
 
-		{term!=latest && <Alert txt={`The term you selected is older than the latest term (${formatTerm(latest)}) and will be updated very infrequently, so you may not get notifications. Use the latest term for frequent updates.`} title="Outdated term" />}
+		{term!=latest && <Alert txt={`The term you selected is older than the latest term (${formatTerm(latest)}). It will likely be updated infrequently, so you may not get notifications. Use the latest term to stay updated.`} title="Outdated term" />}
 
 		{email && <Text>Notifications will be sent to <b>{email.res.email}</b></Text>}
 
@@ -89,7 +90,17 @@ function NotificationCreator({course, section, fixTerm, update}: {
 						threshold: 1, term: term
 					},
 					cb(r) {
-						if (r) {update(); ctx.closeModal();}
+						if (r) {
+							update();
+							ctx.closeModal();
+							if (r.res.verify) {
+								app.open({
+									type: "other", name: "Verify your email",
+									modal: "To finish registering, please verify your email. We just sent something to you (though it may take a minute to arrive, or end up in spam)."
+								});
+							}
+						}
+
 						ctx.setLoading(false);
 					}
 				})

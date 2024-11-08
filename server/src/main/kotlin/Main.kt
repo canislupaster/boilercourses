@@ -12,6 +12,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.io.File
 import java.security.MessageDigest
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -96,8 +97,10 @@ suspend fun main(args: Array<String>) = coroutineScope {
         val searchRateLimit = RateLimiter(10, 1.seconds)
         val dataRateLimit = RateLimiter(1, 5.seconds)
         val loginRateLimit = RateLimiter(3, 3.seconds)
-        val allRateLimit = RateLimiter(25, 2.seconds)
+        val allRateLimit = RateLimiter(50, 2.seconds)
         val isFF = environment.getProperty("useForwardedFor")=="true"
+
+        val viewRateLimit = RateLimiter(1, 8.hours)
 
         before {
             if (isFF) ctx.header("X-Forwarded-For").valueOrNull()?.let {
@@ -155,6 +158,15 @@ suspend fun main(args: Array<String>) = coroutineScope {
                 }
             }
 
+            post("/view") {
+                ctx.json<Int>().let {
+                    if (runCatching { viewRateLimit.check("${ctx.remoteAddress}\n$it") }.isSuccess) {
+                        db.addCourseView(it)
+                    }
+                }
+                ctx.resp(Unit)
+            }
+
             @Serializable data class LookupRequest(val subject: String, val course: Int)
             post("/lookup") {
                 ctx.json<LookupRequest>().let {
@@ -162,9 +174,10 @@ suspend fun main(args: Array<String>) = coroutineScope {
                 }
             }
 
+            post("/mostviewed") { ctx.resp(courses.mostViewed()) }
+
             post("/similar") {
                 searchRateLimit.check(ctx.remoteAddress)
-
                 ctx.json<Int>().let { ctx.resp(courses.similarCourses(it)) }
             }
 

@@ -18,61 +18,69 @@ import { IconPaperclip, IconWorld } from "@tabler/icons-react";
 import Image from "next/image";
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import Select, { MultiValue } from "react-select";
-import { Attachment, CourseId, CourseInstructor, creditStr, emptyInstructorGrade, formatTerm, InstructorGrade, InstructorGrades, latestTerm, mergeGrades, RMPInfo, Section, SmallCourse, Term, termIdx, toSmallCourse, trimCourseNum } from "../../../../shared/types";
+import { allCourseInstructors, Attachment, CourseId, CourseInstructor, creditStr, emptyInstructorGrade, formatTerm, InstructorGrade, latestTerm, mergeGrades, RMPInfo, Section, sectionsByTerm, SmallCourse, Term, termIdx, toSmallCourse, trimCourseNum } from "../../../../shared/types";
 import boilerexams from "../../../public/boilerexams-icon.png";
 import boilerexamsCourses from "../../boilerexamsCourses.json";
 
 const useSmall = (cid: CourseId) => useMemo(()=>toSmallCourse(cid),[cid.id]);
 
-function InstructorGradeView({xs,type,cid,term}: {xs: CourseInstructor[], cid: CourseId, term: Term, type:"rmp"|"gpa"}) {
+function InstructorGradeView({xs,type,cid,term}: {
+	xs: [CourseInstructor, Term][], cid: CourseId, term: Term, type:"rmp"|"gpa"
+}) {
 	let res: (RMPInfo|null)[]|null=null;
 	const small = useSmall(cid);
 	const isMd = useMd();
 	if (type=="rmp") {
-		const o=useAPI<(RMPInfo|null)[],string[]>("rmp", {data: xs.map(x=>x.name)});
+		const o=useAPI<(RMPInfo|null)[],string[]>("rmp", {data: xs.map(x=>x[0].name)});
 		if (o==null) return <Loading/>
 
 		res=o.res;
 	}
 
-	const out: [CourseInstructor, number|null][] = xs.map((i,j) => {
+	const out: [[CourseInstructor, Term], number|null, boolean][] = xs.map(([i,inTerm],j) => {
 		if (type=="gpa" && cid.course.instructor[i.name]!=undefined) {
 			const g = mergeGrades(Object.values(cid.course.instructor[i.name]));
-			if (g.gpa!=null) return [i,g.gpa];
+			if (g.gpa!=null) return [[i,inTerm],g.gpa,inTerm==term];
 		} else if (type=="rmp" && res!=null && res[j]!=null && res[j].numRatings>0) {
-			return [i,res[j].avgRating];
+			return [[i,inTerm],res[j].avgRating,inTerm==term];
 		}
 
-		return [i,null]
+		return [[i,inTerm],null,inTerm==term]
 	});
 
-	return <BarsStat lhs={i=>
-			<ProfLink x={i} className="font-semibold text-nowrap"
-				course={small} term={term}
-				label={abbr(i.name, isMd ? 35 : 20)} />
-			} className="grid-cols-[4fr_10fr_1fr] "
-			vs={out} type={type} />
+	return <BarsStat lhs={([i, inTerm], b)=>{
+		return <ProfLink x={i} className="font-semibold text-nowrap"
+			course={small} term={inTerm} labelTerm={!b}
+			label={abbr(i.name, (isMd ? 35 : 20) - (!b ? 13 : 0))} />;
+	}} className="grid-cols-[4fr_10fr_1fr]" vs={out} type={type} />
 }
 
-function InstructorSemGPA({xs, term, cid}: {xs: CourseInstructor[], term: Term, cid: CourseId}) {
+function InstructorSemGPA({xs, term, cid}: {
+	xs: [CourseInstructor, Term][], term: Term, cid: CourseId
+}) {
 	const idx = termIdx(term);
 
-	const vs = xs.map((x): [CourseInstructor, InstructorGrades] => [
-			x, cid.course.instructor[x.name] ?? {}
-		]).map(([i,x]): [CourseInstructor, [Term, number|null, number][]] => [
-			i, Object.entries(x).filter(([sem,]) => termIdx(sem as Term)<=idx)
-				.map(([sem,v])=>[sem as Term, v?.gpa ?? null, v?.numSections ?? 0]),
-		]);
+	const vs = xs.map(([x,inTerm]): [[CourseInstructor, Term], [Term, number|null, number][], boolean] => {
+		const termGrades = cid.course.instructor[x.name] ?? {};
+
+		const semGrades = Object.entries(termGrades).filter(([sem,]) => termIdx(sem as Term)<=idx)
+			.map(([sem,v]): [Term, number|null, number]=>[sem as Term, v?.gpa ?? null, v?.numSections ?? 0]);
+
+		return [[x, inTerm], semGrades, inTerm==term];
+	});
 	
 	const small = useSmall(cid);
-	return <NameSemGPA vs={vs} lhs={i=>
-		<ProfLink className='font-bold text-lg' x={i} course={small} term={term} />
+	return <NameSemGPA vs={vs} lhs={([i, inTerm], b)=>
+		<ProfLink className='font-bold text-lg' x={i} course={small}
+			term={inTerm} labelTerm={!b} />
 	} />;
 }
 
 const averageInstructor = {type: "avg"} as const;
 
 function CourseDetail(cid: CourseId) {
+	useAPI<void, number>("view", { data: cid.id });
+
 	const latest = latestTerm(cid.course)!;
 	const [term, setTerm] = searchState<Term>(latest, (p) => p.get("term") as Term|null,
 		(x)=> x==latest ? null : new URLSearchParams([["term",x]]))
@@ -83,10 +91,17 @@ function CourseDetail(cid: CourseId) {
 
 	const small = useSmall(cid);
 	const instructors = useMemo(()=>small.termInstructors[term] ?? [], [term]);
+	const allInstructors = useMemo(()=>allCourseInstructors(cid.course, term), [term]);
+	const instructorToTerm = useMemo(()=> new Map<string, Term>([
+		...sectionsByTerm(cid.course).flatMap(([secTerm,secs])=>
+			secs.flatMap(sec=>sec.instructors.map(i=>[i.name, secTerm] satisfies [string, Term]))),
+		...cid.course.sections[term].flatMap(sec=>sec.instructors.map(i=>[i.name, term] satisfies [string, Term]))
+	]), [term]);
 
 	const searchInstructors = useDebounce(() => {
 		const v = simp(instructorSearch);
-		return instructors.filter(x => simp(x.name).includes(v));
+		return allInstructors.filter(x => simp(x.name).includes(v))
+			.map((v): [CourseInstructor, Term]=>[v, instructorToTerm.get(v.name)!]);
 	}, 100, [term, instructorSearch]);
 
 	const [section, setSection] = useState<Section|null>(null);
@@ -105,7 +120,7 @@ function CourseDetail(cid: CourseId) {
 	const gradesForTerm = useMemo(()=>
 		mergeGrades(Object.values(course.instructor).map(x=>x[term] ?? emptyInstructorGrade)), [term]);
 
-	const hasGrades = instructors.some(x=>course.instructor[x.name]!==undefined);
+	const hasGrades = allInstructors.some(x=>course.instructor[x.name]!==undefined);
 	type GradeInstructorOption = ({type:"instructor"}&CourseInstructor)|typeof averageInstructor;
 	const [selectedInstructors, setSelInstructors] = useState<GradeInstructorOption[]>(
 		hasGrades ? [averageInstructor] : []
@@ -117,11 +132,11 @@ function CourseDetail(cid: CourseId) {
 				mergeGrades(Object.values(course.instructor).flatMap(x=>Object.values(x)))]
 			: [x.name,course.instructor[x.name]==undefined ? emptyInstructorGrade
 				: mergeGrades(Object.values(course.instructor[x.name]))]
-		), [selectedInstructors, term, course]);
+		), [selectedInstructors]);
 
 	const gradeInstructors: GradeInstructorOption[] = useMemo(()=>
-		[averageInstructor, ...instructors.map((x): GradeInstructorOption=>
-			({type: "instructor", ...x}))], [instructors]);
+		[averageInstructor, ...allInstructors.map((x): GradeInstructorOption=>
+			({type: "instructor", ...x}))], []);
 
 	return <SelectionContext.Provider value={{
 		selTerm(term) {
@@ -189,13 +204,13 @@ function CourseDetail(cid: CourseId) {
 			<Restrictions restrictions={course.restrictions} />
 
 			{attachmentsTerm.length>0 && <>
-				<Text v="md" >Attachments</Text>
-				<div className={`border p-2 flex flex-col gap-2 ${containerDefault} overflow-y-auto max-h-[8rem] md:max-h-[15rem]`} >
+				<Text v="md" className="mt-2" >Attachments</Text>
+				<div className={`p-2 flex flex-col gap-2 ${containerDefault} overflow-y-auto max-h-[8rem] md:max-h-[15rem]`} >
 					{attachmentsTerm.map(([t, attachments]) => <React.Fragment key={t} >
 						<Text v="bold" >{formatTerm(t)}</Text>
 						<div className="flex flex-row gap-2 flex-wrap" >
 							{attachments.map((attach,i) => {
-								const inner = <div className="flex flex-col gap-1 items-start justify-stretch" >
+								const inner = <div className="flex flex-col gap-0.5 items-start justify-stretch" >
 									<Text v="smbold" >{abbr(attach.name, 35)}</Text>
 									<div className="flex flex-row flex-wrap" >
 										<Text v="dim" >{abbr(attach.author, 20)}</Text>
@@ -204,7 +219,8 @@ function CourseDetail(cid: CourseId) {
 									</div>
 								</div>;
 
-								const icon = attach.type=="web" ? <IconWorld/> : <IconPaperclip/>;
+								//bro why is the height fixed to 1rem while width is like auto...
+								const icon = attach.type=="web" ? <IconWorld className="h-auto" /> : <IconPaperclip className="h-auto" />;
 								const cls = bgColor.secondary;
 
 								if (attach.href)

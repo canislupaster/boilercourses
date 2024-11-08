@@ -1,0 +1,12 @@
+[
+	{
+		"type": "normal",
+		"start": 1731027626, "end": 1731107338,
+		"message": "Sorry about yesterday's outage, my server died. To make things up, I made a couple additions. Thanks for using BoilerCourses."
+	},
+	{
+		"type": "deadline",
+		"end": 1731621600, "title": "Course Request Forms are due soon",
+		"message": "Remember to submit your CRFs by Nov. 14th at 5 pm!"
+	}
+]

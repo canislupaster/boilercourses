@@ -297,7 +297,7 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 	const app = useContext(AppCtx);
 	const ctx = useContext(PostRefreshHook);
 
-	return <div className={`border flex flex-col gap-3 p-5 ${containerDefault}`} >
+	return <div className={`flex flex-col gap-3 p-5 ${containerDefault}`} >
 		<div className="flex flex-row gap-3 items-center w-full justify-start flex-wrap" >
 			{adminPost==null ? <Text v="bold" className="flex flex-row gap-1 items-center" >
 				<IconUserCircle/>
@@ -393,7 +393,7 @@ function CreatePostButton({postLimit, course, post}: {postLimit: number, course:
 	});
 
 	return <div className="flex flex-col gap-1 items-center" >
-		<Button onClick={()=>create(postLimit)} >{post && post.text!=null ? "Edit post" : "Create post"}</Button>
+		<Button onClick={()=>create(postLimit)} >{post && post.text!=null ? "Edit your post" : "Got something to say?"}</Button>
 		{(post==undefined || post.text==null) && <>
 			<Text v="dim" >or {post ? "update your" : "leave a"} rating</Text>
 			{make.loading || del.loading
@@ -424,7 +424,7 @@ export function Community({course}: {course: SmallCourse}) {
 
 	useEffect(refresh, [sortBy, app.hasAuth]);
 
-	return <div className={twMerge("flex items-stretch flex-col gap-2 border-1 p-5 pt-2", containerDefault, bgColor.secondary)} ><PostRefreshHook.Provider value={refresh} >
+	return <div className={twMerge("flex items-stretch flex-col gap-2 p-5 pt-2", containerDefault, bgColor.secondary)} ><PostRefreshHook.Provider value={refresh} >
 		<div className="flex flex-col items-center gap-3 md:flex-row justify-between" >
 			<div className="flex flex-row gap-2 items-center flex-wrap" >
 				<Text v="md" >Community</Text>
@@ -442,7 +442,9 @@ export function Community({course}: {course: SmallCourse}) {
 		</div>
 
 		<div className="py-3 md:px-7">
-			{posts==null ? <Loading/> : <div className="flex flex-col gap-2 overflow-y-auto max-h-96 md:max-h-[40rem] mb-5" >
+			{posts==null ? <div>
+				<Loading className="py-5" />
+			</div> : <div className="flex flex-col gap-2 overflow-y-auto max-h-96 md:max-h-[40rem] mb-5" >
 				{posts.res.edit?.text!=null && <PostCard
 					post={{...posts.res.edit, text: posts.res.edit.text}}
 					key={posts.res.edit.id} yours editButton={
@@ -452,14 +454,13 @@ export function Community({course}: {course: SmallCourse}) {
 			</div>}
 
 			<div className="flex flex-col items-center justify-center gap-2" >
+				{posts?.res.posts.length==0 && <p>No reviews yet...</p>}
 				{posts!=null && app.hasAuth ? (posts?.res.edit==null ? <>
-					{posts?.res.posts.length==0 && <p>Nobody has contributed to this course yet!</p>}
 					<CreatePostButton postLimit={posts.res.postLimit} course={course.id} />
 				</> : <>
 					<CreatePostButton postLimit={posts.res.postLimit} course={course.id} post={posts.res.edit} />
 				</>) : <>
-					{posts?.res.posts.length==0 && <p>Nobody has contributed to this course.</p>}
-					<p><b>Want to add a post?</b></p>
+					<p><b>Have something to say?</b></p>
 					<Button onClick={()=>redir()} >Login</Button>
 				</>}
 			</div>

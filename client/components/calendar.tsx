@@ -1,18 +1,10 @@
 import { IconFilter } from "@tabler/icons-react";
 import React, { useContext, useState } from "react";
 import { twMerge } from "tailwind-merge";
-import { Course, scheduleAbbr, Section, SmallCourse, Term, validDays } from "../../shared/types";
+import { Course, minutesInDay, scheduleAbbr, Section, SmallCourse, Term, validDays } from "../../shared/types";
 import { SelectionContext, ShowMore, simp, useDebounce } from "./clientutil";
 import { SectionLink } from "./sectionlink";
-import { abbr, bgColor, borderColor, containerDefault, Input, Text, textColor } from "./util";
-
-function minutesInDay(t: string) {
-	const re = /(\d+):(\d+) (am|pm)/;
-	const m = t.match(re);
-	if (m==null) throw new Error("invalid time");
-
-	return 60*(Number.parseInt(m[1])%12)+Number.parseInt(m[2])+(m[3]=="pm" ? 12*60 : 0);
-}
+import { abbr, bgColor, borderColor, containerDefault, Divider, Input, Text, textColor } from "./util";
 
 export function calendarDays(course: Course, term: Term) {
 	const secs = course.sections[term];
@@ -44,7 +36,7 @@ export function Calendar({sections: secs, term}: {
 		.map(x=>validDays.indexOf(x))
 		.sort().map(x=>validDays[x]);
  
-	return <div className={twMerge("flex flex-col items-stretch gap-4 rounded-xl border p-2 md:p-4", containerDefault, bgColor.secondary)} >
+	return <div className={twMerge("flex flex-col items-stretch gap-4 rounded-xl p-2 md:p-4", containerDefault, bgColor.secondary)} >
 		<Input value={search} onChange={ev=>setSearch(ev.target.value)}
 			placeholder="Filter sections..." icon={<IconFilter/>} />
 		{sortedDays.length==0 ?
@@ -80,10 +72,10 @@ export function Calendar({sections: secs, term}: {
 
 									<p className="font-bold font-display" >{name ?? sec.scheduleType}</p>
 									{sec.name && <p className="font-bold font-display text-sm" >{sec.name}</p>}
-									<div className={`text-xs flex flex-row items-stretch gap-1 ${hi ? textColor.contrast : textColor.gray}`} >
+									<div className={`text-xs flex flex-row items-center gap-1 ${hi ? textColor.contrast : textColor.gray}`} >
 										{content.map((x,i) => <React.Fragment key={i} >
 											<span>{x}</span>
-											{i<content.length-1 && <div className={`mx-1 w-px my-0.5 ${hi ? bgColor.contrast : bgColor.divider}`} ></div>}
+											{i<content.length-1 && <Divider className={`mx-0.5 h-3 ${hi ? bgColor.contrast : bgColor.divider}`} />}
 										</React.Fragment>)}
 									</div>
 								</SectionLink>

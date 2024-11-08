@@ -4,14 +4,14 @@ import { PublicClientApplication } from "@azure/msal-browser";
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/popover";
 import { Progress } from "@nextui-org/progress";
 import { Tooltip, TooltipPlacement } from "@nextui-org/tooltip";
-import { IconArrowLeft, IconChevronDown, IconChevronUp, IconFilterFilled, IconInfoCircle, IconInfoTriangleFilled } from "@tabler/icons-react";
+import { IconArrowLeft, IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp, IconFilterFilled, IconInfoCircle, IconInfoTriangleFilled } from "@tabler/icons-react";
 import Link, { LinkProps } from "next/link";
 import React, { HTMLAttributes, PointerEvent, useContext, useEffect, useRef, useState } from "react";
 import { Collapse } from "react-collapse";
 import { default as Select, SingleValue } from "react-select";
 import { twMerge } from "tailwind-merge";
 import { formatTerm, Section, Term, termIdx } from "../../shared/types";
-import { Anchor, bgColor, borderColor, Button, Input, selectProps, Text, textColor } from "./util";
+import { Anchor, bgColor, borderColor, Button, containerDefault, Input, selectProps, Text, textColor } from "./util";
 import { AppCtx, useInfo } from "./wrapper";
 
 export type SelectionContextType = {
@@ -60,11 +60,14 @@ export const useLg = () => {
 	return useMediaQuery(queries.lg);
 };
 
-export function gpaColor(gpa: number|null): string|undefined {
-	if (gpa==null) return undefined;
-	return useContext(AppCtx).theme=="dark"
-		? `hsl(${13+(107-13)*Math.pow(gpa,2.5)/Math.pow(4.0,2.5)}, 68%, 42%)`
-		: `hsl(${13+(107-13)*Math.pow(gpa,2.5)/Math.pow(4.0,2.5)}, 75%, 60%)`;
+export function useGpaColor() {
+	const isDark = useContext(AppCtx).theme=="dark";
+	return (gpa: number|null): string|undefined => {
+		if (gpa==null) return undefined;
+		return isDark
+			? `hsl(${13+(107-13)*Math.pow(gpa,2.5)/Math.pow(4.0,2.5)}, 68%, 42%)`
+			: `hsl(${13+(107-13)*Math.pow(gpa,2.5)/Math.pow(4.0,2.5)}, 75%, 60%)`;
+	};
 }
 
 export function useDebounce<T>(f: ()=>T, debounceMs: number, deps: React.DependencyList): T {
@@ -206,29 +209,34 @@ export function StyleClasses({f,classStyles}: {f: (setRef: React.Ref<HTMLElement
 	return f(ref);
 }
 
-export function BarsStat<T>({lhs,type,vs,className}: {lhs: (x: T)=>React.ReactNode, type: "gpa"|"rmp", vs: [T,number|null][], className?: string}) {
-	if (vs.length==0) return <Text v="md" className="w-full text-center mt-5" >
+export function BarsStat<T>({lhs,type,vs,className}: {
+	lhs: (x: T, inTerm: boolean)=>React.ReactNode,
+	type: "gpa"|"rmp", vs: [T,number|null, boolean][], className?: string
+}) {
+	const gpaColor = useGpaColor();
+
+	if (vs.length==0) return <Text v="md" className="w-full text-center mt-5 mb-3" >
 		No data available
 	</Text>;
 
-	const y=vs.toSorted((a,b)=>(b[1]??-1) - (a[1]??-1)).map(([i,x], j)=>{
+	const y=vs.toSorted((a,b)=>{
+		return (b[1]??-1) - (a[1]??-1);
+	}).map(([i,x,b], j): [boolean, React.ReactNode]=>{
 		if (x==null) {
-			return <React.Fragment key={j} >
-				{lhs(i)}
+			return [b,<React.Fragment key={j} >
+				{lhs(i, b)}
 				<div className="col-span-2 flex-row flex items-center" >
 					<span className={`h-0.5 border-b border-dotted flex-grow mx-2 ${borderColor.default}`} />
 					<p className="col-span-2 my-auto ml-auto" >
 						No {type=="rmp" ? "rating" : "grades"} available
 					</p>
 				</div>
-			</React.Fragment>;
+			</React.Fragment>];
 		}
 
 		const c = gpaColor(type=="gpa" ? x : x-1);
-
-		return <React.Fragment key={-j} >
-			{lhs(i)}
-
+		return [b,<React.Fragment key={-j} >
+			{lhs(i, b)}
 			<div className="flex flex-row items-center" >
 				<StyleClasses f={(ref)=>
 					<Progress value={x} minValue={type=="gpa" ? 0 : 1} maxValue={type=="gpa" ? 4 : 5} classNames={{
@@ -241,57 +249,72 @@ export function BarsStat<T>({lhs,type,vs,className}: {lhs: (x: T)=>React.ReactNo
 			<span className="px-2 py-1 rounded-lg my-auto font-black font-display text-xl text-center" style={{backgroundColor: c}} >
 				{x.toFixed(1)}
 			</span>
-		</React.Fragment>;
+		</React.Fragment>];
 	});
 
+	const fst=y.filter(v=>v[0]), snd=y.filter(v=>!v[0]);
 	return <div className={twMerge("grid gap-2 grid-cols-[2fr_10fr_1fr] items-center", className)} >
-		{y}
+		{fst.map(x=>x[1])}
+		{snd.length>0 && <>
+			{fst.length>0 && <Text v="bold" className="col-span-3" >Other terms</Text>}
+			{snd.map(x=>x[1])}
+		</>}
 	</div>;
 }
 
-export function NameSemGPA<T>({vs,lhs}: {vs: [T, [Term, number|null, number|null][]][], lhs: (x: T)=>React.ReactNode}) {
+export function NameSemGPA<T>({vs,lhs}: {
+	vs: [T, [Term, number|null, number|null][], boolean][],
+	lhs: (x: T, inTerm: boolean)=>React.ReactNode
+}) {
 	const selCtx = useContext(SelectionContext);
+	const gpaColor = useGpaColor();
 	
+	const numSems = useMd() ? 5 : 3;
 	const sems = [...new Set(vs.flatMap(x => x[1]).map(x=>x[0]))]
-		.sort((a,b) => termIdx(a)-termIdx(b)).slice(-5);
+		.sort((a,b) => termIdx(a)-termIdx(b)).slice(-numSems);
 
 	if (sems.length==0)
-		return <Text v="md" className="text-center mt-5" >No data available</Text>;
+		return <Text v="md" className="text-center mt-5 mb-3" >No data available</Text>;
 
-	const sorted = vs.map((x):[T, [Term, number|null, number|null][], number]=> {
+	const sorted = vs.map((x):[T, [Term, number|null, number|null][], number, boolean]=> {
 		const bySem = new Map(x[1].map(v=>[v[0],v]));
-		return [
-			x[0],
-			sems.map(s=>{
-				const y = bySem.get(s);
-				return [s,y?.[1] ?? null,y?.[2] ?? null];
-			}),
-			x[1].reduce((a,b)=>a+(b[1]!=null ? 1 : 0), 0)
-		];
-	}).sort((a,b)=>b[2]-a[2]);
-	
-	return <div>
-		{sorted.map(([i, x], j) => (
-			<div key={j} className='flex flex-col mt-1'>
-				{lhs(i)}
-				<div className='grid grid-flow-col auto-cols-fr justify-stretch'>
-					{x.map(([sem, gpa, sections]) => (
-						<div key={sem} className='flex flex-col mt-2'>
-							<div className="flex flex-col h-12 items-center justify-center py-5"
-								style={{backgroundColor: gpaColor(gpa)}} >
 
-								<Text v="bold" className='font-black' >{gpa?.toFixed(1) ?? "?"}</Text>
-								{sections!=null && <Text v="sm" >
-									{sections} section{sections==1?"":"s"}
-								</Text>}
-							</div>
-							<Anchor onClick={() => selCtx.selTerm(sem)}
-								className={`${textColor.gray} text-sm justify-center text-center`} >{formatTerm(sem)}</Anchor>
+		let count=0;
+		const semData = sems.map(s=>{
+			const y = bySem.get(s);
+			if (y?.[1]) count++;
+			return [s,y?.[1] ?? null,y?.[2] ?? null];
+		}) satisfies [Term, number|null, number|null][];
+
+		return [ x[0], semData, count, x[2] ];
+	}).sort((a,b)=>b[2]-a[2]);
+
+	const nodes = sorted.map(([i, x, _, b], j) => 
+		[b, <div key={j} className='flex flex-col mt-1'>
+			{lhs(i, b)}
+			<div className='grid grid-flow-col auto-cols-fr justify-stretch'>
+				{x.map(([sem, gpa, sections]) => (
+					<div key={sem} className='flex flex-col mt-2'>
+						<div className="flex flex-col h-12 items-center justify-center py-5"
+							style={{backgroundColor: gpaColor(gpa)}} >
+
+							<Text v="bold" className='font-black' >{gpa?.toFixed(1) ?? "?"}</Text>
+							{sections!=null && <Text v="sm" >
+								{sections} section{sections==1?"":"s"}
+							</Text>}
 						</div>
-					))}
-				</div>
+						<Anchor onClick={() => selCtx.selTerm(sem)}
+							className={`${textColor.gray} text-sm justify-center text-center`} >{formatTerm(sem)}</Anchor>
+					</div>
+				))}
 			</div>
-		))}
+		</div>] as const
+	);
+	
+	const fst = nodes.filter(x=>x[0]), snd=nodes.filter(x=>!x[0]);
+	return <div>
+		{fst.map(x=>x[1])}
+		{snd.map(x=>x[1])}
 	</div>;
 }
 
@@ -397,6 +420,12 @@ export function MoreButton({children, className, act: hide, down}: {act: ()=>voi
 	</div>
 }
 
+export const fadeGradient = {
+	default: "from-transparent dark:to-neutral-950 to-zinc-100",
+	primary: "from-transparent dark:to-zinc-800 to-zinc-200",
+	secondary: "from-transparent dark:to-zinc-900 to-zinc-150"
+};
+
 export function ShowMore({children, className, forceShowMore, inContainer}: {
 	children: React.ReactNode, className?: string, forceShowMore?: boolean, inContainer?: "primary"|"secondary"
 }) {
@@ -428,7 +457,7 @@ export function ShowMore({children, className, forceShowMore, inContainer}: {
 				</div>}
 
 				{!showMore &&
-					<div className={`absolute bottom-0 h-14 max-h-full bg-gradient-to-b from-transparent z-20 left-0 right-0 ${inContainer=="primary" ? "dark:to-zinc-800 to-zinc-200" : inContainer=="secondary" ? "dark:to-zinc-900 to-zinc-150" : "dark:to-neutral-950 to-zinc-100"}`} />}
+					<div className={`absolute bottom-0 h-14 max-h-full bg-gradient-to-b z-20 left-0 right-0 ${fadeGradient[inContainer ?? "default"]}`} />}
 			</div>
 
 			{showMore && <MoreButton act={()=>setShowMore(false)} className="pt-2" >
@@ -436,4 +465,45 @@ export function ShowMore({children, className, forceShowMore, inContainer}: {
 			</MoreButton>}
 		</Collapse>
 	</div>;
+}
+
+export function Carousel({items}: {items: React.ReactNode[]}) {
+	const carouselRef = useRef<HTMLDivElement>(null);
+	const [scrollLR, setScrollLR] = useState({l: false, r: false});
+	useEffect(() => {
+		const onScroll = () => {
+			setScrollLR({
+				l: carouselRef.current!.scrollLeft>50,
+				r: carouselRef.current!.scrollLeft+carouselRef.current!.offsetWidth+50<carouselRef.current!.scrollWidth
+			});
+		};
+
+		onScroll();
+		carouselRef.current!.addEventListener("scroll", onScroll);
+		return ()=>carouselRef.current?.removeEventListener("scroll", onScroll);
+	}, [])
+
+	return <div className="relative w-full" >
+		{scrollLR.l && <button className={`absolute left-0 w-20 ${fadeGradient.primary} bg-gradient-to-l flex flex-col justify-center items-start pl-2 h-full z-30 border-none outline-none group`}
+			onClick={()=>carouselRef.current!.scrollTo({
+				left: carouselRef.current!.scrollLeft-0.95*carouselRef.current!.clientWidth,
+				behavior: "smooth"
+			})} >
+			<IconChevronLeft size={35} className="group-hover:-translate-x-2 transition" />
+		</button>}
+		{scrollLR.r && <button className={`absolute right-0 w-20 ${fadeGradient.primary} bg-gradient-to-r flex flex-col justify-center items-end pr-2 h-full z-30 border-none outline-none group`}
+			onClick={()=>carouselRef.current!.scrollTo({
+				left: carouselRef.current!.scrollLeft+0.95*carouselRef.current!.clientWidth,
+				behavior: "smooth"
+			})} >
+			<IconChevronRight size={35} className="group-hover:translate-x-2 transition" />
+		</button>}
+		<div className={`flex flex-row flex-nowrap overflow-x-auto w-full ${containerDefault} p-1 gap-2 md:p-3 md:gap-3`} ref={carouselRef} >
+			{items.map((it,i)=>
+				<div className={`flex-shrink-0 basis-96 ${bgColor.secondary} max-w-[80dvw]`} key={i} >
+					{it}
+				</div>
+			)}
+		</div>
+	</div>
 }
