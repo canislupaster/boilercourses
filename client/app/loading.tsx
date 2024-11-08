@@ -1,7 +1,8 @@
-import { Loading } from "@/components/util";
+import { Text, ThemeSpinner } from "@/components/util";
 
 export default function LoadingApp() {
-  return <div className="h-dvh flex item-center justify-center" >
-		<Loading label="One moment please..." />
+  return <div className="h-dvh flex items-center justify-center flex-col gap-3" >
+		<ThemeSpinner size="lg" />
+		<Text v="sm" >Hold on just a sec...</Text>
 	</div>;
 }

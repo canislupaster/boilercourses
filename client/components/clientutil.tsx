@@ -290,7 +290,7 @@ export function NameSemGPA<T>({vs,lhs}: {
 	}).sort((a,b)=>b[2]-a[2]);
 
 	const nodes = sorted.map(([i, x, _, b], j) => 
-		[b, <div key={j} className='flex flex-col mt-1'>
+		[b, <div key={j} className='flex flex-col mt-1 mb-2'>
 			{lhs(i, b)}
 			<div className='grid grid-flow-col auto-cols-fr justify-stretch'>
 				{x.map(([sem, gpa, sections]) => (
@@ -319,15 +319,18 @@ export function NameSemGPA<T>({vs,lhs}: {
 }
 
 export function WrapStat({search, setSearch, title, children, searchName}: {search: string, setSearch: (x:string)=>void, title: string, children: React.ReactNode, searchName: string}) {
+	const md = useMd();
 	return <>
 		<Input icon={<IconFilterFilled/>} placeholder={`Filter ${searchName}...`}
 			value={search} onChange={v => setSearch(v.target.value)} />
 		<Text v="md" className="mt-2 mb-1" >{title}</Text>
-		<Collapse isOpened >
+		{md ? <Collapse isOpened >
 			<div className="max-h-[34rem] overflow-y-auto mb-2" >
 				{children}
 			</div>
-		</Collapse>
+		</Collapse> : <ShowMore maxh="34rem" className="mb-2" >
+			{children}
+		</ShowMore>}
 	</>;
 }
 
@@ -426,41 +429,48 @@ export const fadeGradient = {
 	secondary: "from-transparent dark:to-zinc-900 to-zinc-150"
 };
 
-export function ShowMore({children, className, forceShowMore, inContainer}: {
-	children: React.ReactNode, className?: string, forceShowMore?: boolean, inContainer?: "primary"|"secondary"
+export function ShowMore({children, className, maxh, forceShowMore, inContainer}: {
+	children: React.ReactNode, className?: string, maxh?: string,
+	forceShowMore?: boolean, inContainer?: "primary"|"secondary"
 }) {
 	const [showMore, setShowMore] = useState<boolean|null>(false);
 	const inner = useRef<HTMLDivElement>(null), ref=useRef<HTMLDivElement>(null);
 
 	useEffect(()=>{
-		if (showMore!=null && !forceShowMore
-			&& inner.current!.clientHeight<=ref.current!.clientHeight+100)
-			setShowMore(null); //not needed
-	}, [showMore!=null, forceShowMore]);
+		const a=inner.current!, b=ref.current!;
+		const check = () => {
+			const disableShowMore = !forceShowMore && a.scrollHeight<=b.clientHeight+100;
+			setShowMore(showMore=>disableShowMore ? null : (showMore ?? false));
+		};
 
-	if (showMore==null || forceShowMore)
-		return <div className={twMerge("overflow-y-auto max-h-dvh", className)} >
-			{children}
-		</div>;
+		const observer = new ResizeObserver(check);
+		observer.observe(a); observer.observe(b);
+		return ()=>observer.disconnect();
+	}, []);
+
+	const expanded = showMore==null || showMore==true || forceShowMore;
 
 	return <div className={className} >
 		<Collapse isOpened >
-			<div ref={ref} className={`relative ${showMore ? "" : "max-h-52 overflow-y-hidden"}`} >
-				<div ref={inner} className={showMore ? "overflow-y-auto max-h-dvh" : ""} >
+			<div ref={ref} className={`relative ${expanded ? "" : "max-h-52 overflow-y-hidden"}`} style={{maxHeight: expanded ? undefined : maxh}}>
+				<div ref={inner} className={expanded ? "overflow-y-auto max-h-dvh" : ""} >
 					{children}
 				</div>
 
-				{!showMore && <div className="absolute bottom-0 left-0 right-0 z-40" >
+				{!expanded && <div className="absolute bottom-0 left-0 right-0 z-40" >
 					<MoreButton act={()=>setShowMore(true)} down >
 						Show more
 					</MoreButton>
 				</div>}
 
-				{!showMore &&
+				{!expanded &&
 					<div className={`absolute bottom-0 h-14 max-h-full bg-gradient-to-b z-20 left-0 right-0 ${fadeGradient[inContainer ?? "default"]}`} />}
 			</div>
 
-			{showMore && <MoreButton act={()=>setShowMore(false)} className="pt-2" >
+			{showMore && <MoreButton act={()=>{
+				ref.current?.scrollIntoView({block: "start", behavior: "smooth"});
+				setShowMore(false)
+			}} className="pt-2" >
 				Show less
 			</MoreButton>}
 		</Collapse>

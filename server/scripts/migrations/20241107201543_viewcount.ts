@@ -4,12 +4,12 @@ export async function up(knex: Knex): Promise<void> {
 	if ((await knex("email_block").count({count: "*"}).first())?.count)
 		throw new Error("existing email blocks");
 
-	return knex.schema.alterTable("course", async tb=>{
-			if (!await knex.schema.hasColumn("course", "views"))
-				tb.integer("views").notNullable().defaultTo(0).index();
+	const hasViews = await knex.schema.hasColumn("course", "views");
+	return knex.schema.alterTable("course", tb=>{
+			if (!hasViews) tb.integer("views").notNullable().defaultTo(0).index();
 		})
 		.dropTable("email_block")
-		.createTable("email_block", async tb=>{
+		.createTable("email_block", tb=>{
 			tb.text("email").primary().notNullable();
 			tb.text("key").notNullable();
 			tb.boolean("blocked").defaultTo(false).notNullable();
@@ -23,7 +23,7 @@ export async function down(knex: Knex): Promise<void> {
 		throw new Error("existing email blocks");
 
 	return knex.schema.dropTable("email_block")
-		.createTable("email_block", async tb => {
+		.createTable("email_block", tb => {
 			tb.text("email").primary().notNullable();
 			tb.binary("key").notNullable();
 			tb.boolean("blocked").defaultTo(false).notNullable();
