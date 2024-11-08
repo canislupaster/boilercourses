@@ -14,25 +14,25 @@ class APIError extends Error {
 };
 
 //a much worse api wrapper for server
-export function api<T,>(endpoint: string, data?: unknown): Promise<T> {
-	const v = headers().get("X-Forwarded-For");
+export async function api<T,>(endpoint: string, data?: unknown): Promise<T> {
+	const v = (await headers()).get("X-Forwarded-For");
 	const fetchHdr = new Headers();
 	if (v!=null)
 		fetchHdr.append("X-Forwarded-For", v.slice(v.lastIndexOf(",")+1));
 
-	return fetch(`${process.env.SERVER_URL}/${endpoint}`, {
+	const res = await (await fetch(`${process.env.SERVER_URL}/${endpoint}`, {
 		method: "POST",
 		headers: fetchHdr,
-		body: data==undefined ? undefined : JSON.stringify(data),
-		next: { revalidate: process.env.NODE_ENV=="development" ? 0 : 3600 }
-	}).then((res) => res.json() as Promise<ServerResponse<T>>)
-		.then((res) => {
-			if (res.status=="error") {
-				if (res.error=="notFound") notFound();
-				throw new APIError(res);
-			}
-			return res.result;
-		});
+		body: data == undefined ? undefined : JSON.stringify(data),
+		cache: "no-cache" //its literally right here
+	})).json() as ServerResponse<T>;
+
+	if (res.status == "error") {
+		if (res.error == "notFound") notFound();
+		throw new APIError(res);
+	}
+
+	return res.result;
 }
 
 export function catchAPIError<T,A extends unknown[]>(f: (...args: A)=>Promise<T>): (...args: A) => Promise<T|ReturnType<typeof StatusPage>> {

@@ -5,9 +5,9 @@ import { CourseId, formatTerm, sectionsByTerm, Term, termIdx, trimCourseNum } fr
 import { Instructor } from "./instructor";
 
 export async function generateMetadata(
-  { params }: {params: {id: string}},
+  { params }: {params: Promise<{id: string}>},
 ): Promise<Metadata> {
-	const i = await profById(Number.parseInt(params.id));
+	const i = await profById(Number.parseInt((await params).id));
 
 	const title = `${i.instructor.name} at Purdue`;
 	const fs = i.instructor.name.split(/\s+/);
@@ -51,7 +51,7 @@ export async function generateMetadata(
   }
 }
 
-export default catchAPIError(async ({ params }: {params: {id: string}}) => {
-	const i = await profById(Number.parseInt(params.id));
+export default catchAPIError(async ({ params }: {params: Promise<{id: string}>}) => {
+	const i = await profById(Number.parseInt((await params).id));
 	return <Instructor instructor={i} />;
 });

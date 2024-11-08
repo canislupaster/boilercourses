@@ -50,7 +50,7 @@ function Countdown({until}: {until: number}) {
 			<div style={{backgroundColor: gpaColor(4-i)}} className="p-2 px-3 rounded-md shadow-md" >
 				<Text v="md" >{qty<10 ? `0${qty}` : qty}</Text>
 			</div>
-			<Text v="sm" >{name}{qty>1 ? "s" : ""}</Text>
+			<Text v="sm" >{name}{qty!=1 ? "s" : ""}</Text>
 		</div>)
 }
 
@@ -73,8 +73,10 @@ function Landing({setSearch}: {setSearch: (s: string) => void}) {
 						{msg.message}
 					</Text>
 					{msg.type=="deadline" && msg.end && <Collapse isOpened >
-						<div className="grid grid-cols-4 gap-4 items-stretch self-center" >
-							<Countdown until={msg.end} />
+						<div className="flex flex-col items-center" >
+							<div className="grid grid-cols-4 gap-2 items-stretch" >
+								<Countdown until={msg.end} />
+							</div>
 						</div>
 					</Collapse>}
 				</div>

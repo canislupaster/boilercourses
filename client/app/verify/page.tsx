@@ -3,9 +3,10 @@
 import { Alert } from "@/components/clientutil";
 import { Button, Loading, StatusPage, Text } from "@/components/util";
 import { AppCtx, useAPI } from "@/components/wrapper";
-import { useContext } from "react";
+import { use, useContext } from "react";
 
-export default function Verify({searchParams}: {searchParams: object}) {
+export default function Verify({searchParams: searchParamsAsync}: {searchParams: Promise<object>}) {
+	const searchParams = use(searchParamsAsync);
 	if (!("key" in searchParams) || !("email" in searchParams)
 			|| typeof searchParams.key!="string" || typeof searchParams.email!="string")
 		return <StatusPage title="We couldn't verify your email" >

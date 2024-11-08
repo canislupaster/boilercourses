@@ -5,9 +5,9 @@ import { creditStr, formatTerm, instructorStr, latestTerm, sectionsByTerm, trimC
 import { CourseDetailApp } from "./course";
 
 export async function generateMetadata(
-  { params }: {params: {id: string}},
+  { params }: {params: Promise<{id: string}>},
 ): Promise<Metadata> {
-	const id = Number.parseInt(params.id);
+	const id = Number.parseInt((await params).id);
 	if (isNaN(id)) notFound();
 
 	const course = (await courseById(id)).course;
@@ -40,8 +40,8 @@ export async function generateMetadata(
   }
 }
 
-export default catchAPIError(async ({ params }: {params: {id: string}}) => {
-	const id = Number.parseInt(params.id);
+export default catchAPIError(async ({ params }: {params: Promise<{id: string}>}) => {
+	const id = Number.parseInt((await params).id);
 	if (isNaN(id)) notFound();
 
 	const course = await courseById(id);
