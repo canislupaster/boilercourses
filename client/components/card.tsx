@@ -29,9 +29,7 @@ export function Card({ course, type, termFilter, className, extra, score }: {
     </div>
   </>;
 
-	//type doesn't change
   if (type=="list") {
-    console.log(score);
     const normScore = 1 - 1/(1 + (score ?? 0)*(score ?? 0)/10000);
 
     return <div className={twMerge(`flex flex-col gap-1 relative md:px-3 px-0.5 py-3 pl-2 md:pl-5 md:pb-4 pt-2 md:pt-3 border-t last:border-b`, borderColor.default, className)} >
