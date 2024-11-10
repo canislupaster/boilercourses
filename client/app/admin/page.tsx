@@ -159,7 +159,7 @@ export default function Admin() {
 	const redir = redirectToSignIn();
 	useEffect(()=>{
 		if (isAuthSet()) setLd(false);
-		else redir();
+		else redir(undefined, "/");
 	}, [ld]);
 
 	if (ld) return <Loading/>;

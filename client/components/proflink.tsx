@@ -155,7 +155,7 @@ function ProfData({x, course, term}: {x: CourseInstructor, course: SmallCourse, 
 
 			<div className="inline-flex flex-row flex-wrap items-center gap-1">
 				<b>Terms:</b>
-				<div className="inline-flex flex-row flex-wrap items-center" >
+				<div className="inline-flex flex-row flex-wrap items-center gap-1" >
 					{ts.map(t => <Chip color="blue" className="cursor-pointer" key={t}
 						onClick={()=>selCtx.selTerm(t)} >{formatTerm(t)}</Chip>)}
 				</div>

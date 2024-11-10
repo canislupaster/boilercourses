@@ -55,7 +55,7 @@ export function UserButton() {
 		}},
 	];
 
-	if (admin) drop.push({
+	if (admin && app.hasAuth) drop.push({
 		type: "act",
 		name: "Admin panel",
 		act() { app.goto("/admin"); }

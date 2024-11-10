@@ -1,6 +1,5 @@
 "use client"
 
-import { PublicClientApplication } from "@azure/msal-browser";
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/popover";
 import { Progress } from "@nextui-org/progress";
 import { Tooltip, TooltipPlacement } from "@nextui-org/tooltip";
@@ -171,7 +170,7 @@ export const BackButton = ({children, noOffset}: {children?: React.ReactNode, no
 			<IconArrowLeft className="self-center" size={30} />
 		</Anchor>
 
-		{children && <div className="md:text-3xl text-2xl font-bold font-display flex flex-col items-start">
+		{children && <div className="md:text-3xl text-2xl font-extrabold font-display flex flex-col items-start">
 			{children}
 		</div>}
 	</div>;
@@ -328,7 +327,7 @@ export function WrapStat({search, setSearch, title, children, searchName}: {sear
 			<div className="max-h-[34rem] overflow-y-auto mb-2" >
 				{children}
 			</div>
-		</Collapse> : <ShowMore maxh="34rem" className="mb-2" >
+		</Collapse> : <ShowMore maxh="34rem" className="mb-2" forceShowMore={search!=""} >
 			{children}
 		</ShowMore>}
 	</>;
@@ -353,14 +352,6 @@ export const TermSelect = ({term, terms, setTerm, label, noUpdated}: {
 
 // used for client side filtering (e.g. instructors in prof tabs)
 export const simp = (x: string) => x.toLowerCase().replace(/[^a-z0-9\n]/g, "");
-
-export const msalClientId = process.env.NEXT_PUBLIC_MSAL_CLIENT_ID;
-export const msalApplication = new PublicClientApplication({
-	auth: {
-		clientId: msalClientId!,
-		authority: `https://login.microsoftonline.com/${process.env.NEXT_PUBLIC_MSAL_TENANT!}`
-	 }
-});
 
 export const Alert = ({title, txt, bad, className}: {title?: React.ReactNode, txt: React.ReactNode, bad?: boolean, className?: string}) =>
 	<div className={twMerge(`border ${bad ? `${bgColor.red} ${borderColor.red}` : `${bgColor.default} ${borderColor.default}`} p-2 px-4 rounded-md flex flex-row gap-2`, className)} >

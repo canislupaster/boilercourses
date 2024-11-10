@@ -147,12 +147,12 @@ function CourseDetail(cid: CourseId) {
 	}} >
 		<MainLayout left={<>
 			<div className="flex flex-col gap-4 -mt-3 mb-1">
-				<div className="flex flex-row flex-wrap mb-1 items-center">
+				<div className="flex flex-row flex-wrap mb-1 gap-1 items-center">
 					{/* Credits Display */}
 					<Text v="sm" >{creditStr(course)}</Text>
 
 					{/* Separator Display */}
-					<Divider/>
+					<Divider className="mx-1" />
 					<CourseChips course={small} />
 				</div>
 				

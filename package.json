@@ -3,11 +3,11 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.1.0",
     "@eslint/js": "^9.12.0",
-    "@next/eslint-plugin-next": "^14.2.15",
+    "@next/eslint-plugin-next": "^15.0.3",
     "@types/eslint__js": "^8.42.3",
-    "eslint": "^9.12.0",
-    "eslint-plugin-react": "^7.37.1",
+    "eslint": "^9.14.0",
+    "eslint-plugin-react": "^7.37.2",
     "typescript": "^5.6.3",
-    "typescript-eslint": "^8.8.1"
+    "typescript-eslint": "^8.13.0"
   }
 }

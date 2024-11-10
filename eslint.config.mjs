@@ -30,13 +30,12 @@ const common = {rules: commonRules};
 
 export default [
   ...tseslint.config({
-    files: ["client/**/*.{ts,tsx,js,jsx}", "shared/**/*.ts"],
-    ignores: ["client/public/**/*.{ts,tsx,js,jsx}", "client/.next/**/*.{ts,tsx,js,jsx}"],
+    files: ["client/app/*.{ts,tsx,js,jsx}", "shared/**/*.ts"],
     extends: [
       pluginJs.configs.recommended,
       pluginReact.configs.flat["jsx-runtime"],
       ...tseslint.configs.recommendedTypeChecked,
-      // ...compat.extends("plugin:@next/next/recommended"), there is a bug in this plugin lmao
+      ...compat.extends("plugin:@next/next/recommended"),
       common
     ],
     settings: {
@@ -61,6 +60,8 @@ export default [
     languageOptions: {
       globals: globals.node,
       parserOptions: { projectService: true },
-    },
-  }, )
+    }
+  }, {
+    ignores: ["client/.next", "client/public/"]
+  })
 ];

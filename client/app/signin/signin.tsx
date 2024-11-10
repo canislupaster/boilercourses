@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
-import { Alert, BackButton, msalApplication, msalClientId } from "@/components/clientutil";
+import { Alert, BackButton } from "@/components/clientutil";
 import { borderColor, Button, Loading, Text } from "@/components/util";
 import { AppCtx, AuthErr, setAuth, useAPI } from "@/components/wrapper";
 import { MsalProvider, useMsal } from "@azure/msal-react";
@@ -10,7 +10,16 @@ import { useContext, useEffect, useState } from "react";
 
 import { Footer } from "@/components/footer";
 import { Logo } from "@/components/logo";
-import { BrowserAuthError, BrowserAuthErrorCodes } from "@azure/msal-browser";
+import { BrowserAuthError, BrowserAuthErrorCodes, PublicClientApplication } from "@azure/msal-browser";
+
+export const msalClientId = process.env.NEXT_PUBLIC_MSAL_CLIENT_ID;
+export const msalApplication = new PublicClientApplication({
+	auth: {
+		clientId: msalClientId!,
+		authority: `https://login.microsoftonline.com/${process.env.NEXT_PUBLIC_MSAL_TENANT!}`,
+		redirectUri: `${process.env.NEXT_PUBLIC_ROOT_URL}/signin`
+	}
+});
 
 function SignedIn({loggedIn,tok}: {loggedIn: ()=>void,tok:string}) {
 	const ret = useAPI<{id: string, key: string}, string>("login", {data: tok})

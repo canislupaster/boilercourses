@@ -12,7 +12,7 @@ export function SimilarCourses({id}: {id: number}) {
 		{ret!=null && ret.res.length>0 && <div className="flex flex-col mt-2" >
 			<Text v="md" className="mb-2" >Similar Courses</Text>
 			<Carousel items={ret.res.map(c =>
-				<Card course={c.course} className="h-full" />
+				<Card type="card" course={c.course} className="h-full" />
 			)} />
 		</div>}
 	</Collapse>;

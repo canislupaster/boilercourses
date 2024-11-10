@@ -252,7 +252,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
 
             val newCourseById = c.associateBy { it.id }
             val newSortedCourses = c.sortedWith(compareBy({it.course.subject}, {it.course.course}))
-            val newMostViewedCourses = c.filter { it.views>0 }.sortedByDescending { it.views }
+            val newMostViewedCourses = c.filter { it.views>5 }.sortedByDescending { it.views }
 
             data class IndexCourse(val searchId: Int, val cid: Schema.CourseId, val small: Schema.SmallCourse)
             val indexCourses = c.flatMap {
@@ -553,7 +553,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
         val res = withContext(Dispatchers.IO) {
             searcher!!.search(q, cnt,
                 if (trimQuery.isNotEmpty()) Sort.RELEVANCE
-                else Sort(SortField("subjectSort", SortField.Type.STRING), SortField("courseSort", SortField.Type.STRING)))
+                else Sort(SortField("subjectSort", SortField.Type.STRING), SortField("courseSort", SortField.Type.STRING)), true)
         }
 //        println(searcher!!.explain(q, res.scoreDocs[0].doc).toString())
 

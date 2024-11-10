@@ -180,7 +180,7 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 		{!smallCalendar && cal}
 		
 		<div className="flex flex-col mt-2" >
-			<Text v="big" className="mb-2" >All Courses</Text>
+			<Text v="big" className="mb-2" >Courses taught</Text>
 			<Search init={initSearch.search} setSearchState={(search)=>
 					setInitSearch({...initSearch, search})
 				}

@@ -132,7 +132,7 @@ export const chipColors = {
 export const chipColorKeys = Object.keys(chipColors) as (keyof typeof chipColors)[];
 
 export const Chip = ({className, color, ...props}: HTMLAttributes<HTMLSpanElement>&{color?: keyof typeof chipColors}) =>
-	<span className={twMerge("inline-block text-xs px-3 py-1 mx-0.5 my-0.5 rounded-full border-solid border whitespace-nowrap", chipColors[color ?? "gray"], className)}
+	<span className={twMerge("inline-block text-xs px-2 py-1 rounded-lg border-solid border whitespace-nowrap", chipColors[color ?? "gray"], className)}
 		{...props} >{props.children}</span>
 
 export const StatusPage = ({children, title}: {children: React.ReactNode, title: string}) =>
@@ -253,7 +253,7 @@ export function Text({className, children, v, ...props}: HTMLAttributes<HTMLPara
 }
 
 export const Divider = ({className}: {className?: string}) =>
-	<div className={twMerge(`rounded w-px mx-2 h-4 self-center flex-shrink-0 ${bgColor.divider}`, className)} />;
+	<div className={twMerge(`rounded w-px mx-1.5 h-4 self-center flex-shrink-0 ${bgColor.divider}`, className)} />;
 	
 // export const AppSelect = ({...props}: SelectProps) => <Select {...props}
 // 		classNames={{

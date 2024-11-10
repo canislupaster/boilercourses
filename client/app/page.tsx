@@ -2,14 +2,13 @@
 
 import { Footer } from "@/components/footer";
 
-import { textColor, Text, bgColor, borderColor, chipColors, containerDefault } from "@/components/util";
+import { textColor, Text, bgColor, borderColor, chipColors, containerDefault, Button } from "@/components/util";
 import { decodeQueryToSearchState, encodeSearchState, Search, SearchState } from "./search";
 
 import { AppTooltip, Carousel, searchState, useGpaColor } from "@/components/clientutil";
 import { Logo, LogoText } from "@/components/logo";
 import { ButtonRow } from "@/components/settings";
 import { AppCtx, callAPI, useAPI } from "@/components/wrapper";
-import { IconEye } from "@tabler/icons-react";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { SmallCourse } from "../../shared/types";
 import { Collapse } from "react-collapse";
@@ -18,6 +17,7 @@ import { Card } from "@/components/card";
 import messages from "./messages.json";
 import { twMerge } from "tailwind-merge";
 import { LuckyBox } from "@/components/lucky";
+import { IconListDetails } from "@tabler/icons-react";
 
 type Message = {
 	type: "normal"|"deadline", title?: string, message: string,
@@ -86,13 +86,18 @@ function Landing({setSearch}: {setSearch: (s: string) => void}) {
 				<Logo onClick={() => setSearch("")} className='my-auto max-h-24 cursor-pointer w-auto' />
 				<LogoText onClick={() => setSearch("")} />
 			</div>
-			<input
-				id="landingSearch"
-				type="text" autoFocus
-				placeholder="I want to take a class about..."
-				onChange={(e) => setSearch(e.target.value) }
-				className={`${textColor.contrast} text-lg md:text-xl bg-transparent w-full max-w-72 md:max-w-none pb-2 border-b-2 focus:outline-none focus:border-blue-500 transition duration-300`}
-			/>
+			<form onSubmit={(ev)=>{
+				ev.preventDefault();
+				setSearch("");
+			}} className="contents" >
+				<input
+					id="landingSearch"
+					type="text" autoFocus
+					placeholder="I want to take a class about..."
+					onChange={(e) => setSearch(e.target.value) }
+					className={`${textColor.contrast} text-lg md:text-xl bg-transparent w-full max-w-72 md:max-w-none pb-2 border-b-2 focus:outline-none focus:border-blue-500 transition duration-300`}
+				/>
+			</form>
 			<div className="flex flex-row items-center justify-center mt-5">
 				<AppTooltip content={"I'm feeling lucky"} >
 					<button className="bg-none border-none outline-none" onClick={() => {
@@ -105,13 +110,16 @@ function Landing({setSearch}: {setSearch: (s: string) => void}) {
 					{" "}<b className="font-black font-display px-0.5 mx-0.5 py-0.5 bg-orange-300 text-black" >{ctx.info.nInstructor}</b> instructors.
 				</div>
 			</div>
+			<Button onClick={()=>setSearch("")} icon={<IconListDetails/>} className="mt-3" >All courses</Button>
 		</div>
 
 		<div className="w-full mt-[10dvh]" >
 			<Collapse isOpened >
 				{mostViewed!=null && mostViewed.res.length>0 && <div className="flex flex-col items-start w-full gap-2" >
-					<Text v="big" className="flex flex-row items-center gap-2" ><IconEye size={40} /> Most viewed courses</Text>
-					<Carousel items={mostViewed.res.map(c=><Card course={c} className="h-full" />)} />
+					<Text v="big" className="flex flex-row items-center gap-2" >
+						👀 Most viewed courses
+					</Text>
+					<Carousel items={mostViewed.res.map(c=><Card type="card" course={c} className="h-full" />)} />
 				</div>}
 			</Collapse>
 		</div>

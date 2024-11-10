@@ -65,6 +65,7 @@ export async function makeThumbnail(title: string, sub: string) {
 	return new ImageResponse(
 		(
 			<div tw="w-full h-full flex flex-col justify-center items-center bg-stone-900" >
+				{/* eslint-disable-next-line @next/next/no-img-element */}
 				<img src={`data:image/png;base64,${icon}`} alt="logo" height={200} width={200}/>
 				<div tw="text-white flex flex-col px-16 pb-16 pt-8 items-center">
 					<div tw="flex text-5xl w-full mb-4 items-center text-center" style={{ fontWeight: 500 }}>

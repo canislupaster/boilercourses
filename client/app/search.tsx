@@ -93,10 +93,10 @@ function SearchResults({api, page, terms, filtering, setPage}: {
 	return <div className="contents" ref={resultsRef} >
 		{api==null || api.req!.page!=page ? <Loading/> : (api.res.results.length>0 ? //:)
 				<>
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-8" >
+					<div className="flex flex-col pb-8" >
 						{api.res.results.map(x => <Card key={`${x.course.id}\n${x.course.varTitle}`}
-							termFilter={terms.length==0 ? undefined : terms}
-							course={x.course} />)}
+							termFilter={terms.length==0 ? undefined : terms} score={x.score}
+							course={x.course} type="list" />)}
 					</div>
 					<div className="w-full flex flex-col items-center" >
 						<Pagination total={api.res.npage} initialPage={api.req!.page+1} onChange={
@@ -196,7 +196,7 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 				className={`text-xl bg-transparent w-full pb-2 border-b-2 focus:outline-none focus:border-blue-500 transition duration-300 ${textColor.contrast}`}
 			/>
 		</div>
-		<div className={`flex flex-col mb-8 ${filtersCollapsed ? "" : "gap-2"} justify-center w-full items-stretch`} >
+		<div className={`flex flex-col mb-3 ${filtersCollapsed ? "" : "gap-2"} justify-center w-full items-stretch`} >
 			<Collapse isOpened={!filtersCollapsed} >
 				<div className="flex flex-col gap-2 w-full items-stretch" >
 					<Select placeholder="Subject..." components={{Option: (props) =>
