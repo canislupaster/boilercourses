@@ -65,7 +65,7 @@ export function SectionLink({children, section, className, ...rest}: SectionLink
 	return <AppTooltip placement={mq ? "right" : "top"}
 		onChange={x => {
 			if (x) selCtx.selSection(section);
-			else if (section==selCtx.section) selCtx.selSection(null);
+			else selCtx.deselectSection(section);
 		}}
 		content={
 			<SectionLinkPopup {...rest} section={section} />

@@ -15,12 +15,13 @@ import { AppCtx, useInfo } from "./wrapper";
 
 export type SelectionContextType = {
 	section: Section|null,
-	selSection: (section: Section|null) => void,
+	selSection: (section: Section) => void,
+	deselectSection: (section: Section) => void,
 	selTerm: (term: Term) => void
 };
 
 export const SelectionContext = React.createContext<SelectionContextType>({
-	section: null, selSection(){}, selTerm() {}
+	section: null, selSection(){}, deselectSection() {}, selTerm() {}
 });
 
 export function useMediaQuery(q: MediaQueryList|string|null, init: boolean=false) {
@@ -69,12 +70,12 @@ export function useGpaColor() {
 	};
 }
 
-export function useDebounce<T>(f: ()=>T, debounceMs: number, deps: React.DependencyList): T {
+export function useDebounce<T>(f: ()=>T, debounceMs: number): T {
 	const [v, setV] = useState(f);
 	useEffect(()=>{
 		const ts = setTimeout(()=>setV(f()), debounceMs);
 		return () => clearTimeout(ts);
-	}, deps);
+	}, [f, debounceMs]);
 	return v;
 }
 
@@ -82,7 +83,7 @@ export const IsInTooltipContext = React.createContext(false);
 
 //opens in modal if already in tooltip...
 export function AppTooltip({content, children, placement, className, onChange, ...props}: {content: React.ReactNode, placement?: TooltipPlacement, onChange?: (x: boolean)=>void}&Omit<HTMLAttributes<HTMLDivElement>,"content">) {
-	const app = useContext(AppCtx);
+	const {open: openModal, incPopupCount, popupCount} = useContext(AppCtx);
 	const [open, setOpen] = useState(false);
 	const [reallyOpen, setReallyOpen] = useState<number|null>(null);
 	
@@ -96,15 +97,14 @@ export function AppTooltip({content, children, placement, className, onChange, .
 	};
 
 	const selCtx = useContext(SelectionContext);
+	const isOpen = reallyOpen==popupCount;
 
 	useEffect(()=>{
 		if (open) {
-			if (reallyOpen==app.popupCount) return;
-
-			app.incPopupCount();
-
 			if (ctx) {
-				app.open({type: "other", modal: <SelectionContext.Provider value={selCtx} >
+				console.log("Running open");
+				setReallyOpen(incPopupCount());
+				openModal({type: "other", modal: <SelectionContext.Provider value={selCtx} >
 						{content}
 					</SelectionContext.Provider>, onClose() {
 					setOpen(false);
@@ -112,14 +112,14 @@ export function AppTooltip({content, children, placement, className, onChange, .
 				}});
 			} else {
 				const tm = setTimeout(() => {
-					setReallyOpen(app.popupCount+1);
+					setReallyOpen(incPopupCount());
 				}, 200);
 
 				const cb = ()=>setOpen(false);
-				document.addEventListener("click",cb);
+				document.addEventListener("click", cb);
 
 				return ()=>{
-					document.removeEventListener("click",cb);
+					document.removeEventListener("click", cb);
 					clearTimeout(tm);
 				};
 			}
@@ -127,23 +127,28 @@ export function AppTooltip({content, children, placement, className, onChange, .
 			const tm = setTimeout(() => setReallyOpen(null), 500);
 			return ()=>clearTimeout(tm);
 		}
-	}, [open]);
+
+	//dont want to reopen on selection change / content change
+	//maybe eventually ill overhaul my modal system and this will all be reasonable
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [incPopupCount, openModal, ctx, open]);
 
 	useEffect(()=> {
-		onChange?.(reallyOpen==app.popupCount);
-	}, [reallyOpen==app.popupCount])
+		onChange?.(isOpen);
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [isOpen])
 	
 	return <Tooltip showArrow placement={placement} content={
 			<IsInTooltipContext.Provider value={true} >{content}</IsInTooltipContext.Provider>
 		}
 		classNames={{content: "max-w-96"}}
-		isOpen={reallyOpen==app.popupCount}
+		isOpen={isOpen}
 		onPointerEnter={interact} onPointerLeave={unInteract} >
 
 		<div className={twMerge("inline-block", className)}
 			onPointerEnter={interact} onPointerLeave={unInteract}
 			onClick={(ev)=>{
-				setOpen(reallyOpen!=app.popupCount);
+				setOpen(!isOpen);
 				ev.stopPropagation();
 			}} {...props} >
 
@@ -175,8 +180,9 @@ export const BackButton = ({children, noOffset}: {children?: React.ReactNode, no
 		</div>}
 	</div>;
 
-export function searchState<T>(start: T, init: (params: URLSearchParams) => T|undefined|null, change: (x:T)=>URLSearchParams|undefined|null): [T, (newX: T)=>void] {
+export function useSearchState<T>(start: T, init: (params: URLSearchParams) => T|undefined|null, change: (x:T)=>URLSearchParams|undefined|null): [T, (newX: T)=>void] {
 	const [x,setX] = useState<T>(start);
+
 	useEffect(()=>{
 		const u = new URLSearchParams(window.location.search);
 		if (u.size>0) {
@@ -186,6 +192,7 @@ export function searchState<T>(start: T, init: (params: URLSearchParams) => T|un
 				setX(t);
 			}
 		}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	return [x, (newX: T) => {
@@ -204,6 +211,7 @@ export function StyleClasses({f,classStyles}: {f: (setRef: React.Ref<HTMLElement
 			for (const k in styles)
 				if (styles[k]!==undefined) st[k]=styles[k];
 		}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 	return f(ref);
 }
@@ -240,7 +248,7 @@ export function BarsStat<T>({lhs,type,vs,className}: {
 				<StyleClasses f={(ref)=>
 					<Progress value={x} minValue={type=="gpa" ? 0 : 1} maxValue={type=="gpa" ? 4 : 5} classNames={{
 						indicator: "indicator"
-					}} ref={ref} />}
+					}} ref={ref} aria-label="GPA" />}
 					classStyles={{indicator: {backgroundColor: c}}}
 				/>
 			</div>
@@ -333,10 +341,11 @@ export function WrapStat({search, setSearch, title, children, searchName}: {sear
 	</>;
 }
 
-export const TermSelect = ({term, terms, setTerm, label, noUpdated}: {
+export function TermSelect({term, terms, setTerm, label, noUpdated}: {
 	term: Term, terms: Term[], setTerm: (t:Term)=>void, label?: string, noUpdated?: boolean
-}) =>
-	<div className="flex flex-wrap flex-row items-center gap-3 text-sm" >
+}) {
+	const info = useInfo();
+	return <div className="flex flex-wrap flex-row items-center gap-3 text-sm" >
 		{label} <Select
 			options={terms.map((x):[number,Term]=>[termIdx(x), x])
 				.sort((a,b)=>b[0]-a[0])
@@ -346,9 +355,10 @@ export const TermSelect = ({term, terms, setTerm, label, noUpdated}: {
 			{...selectProps<{label:string,value:Term},false>()}
 		/>
 		{!noUpdated && <span className="text-gray-400" >
-			last updated {new Date(useInfo().terms[term]!.lastUpdated).toLocaleDateString()}
+			last updated {new Date(info.terms[term]!.lastUpdated).toLocaleDateString()}
 		</span>}
 	</div>;
+}
 
 // used for client side filtering (e.g. instructors in prof tabs)
 export const simp = (x: string) => x.toLowerCase().replace(/[^a-z0-9\n]/g, "");
@@ -373,6 +383,7 @@ export function Dropdown({parts, trigger, onOpenChange}: {trigger?: React.ReactN
 	const app = useContext(AppCtx);
 	useEffect(()=>{
 		setOpen(false); onOpenChange?.(false);
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [app.popupCount]);
 
 	//these components are fucked up w/ preact and props don't merge properly with container element
@@ -437,7 +448,7 @@ export function ShowMore({children, className, maxh, forceShowMore, inContainer}
 		const observer = new ResizeObserver(check);
 		observer.observe(a); observer.observe(b);
 		return ()=>observer.disconnect();
-	}, []);
+	}, [forceShowMore]);
 
 	const expanded = showMore==null || showMore==true || forceShowMore;
 
@@ -480,8 +491,10 @@ export function Carousel({items}: {items: React.ReactNode[]}) {
 		};
 
 		onScroll();
-		carouselRef.current!.addEventListener("scroll", onScroll);
-		return ()=>carouselRef.current?.removeEventListener("scroll", onScroll);
+
+		const el = carouselRef.current!;
+		el.addEventListener("scroll", onScroll);
+		return ()=>el.removeEventListener("scroll", onScroll);
 	}, [])
 
 	return <div className="relative w-full" >

@@ -3,7 +3,7 @@
 import { decodeQueryToSearchState, encodeSearchState, Search, SearchState } from "@/app/search";
 import { Calendar } from "@/components/calendar";
 import { CourseLink } from "@/components/card";
-import { BarsStat, NameSemGPA, searchState, SelectionContext, simp, TermSelect, WrapStat } from "@/components/clientutil";
+import { BarsStat, NameSemGPA, useSearchState, SelectionContext, simp, TermSelect, WrapStat } from "@/components/clientutil";
 import Graph from "@/components/graph";
 import { MainLayout } from "@/components/mainlayout";
 import { Meters } from "@/components/proflink";
@@ -17,10 +17,12 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 	useEffect(() => {
 		setAPI<InstructorId, number>("prof", {data: instructor.id, result: instructor})
 		setAPI<InstructorId, string>("profbyname", {data: instructor.instructor.name, result: instructor})
-	}, []);
+	}, [instructor]);
 
 	const i = instructor.instructor;
-	const total = useMemo(()=>mergeGrades(i.grades.map(x=>toInstructorGrade(x.data))),[]);
+	const total = useMemo(()=>
+		mergeGrades(i.grades.map(x=>toInstructorGrade(x.data))),
+	[i.grades]);
 
 	type SelCourse = CourseId|{id: "avg"};
 	const [courseSearch, setCourseSearch] = useState("");
@@ -34,10 +36,10 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 				secs.filter(sec=>sec.instructors.find(j=>j.name==i.name)!==undefined).map(sec=>[
 					c, term as Term, sec
 				])
-	)),[]);
+	)), [i.name, instructor.courses]);
 
 	const defaultTerm = latestTermofTerms(allSecs.map(x=>x[1]))!;
-	const [initSearch, setInitSearch] = searchState<{term: Term, search: Partial<SearchState>}>({
+	const [initSearch, setInitSearch] = useSearchState<{term: Term, search: Partial<SearchState>}>({
 		term: defaultTerm, search: {instructors: [i.name]}
 	}, (x) => {
 		return {
@@ -56,19 +58,19 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 	const [section, setSection] = useState<Section|null>(null);
 	const idx = termIdx(term);
 
-	const allTerms = useMemo(()=>[...new Set(allSecs.map(x=>x[1]))],[]);
-	const termSecs = allSecs.filter(x=>x[1]==term);
+	const allTerms = useMemo(()=>[...new Set(allSecs.map(x=>x[1]))], [allSecs]);
+	const termSecs = useMemo(()=>allSecs.filter(x=>x[1]==term), [allSecs, term]);
 
 	const allCourses = useMemo(() => 
 		 instructor.courses.map((c): [CourseId, Term]=>{
 			const ts = Object.keys(c.course.sections) as Term[];
 			return [c, ts.includes(term) ? term : latestTermofTerms(ts)!];
-		}), [term]);
+		}), [instructor.courses, term]);
 
 	const courseGrades = useMemo(() => new Map(allCourses.map(([c])=> {
 		const x = c.course.instructor[i.name];
 		return [c.id,x==undefined ? emptyInstructorGrade : mergeGrades(Object.values(x))];
-	})), [allCourses]);
+	})), [allCourses, i.name]);
 
 	const searchCourses = useMemo(() => {
 		const simpQ = simp(courseSearch);
@@ -81,7 +83,7 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 		selCourse.map((c)=>[
 			c.id=="avg" ? "Average" : `${c.course.subject} ${trimCourseNum(c.course.course)}`,
 			c.id=="avg" ? total : courseGrades.get(c.id)!
-		]), [selCourse]);
+		]), [courseGrades, selCourse, total]);
 	
 	const semGPA = useMemo(() => 
 		searchCourses.map(([x, inTerm]): [[CourseId, Term], [Term,number|null,number][],boolean]=>{
@@ -93,23 +95,24 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 						.map(([term,g]) => [term as Term, g.gpa, g.numSections]),
 				inTerm==term
 			];
-		}), [searchCourses, term]);
+		}), [i.name, idx, searchCourses, term]);
 
 	const days = [...new Set(termSecs.flatMap(x=>x[2].times.map(y=>y.day)))];
 	const smallCalendar = days.length<=3;
 
 	const smallCourses = useMemo(()=>new Map(
 		instructor.courses.map(x=>[x.id, toSmallCourse(x)])
-	), [])
+	), [instructor.courses])
 
 	const calSecs = useMemo((): [SmallCourse, Section][]=>
-		termSecs.map(x=>[smallCourses.get(x[0].id)!,x[2]]), [instructor, term]);
+		termSecs.map(x=>[smallCourses.get(x[0].id)!,x[2]]), [smallCourses, termSecs]);
 
 	const cal = calSecs.length>0 && <>
 		<TermSelect term={term} setTerm={setTerm} terms={allTerms} label="Schedule for" />
 		<Calendar sections={calSecs} term={term} />
 	</>;
 
+	// eslint-disable-next-line react/display-name
 	const renderLHS = (big: boolean) => (x: [CourseId, Term], b: boolean) =>
 		<CourseLink type="course" course={smallCourses.get(x[0].id)!} className="flex-nowrap whitespace-nowrap" >
 			<span className={`font-display font-extrabold ${big ? "text-lg" : "text-md"}`} >{x[0].course.subject} {trimCourseNum(x[0].course.course)}</span>
@@ -188,14 +191,17 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 		</div>
 	</>} />;
 
-	const app = useContext(AppCtx);
-	return <SelectionContext.Provider value={{
+	const {open: openModal} = useContext(AppCtx);
+	return <SelectionContext.Provider value={useMemo(()=>({
 		selTerm(term) {
 			if (allTerms.includes(term)) setTerm(term);
-			else app.open({type: "error", name: "Term not available",
+			else openModal({type: "error", name: "Term not available",
 				msg: "We don't have data for this semester"})
-		}, section, selSection(section) {setSection(section)}
-	}} >
+		},
+		section,
+		selSection(section) {setSection(section)},
+		deselectSection(section) {setSection(s=>s==section ? null : s);},
+	}), [allTerms, openModal, section, setTerm])} >
 		{main}
 	</SelectionContext.Provider>;
 }

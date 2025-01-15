@@ -8,10 +8,10 @@ export function InstructorList({term, short, className, whomst: instructors, cou
 	term: Term, short?: boolean, className?: string,
 	whomst: CourseInstructor[], course: SmallCourse
 }) {
-	if (instructors.length==0) return <></>;
-
 	const [showMoreInstructors, setShowMoreInstructors] = useState(false);
 	const curInstructors = showMoreInstructors ? instructors : instructors.slice(0,3);
+
+	if (instructors.length==0) return <></>;
 
 	return <div className={twMerge("flex flex-wrap flex-row lg:text-sm text-sm mt-1 font-medium items-center gap-1", className)} >
 		{!short && <Text v="smbold" className="mr-px" >{formatTerm(term)} Instructors: </Text>}

@@ -1,4 +1,4 @@
-import { Section, SmallCourse, Term } from "./types";
+import { Section, SmallCourse, Term } from "./types.ts";
 
 export type RegisterNotificationRequest = {
 	course: number, crn: number|null, threshold: number, term: Term

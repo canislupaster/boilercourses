@@ -2,12 +2,12 @@ import {parseArgs} from "node:util";
 import {devices} from "playwright";
 import {chromium} from "playwright-extra";
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import {DBAvailabilityNotification, DBCourse, DBProperty, DBTerm, loadDB} from "./db";
+import {DBAvailabilityNotification, DBCourse, DBProperty, DBTerm, loadDB} from "./db.ts";
 import {readFile, rm} from "node:fs/promises";
 import {createDecipheriv} from "node:crypto";
 import Papa from "papaparse";
-import {Course, formatTerm, Seats, Term, termIdx} from "../../shared/types";
-import {deepEquals} from "./fetch";
+import {Course, formatTerm, Seats, Term, termIdx} from "../../shared/types.ts";
+import {deepEquals} from "./fetch.ts";
 import {exit} from "node:process";
 
 const {values, positionals} = parseArgs({
@@ -267,5 +267,6 @@ for (const t of activeTerms) {
 console.log("exiting");
 
 await pg.close();
+await ctx.close();
 await browser.close();
 exit(0);

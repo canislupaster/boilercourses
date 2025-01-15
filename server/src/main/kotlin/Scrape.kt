@@ -64,6 +64,8 @@ class Scrape(val log: Logger, db: DB, val env: Environment, val courses: Courses
         }
 
         if (!res) {
+            proc.destroyForcibly()
+
             log.error("${x.name} took too long")
             scrapeOk=false
             lastScrape=Instant.now()

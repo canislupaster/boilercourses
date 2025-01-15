@@ -3,10 +3,17 @@ import {Cheerio} from "cheerio";
 import {readFile} from "node:fs/promises";
 import {ProxyAgent} from "undici";
 import cliProgress from "cli-progress";
+import { Element } from "domhandler";
 
 const userAgent = "boilercourses scraper";
 
-const dispatchers: (ProxyAgent|undefined)[] = [undefined];
+type Dispatcher = ({
+	type: "proxy", proxy: ProxyAgent
+}|{
+	type: "main"
+})&{errorWait?: number, name: string};
+
+const dispatchers: Dispatcher[] = [{type: "main", name: "main"}];
 const waiters: (()=>void)[] = [];
 
 export function shuffle<T>(arr: T[]) {
@@ -29,32 +36,38 @@ export async function addProxies(proxiesPath: string) {
 
 	console.log(`adding ${prox.length} proxies`);
 
+	let pi=1;
 	for (const p of prox) {
 		const parts = p.split(":");
 		if (parts.length!=2 && parts.length!=4)
 			throw new Error(`expected 2 (host,port) or 4 parts (host,port,user,pass) for proxy ${p}`);
-		dispatchers.push(new ProxyAgent({
+
+		const proxy = new ProxyAgent({
 			uri: `http://${parts[0]}:${parts[1]}`,
 			token: parts.length==2 ? undefined : `Basic ${Buffer.from(`${parts[2]}:${parts[3]}`).toString('base64')}`
-		}));
+		});
+
+		dispatchers.push({type: "proxy", proxy, name: `Proxy #${pi++} (${parts[0]}:${parts[1]})`});
 	}
 	shuffle(dispatchers);
 }
 
-const dispatcherWait = 1000, dispatcherErrorWait = 30_000;
+const dispatcherWait = 1000, dispatcherErrorWait = 30_000
+const dispatcherErrorWaitMul = 2, dispatcherTimeout = 120_000;
+const maxDispatcherErrorWait = 60_000*5;
 
 export async function fetchDispatcher<T>({ transform, handleErr }: {
 	transform: (r: Response) => Promise<T>,
 	handleErr?: (r: Response) => Promise<"retry"|T>
 }, ...args: Parameters<typeof fetch>): Promise<T> {
-	let err: Error;
+	let err: Error|null=null;
 	for (let retryI=0; retryI<5; retryI++) {
 		while (dispatchers.length==0) {
 			await new Promise<void>((res) => waiters.push(res));
 		}
 
-		const d = dispatchers.pop();
-		let wait = dispatcherWait;
+		const d = dispatchers.pop()!;
+		err=null;
 
 		try {
 			const hdrs = new Headers({...args[1]?.headers});
@@ -63,8 +76,9 @@ export async function fetchDispatcher<T>({ transform, handleErr }: {
 			const resp = await fetch(args[0], {
 				...args[1],
 				//@ts-ignore
-				dispatcher: d,
-				headers: hdrs
+				dispatcher: d.type=="proxy" ? d.proxy : undefined,
+				headers: hdrs,
+				signal: AbortSignal.timeout(dispatcherTimeout)
 			});
 
 			if (resp.status!=200) {
@@ -78,14 +92,21 @@ export async function fetchDispatcher<T>({ transform, handleErr }: {
 			return await transform(resp)
 		} catch (e) {
 			if (e instanceof Error) err=e;
-			wait = dispatcherErrorWait;
-			continue;
 		} finally {
+			if (err) {
+				d.errorWait = d.errorWait==undefined ? dispatcherErrorWait
+					: Math.min(d.errorWait*dispatcherErrorWaitMul, maxDispatcherErrorWait);
+				//progress bar sometimes makes it hard to read (thus newlines)
+				console.warn(`\nError with dispatcher ${d.name}, waiting ${(d.errorWait/60/1000).toFixed(2)} min.\n`);
+			} else {
+				delete d.errorWait;
+			}
+
 			setTimeout(() => {
 				dispatchers.unshift(d);
 				const w = waiters.shift();
 				if (w!==undefined) w();
-			}, wait);
+			}, d.errorWait ?? dispatcherWait);
 		}
 	}
 
@@ -135,7 +156,7 @@ String.prototype.trimIfStarts = function(v: string) {
 	else return this as string;
 }
 
-export function tableToObject(c: cheerio.CheerioAPI, tb: Cheerio<cheerio.Element>) {
+export function tableToObject(c: cheerio.CheerioAPI, tb: Cheerio<Element>) {
 	tb = tb.children();
 	const hdr = tb.first().children().toArray().map(e => c(e).text().trim());
 	const rest = tb.slice(1).toArray()

@@ -267,7 +267,7 @@ fun email(data: AvailabilityEmailData): String {
     
           <div
              style="font-family:Inter, Arial, sans-serif;font-size:16px;line-height:1;text-align:left;color:#000000;"
-          >We're letting you know because you, or someone with access to your Purdue Microsoft account, has registered you for updates relating to these courses or sections. To unregister for these updates, <a href="${data.email.rootUrl}/notifications" >manage your notifications</a> on BoilerCourses.</div>
+          >An account on BoilerCourses associated with your email was used to register for updates. You may <a href="${data.email.rootUrl}/notifications" >manage your notifications</a> on BoilerCourses.</div>
     
                     </td>
                   </tr>
@@ -358,9 +358,9 @@ fun email(data: AvailabilityEmailData): String {
                     >
     
           <div
-             style="font-family:Inter, Arial, sans-serif;font-size:12px;line-height:1;text-align:center;color:#000000;"
+             style="font-family:Inter, Arial, sans-serif;font-size:14px;line-height:1;text-align:center;color:#000000;"
           ><a href="${data.email.unsubscribe()}" style="color: #993128" >
-             Permanently unsubscribe from all future emails from BoilerCourses
+             Unsubscribe from all future emails from BoilerCourses
             </a></div>
     
                     </td>

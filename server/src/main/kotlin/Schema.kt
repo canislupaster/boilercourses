@@ -74,7 +74,8 @@ object Schema {
         sealed class CourseLike(
             val minCredits: Int?=null,
             val minGPA: Double?=null,
-            val grade: String?=null
+            val grade: String?=null,
+            val corequisite: Boolean?=null
         ): PreReq() {
             abstract val concurrent: Boolean
         }

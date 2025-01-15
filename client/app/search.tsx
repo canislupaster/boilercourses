@@ -1,9 +1,9 @@
 import { Card } from "@/components/card";
-import { Alert, MoreButton } from "@/components/clientutil";
+import { Alert, MoreButton, simp } from "@/components/clientutil";
 import { Footer } from "@/components/footer";
 import { LogoBar } from "@/components/logo";
 import { Button, ButtonPopover, Divider, IconButton, Loading, selectProps, Text, textColor } from "@/components/util";
-import { APICallResult, AppCtx, useAPI, useInfo } from "@/components/wrapper";
+import { APICallResult, AppCtx, useAPIResponse, useInfo } from "@/components/wrapper";
 import { Checkbox, CheckboxGroup } from "@nextui-org/checkbox";
 import { Pagination } from "@nextui-org/pagination";
 import { Slider } from "@nextui-org/slider";
@@ -12,7 +12,7 @@ import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Collapse } from 'react-collapse';
 import Select, { Props as SelectProps } from 'react-select';
 import { twMerge } from "tailwind-merge";
-import { formatTerm, ServerSearch, Term, termIdx } from "../../shared/types";
+import { formatTerm, latestTermofTerms, ServerSearch, Term, termIdx } from "../../shared/types";
 import attributeToGenEd from "./attributeToGenEd.json";
 
 export type SearchState = {
@@ -74,9 +74,10 @@ export function decodeQueryToSearchState(query: URLSearchParams) {
 	return x;
 }
 
-function SearchResults({api, page, terms, filtering, setPage}: {
+function SearchResults({api, page, terms, filtering, setPage, searchInput}: {
 	api: APICallResult<SearchState, ServerSearch>|null, page: number,
-	filtering: boolean, terms: Term[], setPage: (x: number)=>void
+	filtering: boolean, terms: Term[], setPage: (x: number)=>void,
+	searchInput: React.RefObject<HTMLInputElement>
 }) {
 	const [scrollToTop, setScrollToTop] = useState(false);
 	const resultsRef = useRef<HTMLDivElement>(null);
@@ -90,13 +91,79 @@ function SearchResults({api, page, terms, filtering, setPage}: {
 		return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+	const [active, setActive] = useState<number|null>(null);
+	const resultsList = useRef<HTMLDivElement>(null);
+	const {goto} = useContext(AppCtx);
+
+	const res = api?.res;
+	const resWithTerms = useMemo(()=>{
+		if (!res || res.results.length==0) return null;
+		return res.results.map(r=>({
+			...r,
+			term: terms.length==0 ? undefined
+				: latestTermofTerms(Object.keys(r.course.termInstructors) as Term[], terms) ?? undefined
+		}));
+	}, [res, terms]);
+
+	useEffect(()=>{
+		setActive(null);
+		if (!resWithTerms) return;
+		const len = resWithTerms.length;
+		
+		let cur: number|null=null;
+		const cb = (ev: KeyboardEvent) => {
+			const navKeys = ["ArrowUp", "ArrowDown", "Tab"];
+
+			if (ev.target==searchInput.current && navKeys.includes(ev.key)) {
+				searchInput.current?.blur();
+			} else if (ev.target!=document.body) {
+				setActive(null);
+				cur=null;
+				return;
+			}
+
+			if (ev.key=="Enter" && cur!=null) {
+				ev.preventDefault();
+
+				let url = `/course/${resWithTerms[cur].course.id}`;
+				if (resWithTerms[cur].term) url+=`?term=${resWithTerms[cur].term}`;
+				goto(url);
+				return;
+			} else if (!navKeys.includes(ev.key)) {
+				if (/^[A-Za-z0-9 ]{1}$/.test(ev.key)) searchInput.current?.focus();
+				return;
+			}
+
+			const up = ev.key=="ArrowUp" || (ev.key=="Tab" && ev.shiftKey);
+			ev.preventDefault();
+
+			if (cur==null) {
+				const f = [...resultsList.current!.children].findIndex(x=>{
+					return x.getBoundingClientRect().top>=0;
+				});
+
+				setActive(cur = f==-1 ? null : f);
+			} else {
+				cur = ((up ? cur-1 : cur+1)+len)%len;
+				resultsList.current!.children[cur].scrollIntoView({block: "center"});
+				setActive(cur);
+			}
+		};
+
+		window.addEventListener("keydown", cb);
+		return () => {
+			window.removeEventListener("keydown", cb);
+		};
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [goto, resWithTerms]);
+
 	return <div className="contents" ref={resultsRef} >
 		{api==null || api.req!.page!=page ? <Loading/> : (api.res.results.length>0 ? //:)
 				<>
-					<div className="flex flex-col pb-8" >
-						{api.res.results.map(x => <Card key={`${x.course.id}\n${x.course.varTitle}`}
-							termFilter={terms.length==0 ? undefined : terms} score={x.score}
-							course={x.course} type="list" />)}
+					<div className="flex flex-col pb-8" ref={resultsList} >
+						{resWithTerms!.map((x,i) => <Card key={`${x.course.id}\n${x.course.varTitle}`}
+							term={x.term} score={x.score}
+							course={x.course} type="list" selected={i==active} />)}
 					</div>
 					<div className="w-full flex flex-col items-center" >
 						<Pagination total={api.res.npage} initialPage={api.req!.page+1} onChange={
@@ -122,27 +189,28 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 	clearSearch?: ()=>void, setSearchState: (s:SearchState)=>void,
 	includeLogo?: boolean
 }) {
-	const searchState = {...defaultSearchState, ...init};
+	const searchState = useMemo(()=>({...defaultSearchState, ...init}), [init]);
 	const info = useInfo();
 
 	const sortedTerms = useMemo(()=>
 		Object.keys(info.terms).map(k=>({k: k as Term, idx: termIdx(k as Term)}))
-			.sort((a,b) => b.idx-a.idx), []);
+			.sort((a,b) => b.idx-a.idx), [info.terms]);
 
 	const mod = (x: Partial<SearchState>) => {
 		setSearchState({...searchState, page: 0, ...x});
 	};
 
-	const multiSelectProps = (k: "attributes"|"subjects"|"terms", options: {value: string, label: string}[]): SelectProps<{value: string, label: string}, true> => {
-		const obj = Object.fromEntries(options.map(x => [x.value,x.label]));
+	const multiSelectProps = <T extends {value: string}>(
+		k: "attributes"|"subjects"|"terms", options: T[]
+	): SelectProps<T, true> => {
+		const obj = Object.fromEntries(options.map(x => [x.value,x]));
 
 		return {
-			...selectProps<{value: string, label: string}, true>(),
+			...selectProps<T, true>(),
 			options, isMulti: true,
-			value: searchState[k].map(x => ({value: x, label: obj[x]})),
-			onChange: (ks: unknown)=>
-			mod({[k]: (ks as typeof options).map(x => x.value)})
-		}
+			value: searchState[k].map(x=>obj[x]),
+			onChange: (ks: unknown)=>mod({[k]: (ks as typeof options).map(x=>x.value)})
+		};
 	};
 
 	const renderRange = (a?: number, b?: number) =>
@@ -158,18 +226,18 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 		a!=undefined ? (b!=undefined ? `${renderTime(a)} - ${renderTime(b)}` : `after ${renderTime(a)}`)
 			: (b!=undefined ? `before ${renderTime(b)}` : undefined);
 
-	const api = useAPI<ServerSearch,SearchState>("search", {data: searchState, method: "POST", debounceMs: 100});
+	const api = useAPIResponse<ServerSearch,SearchState>("search", {data: searchState, method: "POST", debounceMs: 100});
 
 	const cond = api!=null && api.res.npage<=searchState.page && !api.loading;
 	useEffect(() => {
 		if (cond) setSearchState({...searchState, page: api.res.npage-1});
-	}, [cond]);
+	}, [api?.res.npage, cond, searchState, setSearchState]);
 
 	const cond2 = api!=null && api.loading==false;
-	const app = useContext(AppCtx);
+	const {restoreScroll} = useContext(AppCtx);
 	useEffect(()=>{
-		if (cond2) app.restoreScroll();
-	}, [cond2]);
+		if (cond2) restoreScroll();
+	}, [cond2, restoreScroll]);
 
 	const activeFilters=[];
 	if (searchState.minCourse!=undefined || searchState.maxCourse!=undefined) activeFilters.push("level");
@@ -182,12 +250,14 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 	if (searchState.subjects.length>0) activeFilters.push("subject");
 
 	const [filtersCollapsed, setFiltersCollapsed] = useState(true);
+	const inputRef = useRef<HTMLInputElement>(null);
 
 	return <>
 		{includeLogo && <LogoBar onClick={clearSearch} />}
 
 		<div className="mb-3" >
 			<input
+				ref={inputRef}
 				maxLength={info.searchLimit}
 				autoFocus={autoFocus} id="search" type="text"
 				placeholder="Search for courses..."
@@ -199,16 +269,31 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 		<div className={`flex flex-col mb-3 ${filtersCollapsed ? "" : "gap-2"} justify-center w-full items-stretch`} >
 			<Collapse isOpened={!filtersCollapsed} >
 				<div className="flex flex-col gap-2 w-full items-stretch" >
+					{/* 🤮 */}
 					<Select placeholder="Subject..." components={{Option: (props) =>
 							<div className={twMerge(props.getClassNames("option", props), "flex flex-row items-stretch justify-start py-0")}
 								key={props.data.value} onClick={() => props.selectOption(props.data)} >
-								<span className="basis-14 shrink-0 py-2" >{props.data.value}</span>
+								<span className="basis-14 shrink-0 py-2" >{props.data.abbr}</span>
 								<Divider className="h-7" />
-								<span className="py-2" >{props.data.label}</span>
+								<span className="py-2" >{props.data.name}</span>
 							</div>
 						}}
-						getOptionLabel={x => `${x.value} - ${x.label}`}
-						{...multiSelectProps("subjects", info.subjects.map(x => ({label: x.name, value: x.abbr})))}
+						filterOption={(option, query) => {
+							const sq = simp(query);
+							const nameMatch = simp(option.data.name).includes(sq);
+							const abbrMatch = simp(option.data.abbr).startsWith(sq);
+
+							if (abbrMatch) return !option.data.v;
+							else return !abbrMatch && nameMatch && option.data.v;
+						}}
+						getOptionLabel={x => `${x.abbr} - ${x.name}`}
+						getOptionValue={x => `${x.abbr}\n${x.v}`}
+						{...multiSelectProps<{
+							abbr: string, name: string, value: string, v: boolean
+						}>("subjects", [
+							...info.subjects.map(x=>({...x, v: false, value: x.abbr})),
+							...info.subjects.map(x=>({...x, v: true, value: x.abbr}))
+						])}
 					/>
 					<Select placeholder="Semester..."
 						{...multiSelectProps("terms", sortedTerms.map(x => ({
@@ -266,6 +351,7 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 						<ButtonPopover title="Time" desc={renderTimeRange(searchState.minMinute, searchState.maxMinute)} >
 							<p className="mb-3" >Latest semester section time</p>
 							<Slider
+								aria-label="Latest semester section time"
 								step={15} minValue={5*60} maxValue={24*60}
 								marks={[...new Array<void>(5)].map((x,i)=> {
 									const v = 60*((24-5)*i/4+5);
@@ -321,7 +407,11 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 							</CheckboxGroup>
 						</ButtonPopover>
 						{activeFilters.length>0 && <Button icon={<IconX/>} onClick={()=>{
-							setSearchState({...defaultSearchState, query: searchState.query});
+							setSearchState({
+								...defaultSearchState,
+								instructors: searchState.instructors,
+								query: searchState.query
+							});
 						}} >
 							Clear
 						</Button>}
@@ -340,7 +430,8 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 		</div>
 
 		<SearchResults api={api} page={searchState.page} setPage={(page)=>mod({page})}
-			filtering={activeFilters.length>0} terms={searchState.terms} />
+			filtering={activeFilters.length>0} terms={searchState.terms}
+			searchInput={inputRef} />
 
 		{includeLogo && <Footer />}
 	</>;

@@ -1,22 +1,21 @@
 import { twMerge } from "tailwind-merge";
 import { CourseId, creditStr, formatTerm, InstructorGrade, latestTermofTerms, SmallCourse, Term, toSmallCourse, trimCourseNum } from "../../shared/types";
 import attributeToGenEd from "../app/attributeToGenEd.json";
-import { AppLink, AppTooltip, useGpaColor, useMd } from "./clientutil";
+import { AppTooltip, useGpaColor, useMd } from "./clientutil";
 import { Stars } from "./community";
 import { InstructorList } from "./instructorlist";
 import { abbr, Anchor, bgColor, borderColor, Chip, containerDefault, Divider, Loading, Text, textColor } from "./util";
-import { AppCtx, useAPI } from "./wrapper";
+import { AppCtx, useAPIResponse } from "./wrapper";
 import { IconEye } from "@tabler/icons-react";
 import { useContext } from "react";
 
-//ideally maybe have term inherited from search semester filter.............?????
-export function Card({ course, type, termFilter, className, extra, score }: {
-  type: "card"|"frameless"|"list", termFilter?: Term[], className?: string,
-  course: SmallCourse, extra?: React.ReactNode, score?: number
+export function Card({ course, type, term: optTerm, className, extra, score, selected }: {
+  type: "card"|"frameless"|"list", term?: Term, className?: string,
+  course: SmallCourse, extra?: React.ReactNode, score?: number, selected?: boolean
 }) {
   const terms = Object.keys(course.termInstructors) as Term[];
-  const term = latestTermofTerms(terms, termFilter) ?? latestTermofTerms(terms)!;
-  const url = `/course/${course.id}?term=${term}`;
+  const term = optTerm ?? latestTermofTerms(terms)!;
+  const url = `/course/${course.id}${optTerm ? `?term=${optTerm}` : ""}`;
   const app = useContext(AppCtx);
 
   const creditGPAViews = <>
@@ -24,20 +23,22 @@ export function Card({ course, type, termFilter, className, extra, score }: {
     <div className="z-10" >
       <GPAIndicator grades={course.grades} smol />
     </div>
-    <div className={`${containerDefault} flex flex-row gap-0.5 px-1.5 py-0.5 items-center`} >
-      <IconEye/> <span className="font-display font-medium" >{course.views>1000 ? `${Math.round(course.views/1000)}K` : course.views}</span>
-    </div>
+    <AppTooltip content="Views" className="z-10" >
+      <div className={`${containerDefault} flex flex-row gap-0.5 px-1.5 py-0.5 items-center`} >
+        <IconEye/> <span className="font-display font-medium" >{course.views>1000 ? `${Math.round(course.views/1000)}K` : course.views}</span>
+      </div>
+    </AppTooltip>
   </>;
 
   if (type=="list") {
-    const normScore = 1 - 1/(1 + (score ?? 0)*(score ?? 0)/10000);
+    const normScore = score ? 1 - 1/(1 + score*score/10000) : null;
 
-    return <div className={twMerge(`flex flex-col gap-1 relative md:px-3 px-0.5 py-3 pl-2 md:pl-5 md:pb-4 pt-2 md:pt-3 border-t last:border-b`, borderColor.default, className)} >
-      <div className="absolute -left-2 md:left-0 -bottom-px -top-px w-2" style={{
+    return <div className={twMerge(`flex flex-col gap-1 relative ${normScore!=null ? "md:px-3 px-0.5 md:pl-5" : ""} py-3 pl-2 md:pb-4 pt-2 md:pt-3 border-t last:border-b`, borderColor.default, className)} >
+      {normScore!=null && <div className="absolute -left-2 md:left-0 -bottom-px -top-px w-2" style={{
         backgroundColor: app.theme=="dark"
           ? `hsl(${(1-normScore) * 240}, ${normScore*50+40}%, ${normScore*50+15}%)`
           : `hsl(${(1-normScore) * 240}, ${normScore*70+20}%, ${80-normScore*30}%)`
-      }} />
+      }} />}
 
       <Text v="lg" className="md:text-2xl underline-offset-2 underline decoration-dashed decoration-1" >{course.subject} {trimCourseNum(course.course)}: {course.name}</Text>
       {course.varTitle && <Text v="bold" className="-mt-1" >{course.varTitle}</Text>}
@@ -59,7 +60,7 @@ export function Card({ course, type, termFilter, className, extra, score }: {
 
       <InstructorList className="z-10" whomst={course.termInstructors[term]} term={term} course={course} />
 
-      <button onClick={()=>app.goto(url)} className="bg-transparent border-none outline-none absolute left-0 right-0 top-0 bottom-0 hover:bg-cyan-800/5 dark:hover:bg-cyan-100/5 transition" ></button>
+      <button onClick={()=>app.goto(url)} className={`border-none outline-none absolute left-0 right-0 top-0 bottom-0 hover:bg-cyan-800/5 dark:hover:bg-cyan-100/5 transition ${selected ? "bg-cyan-800/10" : "bg-transparent"}`} ></button>
     </div>;
   } else {
     const body = <>
@@ -79,10 +80,10 @@ export function Card({ course, type, termFilter, className, extra, score }: {
       </Text>
 
       {/* higher z index for selectability */}
-      <div className="flex flex-wrap flex-row lg:text-sm text-sm gap-x-1 items-center gap-y-0.5 mb-2 z-10 mt-2" >
+      {course.termInstructors[term].length>0 && <div className="flex flex-wrap flex-row lg:text-sm text-sm gap-x-1 items-center gap-y-0.5 mb-2 z-10 mt-2" >
         <Text v="smbold">Taught by</Text>
         <InstructorList short className="my-2 contents" whomst={course.termInstructors[term]} term={term} course={course} />
-      </div>
+      </div>}
 
       <div className="flex flex-row flex-wrap gap-1" ><CourseChips course={course} /></div>
     </>;
@@ -110,22 +111,30 @@ type LookupOrCourse = {type:"lookup", subject: string, num: number}|{type:"cours
 
 function useLookupOrCourse(props: LookupOrCourse): [SmallCourse|"notFound"|null, string, number] {
   let cid: "notFound"|SmallCourse|null=null;
-  let subject:string, num:number;
-  //cant change type! different hooks
-  if (props.type=="lookup") {
-    subject=props.subject; num=props.num;
-    while (num<1e4) num*=10;
 
-    const res = useAPI<CourseId[], {subject: string, course: number}>("lookup", {
-      data: { subject: subject, course: num }
-    });
+  const data: {subject: string, course: number} = props.type=="lookup" ? {
+    subject: props.subject, course: props.num
+  } : {
+    subject: props.course.subject, course: props.course.course
+  };
 
-    if (res!=null) cid=res.res.length==0 ? "notFound" : toSmallCourse(res.res[0]);
-  } else {
-    cid=props.course; subject=cid.subject; num=cid.course;
+  if (data) {
+    while (data.course<1e4) data.course*=10;
   }
 
-  return [cid, subject, num];
+  //cant change type! different hooks
+  const res = useAPIResponse<CourseId[], {subject: string, course: number}>("lookup", {
+    data,
+    disabled: props.type!="lookup"
+  });
+
+  if (props.type=="lookup") {
+    if (res!=null) cid=res.res.length==0 ? "notFound" : toSmallCourse(res.res[0]);
+  } else {
+    cid=props.course;
+  }
+
+  return [cid, data.subject, data.course];
 }
 
 export function CourseLinkPopup({extra, ...props}: LookupOrCourse&{extra?: React.ReactNode}) {
@@ -136,10 +145,10 @@ export function CourseLinkPopup({extra, ...props}: LookupOrCourse&{extra?: React
       {extra ? <>
         <Text v="lg" className="mb-2" >{subject} {num}</Text>
         {extra}
-        <p className="mt-2" >We don't have any more information on this course</p>
+        <p className="mt-2" >We don{"'"}t have any more information on this course</p>
       </> : <>
         <Text v="lg" >Course not found</Text>
-        <p>Maybe it's been erased from the structure of the universe, or it just isn't on our servers...</p>
+        <p>Maybe it{"'"}s been erased from the structure of the universe, or it just isn{"'"}t on our servers...</p>
       </>}
     </div>
       : <Card type="frameless" extra={extra} course={cid} />)

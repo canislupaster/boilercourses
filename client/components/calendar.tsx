@@ -1,5 +1,5 @@
 import { IconFilter } from "@tabler/icons-react";
-import React, { useContext, useState } from "react";
+import React, { useCallback, useContext, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { Course, minutesInDay, scheduleAbbr, Section, SmallCourse, Term, validDays } from "../../shared/types";
 import { SelectionContext, ShowMore, simp, useDebounce } from "./clientutil";
@@ -19,7 +19,7 @@ export function Calendar({sections: secs, term}: {
 
 	const [search, setSearch] = useState("");
 
-	const filterSecs = useDebounce(() => {
+	const filterSecs = useDebounce(useCallback(() => {
 		const v = simp(search);
 		return secs.filter(([,x]) => simp(`
 			${x.crn}
@@ -29,7 +29,7 @@ export function Calendar({sections: secs, term}: {
 			${x.instructors.map(v=>v.name).join("\n")}
 			${x.times.map(v=>`${v.day} ${v.time}`).join("\n")}
 		`).includes(v));
-	}, 100, [secs, search]);
+	}, [secs, search]), 100);
 
 	const sortedDays = [...new Set(filterSecs
 		.flatMap(sec=>sec[1].times.map(v=>v.day)))]

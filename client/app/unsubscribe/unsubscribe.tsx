@@ -1,7 +1,7 @@
 "use client"
 
 import { bgColor, Button, StatusPage, Text } from "@/components/util";
-import { callAPI } from "@/components/wrapper";
+import { useAPI } from "@/components/wrapper";
 import { useState } from "react";
 
 export const Unsubscribed = () => <StatusPage title="Unsubscribed" >
@@ -11,7 +11,7 @@ export const Unsubscribed = () => <StatusPage title="Unsubscribed" >
 type Unsubscribe = {email: string, key: string};
 
 export function Unsubscribe({req}: {req: Unsubscribe}) {
-	const unsub = callAPI<void, Unsubscribe>("notifications/unsubscribe");
+	const unsub = useAPI<void, Unsubscribe>("notifications/unsubscribe");
 	const [done, setDone] = useState(false);
 
 	if (done) return <Unsubscribed/>;

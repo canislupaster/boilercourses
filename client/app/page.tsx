@@ -5,11 +5,11 @@ import { Footer } from "@/components/footer";
 import { textColor, Text, bgColor, borderColor, chipColors, containerDefault, Button } from "@/components/util";
 import { decodeQueryToSearchState, encodeSearchState, Search, SearchState } from "./search";
 
-import { AppTooltip, Carousel, searchState, useGpaColor } from "@/components/clientutil";
+import { AppTooltip, Carousel, useSearchState, useGpaColor } from "@/components/clientutil";
 import { Logo, LogoText } from "@/components/logo";
 import { ButtonRow } from "@/components/settings";
-import { AppCtx, callAPI, useAPI } from "@/components/wrapper";
-import { useContext, useEffect, useMemo, useState } from "react";
+import { AppCtx, useAPI, useAPIResponse } from "@/components/wrapper";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { SmallCourse } from "../../shared/types";
 import { Collapse } from "react-collapse";
 import { Card } from "@/components/card";
@@ -38,7 +38,7 @@ function Countdown({until}: {until: number}) {
 		return ()=>{
 			if (curTimeout!=null) clearTimeout(curTimeout);
 		};
-	}, [])
+	}, [until])
 
 	const gpaColor = useGpaColor();
 
@@ -55,9 +55,9 @@ function Countdown({until}: {until: number}) {
 }
 
 function Landing({setSearch}: {setSearch: (s: string) => void}) {
-	const randomCourse = callAPI<number, object>("random");
+	const randomCourse = useAPI<number, object>("random");
 	const ctx = useContext(AppCtx);
-	const mostViewed = useAPI<SmallCourse[]>("mostviewed");
+	const mostViewed = useAPIResponse<SmallCourse[]>("mostviewed");
 
 	const activeMessages = useMemo(()=>{
 		const now = Date.now()/1000;
@@ -119,7 +119,8 @@ function Landing({setSearch}: {setSearch: (s: string) => void}) {
 					<Text v="big" className="flex flex-row items-center gap-2" >
 						👀 Most viewed courses
 					</Text>
-					<Carousel items={mostViewed.res.map(c=><Card type="card" course={c} className="h-full" />)} />
+					<Carousel items={mostViewed.res.map(c=>
+						<Card key={c.id} type="card" course={c} className="h-full" />)} />
 				</div>}
 			</Collapse>
 		</div>
@@ -129,16 +130,17 @@ function Landing({setSearch}: {setSearch: (s: string) => void}) {
 }
 
 export default function App() {
-	const [initSearch, setInitSearch] = searchState<[Partial<SearchState>,boolean]|null>(null, (x) => {
+	const [initSearch, setInitSearch] = useSearchState<[Partial<SearchState>,boolean]|null>(null, (x) => {
 		return [decodeQueryToSearchState(x),false];
 	}, (x) => {
 		if (x==null) return;
 		return encodeSearchState(x[0]);
 	});
 
+	const clearSearch = useCallback(()=>setInitSearch(null),[setInitSearch]);
+	const setSearchState = useCallback((s: SearchState)=>setInitSearch([s,false]), [setInitSearch]);
 	return initSearch ?
-		<Search init={initSearch[0]} autoFocus={initSearch[1]} clearSearch={()=>setInitSearch(null)} setSearchState={(s) => {
-			setInitSearch([s,false]);
-		}} includeLogo />
+		<Search init={initSearch[0]} autoFocus={initSearch[1]}
+			clearSearch={clearSearch} setSearchState={setSearchState} includeLogo />
 		: <Landing setSearch={(s) => setInitSearch([{query: s}, true])} />;
 }

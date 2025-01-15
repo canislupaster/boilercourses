@@ -1,4 +1,4 @@
-import { SmallCourse } from "./types";
+import { SmallCourse } from "./types.ts";
 
 export type AdminPost = {
 	id: number,

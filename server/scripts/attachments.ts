@@ -1,9 +1,9 @@
 import * as cheerio from "cheerio";
 
-import {fetchDispatcher, logArray} from "./fetch";
-import {Attachment, Course, Term} from "../../shared/types";
+import {fetchDispatcher, logArray} from "./fetch.ts";
+import {Attachment, Course, Term} from "../../shared/types.ts";
 import {Knex} from "knex";
-import {DBCourse, DBTerm} from "./db";
+import {DBCourse, DBTerm} from "./db.ts";
 
 async function getAttachments(subject: string, num: number) {
 	const res = await fetchDispatcher<cheerio.CheerioAPI|null>({
@@ -33,7 +33,7 @@ async function getAttachments(subject: string, num: number) {
 			const docs = res(d).find("#listCourseDocs").first().find("p").toArray();
 			const pages = res(d).find("#listCoursePages").first().find("p").toArray();
 
-			const getInfo = (x: cheerio.Element, type: "web"|"doc"): Attachment => {
+			const getInfo = (x: typeof d, type: "web"|"doc"): Attachment => {
 				const txts = res(x).children().first()
 					.contents().toArray().filter(y=>y.nodeType==3)
 					.map(v=>res(v).text().trim());

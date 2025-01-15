@@ -1,4 +1,4 @@
-import {Grade, grades, Term, termPre} from "../../shared/types";
+import {Grade, grades, Term, termPre} from "../../shared/types.ts";
 import * as XLSX from 'xlsx';
 
 export type Grades = {

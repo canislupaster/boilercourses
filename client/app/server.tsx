@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unknown-property */
 //utilities for server...
 //you shouldn't use any of these from non-server components
 

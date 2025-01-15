@@ -6,11 +6,11 @@ import { twMerge } from "tailwind-merge";
 import { UserData } from "../../shared/posts";
 import { Dropdown, DropdownPart } from "./clientutil";
 import { IconButton, Text, textColor } from "./util";
-import { AppCtx, callAPI, redirectToSignIn, setAuth, useAPI } from "./wrapper";
+import { AppCtx, useAPI, useSignInRedirect, setAuth, useAPIResponse } from "./wrapper";
 
 function useLogout() {
 	const app = useContext(AppCtx);
-	const logout = callAPI("logout", "unset");
+	const logout = useAPI("logout", "unset");
 
 	return {
 		logout: () => logout.run({
@@ -26,11 +26,11 @@ function useLogout() {
 function UserEmail({setAdmin}: {setAdmin: (x: boolean)=>void}) {
 	// yeah so i should probably create a variant of useAPI for this case
 	// instead of checking app.hasAuth to see if its loading....
-	const u = useAPI<UserData>("user", {auth: "unset"});
+	const u = useAPIResponse<UserData>("user", {auth: "unset"});
 
 	useEffect(()=>{
 		if (u) setAdmin(u.res.admin);
-	}, [u]);
+	}, [u, setAdmin]);
 
 	const app = useContext(AppCtx);
 	
@@ -41,9 +41,9 @@ function UserEmail({setAdmin}: {setAdmin: (x: boolean)=>void}) {
 export function UserButton() {
 	const app = useContext(AppCtx);
 	const logout = useLogout();
-	const redir = redirectToSignIn();
+	const redir = useSignInRedirect();
 
-	const deleteUser = callAPI("deleteuser", "redirect");
+	const deleteUser = useAPI("deleteuser", "redirect");
 	const [admin, setAdmin] = useState(false);
 
 	const drop: DropdownPart[] = [

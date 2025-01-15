@@ -8,12 +8,12 @@ import { CourseLink } from "./card";
 import { Alert, Dropdown, TermSelect } from "./clientutil";
 import { SectionLink } from "./sectionlink";
 import { Anchor, bgColor, Button, containerDefault, Divider, IconButton, Loading, Text, textColor } from "./util";
-import { AppCtx, callAPI, ModalActions, ModalCtx, redirectToSignIn, useAPI, useCourse } from "./wrapper";
+import { AppCtx, useAPI, ModalActions, ModalCtx, useSignInRedirect, useAPIResponse, useCourse } from "./wrapper";
 
 const AvailabilityUpdateCtx = createContext<()=>void>(()=>{});
 
 function Notification({id, course, satisfied, section, sent, term}: Notification) {
-	const del = callAPI<void, number>("notifications/delete", "redirect");
+	const del = useAPI<void, number>("notifications/delete", "redirect");
 	const ctx = useContext(AvailabilityUpdateCtx);
 
 	return <div className={twMerge(containerDefault, "p-2 flex flex-col gap-1 px-4")} >
@@ -48,14 +48,14 @@ function Notification({id, course, satisfied, section, sent, term}: Notification
 function NotificationCreator({course, section, fixTerm, update}: {
 	course: CourseId, section?: Section, fixTerm?: Term, update: ()=>void
 }) {
-	const register = callAPI<RegisterNotificationResponse, RegisterNotificationRequest>("notifications/register", "redirect");
+	const register = useAPI<RegisterNotificationResponse, RegisterNotificationRequest>("notifications/register", "redirect");
 	const terms = Object.keys(course.course.sections) as Term[];
 	const latest = latestTerm(course.course)!;
 	const [term, setTerm] = useState(fixTerm ?? latest);
 	const ctx = useContext(ModalCtx)!;
 	const app = useContext(AppCtx);
-	const sm = useMemo(()=>toSmallCourse(course), []);
-	const email = useAPI<UserData>("user", {auth: "redirect"});
+	const sm = useMemo(()=>toSmallCourse(course), [course]);
+	const email = useAPIResponse<UserData>("user", {auth: "redirect"});
 
 	const isOpen = (section ? [section] : course.course.sections[term])
 		.some(v=>v.seats && v.seats.left>0);
@@ -80,7 +80,7 @@ function NotificationCreator({course, section, fixTerm, update}: {
 
 		{isOpen
 		? <Alert bad title={`This ${section ? "section" : "course"} isn't full!`}
-			txt={<>You can't register for notifications at the moment. If you want to get notifications for a specific <b>full</b> section, select that section in the calendar.</>} />
+			txt={<>You can{"'"}t register for notifications at the moment. If you want to get notifications for a specific <b>full</b> section, select that section in the calendar.</>} />
 		: <ModalActions>
 			<Button className={bgColor.sky} onClick={()=>{
 				ctx.setLoading(true);
@@ -112,12 +112,13 @@ function NotificationCreator({course, section, fixTerm, update}: {
 }
 
 export function Notifications({course, className}: {course?: CourseId, className?: string}) {
-	const notifs = callAPI<Notification[]>("notifications/list", "unset");
-	useEffect(()=>notifs.run(), []);
+	const {run, loading, current} = useAPI<Notification[]>("notifications/list", "unset");
+	useEffect(run, [run]);
+
 	const app = useContext(AppCtx);
 
-	if (notifs.loading) return <Loading/>;
-	let list = notifs.current?.res ?? [];
+	if (loading) return <Loading/>;
+	let list = current?.res ?? [];
 	if (course!=undefined) list=list.filter(x=>x.course.id==course.id);
 	
 	return <div className={twMerge("flex flex-col gap-2 items-stretch", className)} >
@@ -125,14 +126,14 @@ export function Notifications({course, className}: {course?: CourseId, className
 			<Text>{course ? "Want to know when space opens up?" : "No notifications. Try visiting a full course to notify yourself when there's space!"}</Text>
 		</div>}
 
-		<AvailabilityUpdateCtx.Provider value={()=>notifs.run()} >
+		<AvailabilityUpdateCtx.Provider value={run} >
 			{list.map(x=><Notification key={x.id} {...x} />)}
 		</AvailabilityUpdateCtx.Provider>
 
 		{course && !list.some(v=>v.section==null) && <Button onClick={()=>{
 			app.open({
 				type: "other",
-				modal: <NotificationCreator update={()=>notifs.run()} course={course} />
+				modal: <NotificationCreator update={run} course={course} />
 			});
 		}} >
 			Register for notifications
@@ -142,7 +143,7 @@ export function Notifications({course, className}: {course?: CourseId, className
 
 export function CourseNotificationButton({course}: {course?: CourseId}) {
 	const app = useContext(AppCtx);
-	const redir = redirectToSignIn();
+	const redir = useSignInRedirect();
 
 	return <Dropdown trigger={<IconButton icon={<IconBell size={18} />} />} parts={app.hasAuth ? [
 		{type: "txt", txt: <>
@@ -160,30 +161,31 @@ function NotificationCreatorId({courseId,...props}: {courseId: number}&Omit<Reac
 }
 
 export function SectionNotifications({section, small, term}: {section: Section, small: SmallCourse, term: Term}) {
-	const notifs = callAPI<Notification[]>("notifications/list", "unset");
-	const del = callAPI<void, number>("notifications/delete", "redirect");
+	const {run,current} = useAPI<Notification[]>("notifications/list", "unset");
+	useEffect(run, [run]);
 
-	useEffect(()=>notifs.run(), []);
+	const del = useAPI<void, number>("notifications/delete", "redirect");
+
 	const app = useContext(AppCtx);
-	const redir = redirectToSignIn();
+	const redir = useSignInRedirect();
 	const actx = useContext(AvailabilityUpdateCtx);
 	const isFull = !section.seats || section.seats.left<=0;
 
 	if (isFull && !app.hasAuth) return <Text v="sm" >
 		<Anchor onClick={()=>redir()} >Login</Anchor> to be notified when this section has space.
 	</Text>;
-	else if (notifs.current==null || !isFull) return <></>;
+	else if (current==null || !isFull) return <></>;
 	
-	const notif = notifs.current.res.find(x=>x.section?.crn == section.crn);
+	const notif = current.res.find(x=>x.section?.crn == section.crn);
 	return notif==undefined || notif.sent ? <Anchor onClick={()=>{
 		app.open({
 			type: "other",
-			modal: <NotificationCreatorId update={()=>{notifs.run(); actx()}}
+			modal: <NotificationCreatorId update={()=>{run(); actx()}}
 				courseId={small.id} section={section} fixTerm={term} />
 		});
 	}} >Be notified when this section has space</Anchor> : <Text>
-		You'll be notified when this section opens up. <Anchor className={textColor.red} onClick={()=>{
-			del.run({data: notif.id, refresh() {notifs.run(); actx();}});
+		You{"'"}ll be notified when this section opens up. <Anchor className={textColor.red} onClick={()=>{
+			del.run({data: notif.id, refresh() {run(); actx();}});
 		}} >{del.loading ? "Deleting..." : "Delete"}</Anchor>
 	</Text>
 }

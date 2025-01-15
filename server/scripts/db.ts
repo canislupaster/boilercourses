@@ -1,5 +1,5 @@
 import {abort} from "node:process";
-import {RMPInfo, Term} from "../../shared/types";
+import {RMPInfo, Term} from "../../shared/types.ts";
 import {default as knexBuilder} from "knex";
 
 export type DBCourse = {

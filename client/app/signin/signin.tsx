@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 
 import { Alert, BackButton } from "@/components/clientutil";
 import { borderColor, Button, Loading, Text } from "@/components/util";
-import { AppCtx, AuthErr, setAuth, useAPI } from "@/components/wrapper";
+import { AppCtx, AuthErr, setAuth, useAPIResponse } from "@/components/wrapper";
 import { MsalProvider, useMsal } from "@azure/msal-react";
 import { useContext, useEffect, useState } from "react";
 
@@ -21,17 +21,17 @@ export const msalApplication = new PublicClientApplication({
 	}
 });
 
-function SignedIn({loggedIn,tok}: {loggedIn: ()=>void,tok:string}) {
-	const ret = useAPI<{id: string, key: string}, string>("login", {data: tok})
-	const app = useContext(AppCtx);
+function SignedIn({loggedIn,tok}: {loggedIn: ()=>void, tok:string}) {
+	const ret = useAPIResponse<{id: string, key: string}, string>("login", {data: tok})
+	const {setHasAuth} = useContext(AppCtx);
 
 	useEffect(() => {
 		if (ret!=null) {
 			setAuth(ret.res);
-			app.setHasAuth(true);
+			setHasAuth(true);
 			loggedIn();
 		}
-	}, [ret]);
+	}, [setHasAuth, loggedIn, ret]);
 
 	return <>
 		<Text v="lg" >Signing in...</Text>
@@ -95,7 +95,7 @@ export function SignIn() {
 
 		if (it==null) router.push("/")
 		else setV(JSON.parse(it) as typeof v);
-	}, [])
+	}, [router])
 
 	if (v==null) return <Loading/>;
 

@@ -77,7 +77,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
 
     @Serializable
     data class SearchResult(
-        val score: Float,
+        val score: Float?,
         val course: Schema.SmallCourse
     )
 
@@ -453,7 +453,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
         return scoredocs.map { scoredoc ->
             val id = fields.document(scoredoc.doc).getField("searchId").numericValue().toInt()
             SearchResult(
-                if (scoredoc.score.isNaN()) 0.0f else scoredoc.score,
+                if (scoredoc.score.isNaN()) null else scoredoc.score,
                 smallCourseBySearchId[id]!!
             )
         }
@@ -486,7 +486,7 @@ class Courses(val env: Environment, val log: Logger, val db: DB) {
             if (f>t) throw APIErrTy.NotFound.err("Page doesn't exist")
 
             return@read sortedCourses.subList(f,t).map {
-                SearchResult(0.0f, it.toSmall(null))
+                SearchResult(null, it.toSmall(null))
             }.let {
                 SearchOutput(it, sortedCourses.size,
                     (sortedCourses.size+numResults-1)/numResults, 0.0)

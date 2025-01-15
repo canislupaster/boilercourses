@@ -1,12 +1,12 @@
 {
   "compilerOptions": {
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
     "allowSyntheticDefaultImports": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "strict": true,
-    "target": "ESNext"
+    "rootDir": "../../"
   },
-	"include": ["./*.ts"]
+	"include": ["./*.ts", "../../shared/*.ts"]
 }

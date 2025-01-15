@@ -1,13 +1,13 @@
 import {exit} from "node:process";
 import {parseArgs} from "node:util";
-import {addProxies, fetchDispatcher, getHTML} from "./fetch";
-import {formatTerm, Term, termIdx} from "../../shared/types";
-import {getGrades, Grades} from "./grades";
+import {addProxies, fetchDispatcher, getHTML} from "./fetch.ts";
+import {formatTerm, Term, termIdx} from "../../shared/types.ts";
+import {getGrades, Grades} from "./grades.ts";
 import {readFile} from "node:fs/promises";
-import {updateCourses} from "./course";
-import {DBInstructor, DBTerm, loadDB} from "./db";
-import {updateInstructors} from "./prof";
-import {addAttachments} from "./attachments";
+import {updateCourses} from "./course.ts";
+import {DBInstructor, DBTerm, loadDB} from "./db.ts";
+import {updateInstructors} from "./prof.ts";
+import {addAttachments} from "./attachments.ts";
 
 const {values, positionals} = parseArgs({
 	options: {
@@ -37,11 +37,11 @@ function tryOr<T>(f: () => T, d: T) {
 }
 
 const gradePath = tryOr<{type:"online",url:string}|{type:"file", path:string}>(
-	()=>({type: "online", url: new URL(values.grades!).href}),
-	{type: "file", path: values.grades!}
+	()=>({type: "online", url: new URL(values.grades).href}),
+	{type: "file", path: values.grades}
 );
 
-console.log(`getting grades from ${values.grades!}`);
+console.log(`getting grades from ${values.grades}`);
 
 let grades: Grades[];
 if (gradePath.type=="online")

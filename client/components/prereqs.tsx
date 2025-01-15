@@ -27,12 +27,14 @@ function PrereqCourseLikeLink({prereq}: {prereq: CourseLikePreReq}) {
 	else if (prereq.minGPA!=null) what=`${prereq.minGPA.toFixed(1)} GPA`;
 	else if (prereq.minCredits!=null) what=`${prereq.minCredits} credit${prereq.minCredits==1 ? "" : "s"}`;
 
+	const concurrentOrCoreq = prereq.corequisite ? "Corequisite" : `Can${prereq.concurrent ? "":"'t"} be taken concurrently`
 	const courseExtra = <div className="flex flex-col gap-2 items-start pl-0" >
 		{[
 			prereq.grade!=null && <><span className="font-extrabold font-display" >{prereq.grade}</span> or higher</>,
 			prereq.minGPA!=null && <><span className="font-extrabold font-display" >{prereq.minGPA.toFixed(1)}</span> GPA</>,
 			prereq.minCredits!=null && <><span className="font-extrabold font-display" >{prereq.minCredits}</span> credits in {kind}</>,
-			<span className="font-extrabold" >{`Can${prereq.concurrent ? "":"'t"} be taken concurrently`}</span>
+			// eslint-disable-next-line react/jsx-key
+			<span className="font-extrabold" >{concurrentOrCoreq}</span>
 		].map((x,i) => {
 			if (x==false) return <React.Fragment key={i} />
 			return <div key={i} className="flex flex-row gap-2 items-center" >
@@ -87,7 +89,7 @@ export function Prereqs({prereqs, isChild}: {prereqs: PreReqs, isChild?: boolean
 	if (prereqs.type=="and" && !isChild && !prereqs.vs.some(p=>p.type=="or")) {
 		return <div className="flex flex-col gap-2" >
 			{prereqs.vs.map((v,i) => <Prereqs isChild key={i} prereqs={v} />)}
-		</div>
+		</div>;
 	}
 
 	return <div className={`flex flex-col relative border ${

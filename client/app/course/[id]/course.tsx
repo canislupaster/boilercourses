@@ -3,7 +3,7 @@
 import { CourseNotificationButton } from "@/components/availability";
 import { Calendar, calendarDays } from "@/components/calendar";
 import { CourseChips, GPAIndicator } from "@/components/card";
-import { Alert, BarsStat, NameSemGPA, searchState, SelectionContext, ShowMore, simp, TermSelect, useDebounce, useMd, WrapStat } from "@/components/clientutil";
+import { Alert, BarsStat, NameSemGPA, useSearchState, SelectionContext, ShowMore, simp, TermSelect, useDebounce, useMd, WrapStat } from "@/components/clientutil";
 import { Community } from "@/components/community";
 import Graph from "@/components/graph";
 import { InstructorList } from "@/components/instructorlist";
@@ -13,47 +13,53 @@ import { ProfLink } from "@/components/proflink";
 import { Restrictions } from "@/components/restrictions";
 import { SimilarCourses } from "@/components/similar";
 import { abbr, Anchor, bgColor, Button, CatalogLinkButton, containerDefault, Divider, firstLast, LinkButton, Loading, RedditButton, selectProps, Text } from "@/components/util";
-import { AppCtx, setAPI, useAPI, useInfo } from "@/components/wrapper";
+import { AppCtx, setAPI, useAPIResponse, useInfo } from "@/components/wrapper";
 import { IconPaperclip, IconWorld } from "@tabler/icons-react";
 import Image from "next/image";
-import React, { useContext, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import Select, { MultiValue } from "react-select";
-import { allCourseInstructors, Attachment, CourseId, CourseInstructor, creditStr, emptyInstructorGrade, formatTerm, InstructorGrade, latestTerm, mergeGrades, RMPInfo, Section, sectionsByTerm, SmallCourse, Term, termIdx, toSmallCourse, trimCourseNum } from "../../../../shared/types";
+import { allCourseInstructors, Attachment, CourseId, CourseInstructor, creditStr, emptyInstructorGrade, formatTerm, InstructorGrade, latestTerm, mergeGrades, PreReqs, RMPInfo, Section, sectionsByTerm, SmallCourse, Term, termIdx, toSmallCourse, trimCourseNum } from "../../../../shared/types";
 import boilerexams from "../../../public/boilerexams-icon.png";
 import boilerexamsCourses from "../../boilerexamsCourses.json";
 
-const useSmall = (cid: CourseId) => useMemo(()=>toSmallCourse(cid),[cid.id]);
+const useSmall = (cid: CourseId) => useMemo(()=>toSmallCourse(cid), [cid]);
 
-function InstructorGradeView({xs,type,cid,term}: {
-	xs: [CourseInstructor, Term][], cid: CourseId, term: Term, type:"rmp"|"gpa"
-}) {
-	let res: (RMPInfo|null)[]|null=null;
-	const small = useSmall(cid);
-	const isMd = useMd();
-	if (type=="rmp") {
-		const o=useAPI<(RMPInfo|null)[],string[]>("rmp", {data: xs.map(x=>x[0].name)});
-		if (o==null) return <Loading/>
+const instructorGradeViewComponent = (type: "rmp"|"gpa") =>
+	function InstructorGradeView({xs,cid,term}: {
+		xs: [CourseInstructor, Term][], cid: CourseId, term: Term
+	}) {
+		let res: (RMPInfo|null)[]|null=null;
+		const small = useSmall(cid);
+		const isMd = useMd();
 
-		res=o.res;
-	}
+		if (type=="rmp") {
+			// eslint-disable-next-line react-hooks/rules-of-hooks
+			const o=useAPIResponse<(RMPInfo|null)[],string[]>("rmp", {data: xs.map(x=>x[0].name)});
+			if (o==null) return <Loading/>
 
-	const out: [[CourseInstructor, Term], number|null, boolean][] = xs.map(([i,inTerm],j) => {
-		if (type=="gpa" && cid.course.instructor[i.name]!=undefined) {
-			const g = mergeGrades(Object.values(cid.course.instructor[i.name]));
-			if (g.gpa!=null) return [[i,inTerm],g.gpa,inTerm==term];
-		} else if (type=="rmp" && res!=null && res[j]!=null && res[j].numRatings>0) {
-			return [[i,inTerm],res[j].avgRating,inTerm==term];
+			res=o.res;
 		}
 
-		return [[i,inTerm],null,inTerm==term]
-	});
+		const out: [[CourseInstructor, Term], number|null, boolean][] = xs.map(([i,inTerm],j) => {
+			if (type=="gpa" && cid.course.instructor[i.name]!=undefined) {
+				const g = mergeGrades(Object.values(cid.course.instructor[i.name]));
+				if (g.gpa!=null) return [[i,inTerm],g.gpa,inTerm==term];
+			} else if (type=="rmp" && res!=null && res[j]!=null && res[j].numRatings>0) {
+				return [[i,inTerm],res[j].avgRating,inTerm==term];
+			}
 
-	return <BarsStat lhs={([i, inTerm], b)=>{
-		return <ProfLink x={i} className="font-semibold text-nowrap"
-			course={small} term={inTerm} labelTerm={!b}
-			label={abbr(i.name, (isMd ? 35 : 20) - (!b ? 13 : 0))} />;
-	}} className="grid-cols-[4fr_10fr_1fr]" vs={out} type={type} />
-}
+			return [[i,inTerm],null,inTerm==term]
+		});
+
+		return <BarsStat lhs={([i, inTerm], b)=>{
+			return <ProfLink x={i} className="font-semibold text-nowrap"
+				course={small} term={inTerm} labelTerm={!b}
+				label={abbr(i.name, (isMd ? 35 : 20) - (!b ? 13 : 0))} />;
+		}} className="grid-cols-[4fr_10fr_1fr]" vs={out} type={type} />
+	}
+
+const GPAView = instructorGradeViewComponent("gpa");
+const RMPView = instructorGradeViewComponent("rmp");
 
 function InstructorSemGPA({xs, term, cid}: {
 	xs: [CourseInstructor, Term][], term: Term, cid: CourseId
@@ -78,11 +84,41 @@ function InstructorSemGPA({xs, term, cid}: {
 
 const averageInstructor = {type: "avg"} as const;
 
+function CoursePrereqs({prereqs}: {prereqs: PreReqs}) {
+	const isCoReq = (x: PreReqs): boolean => {
+		if (x.type=="leaf") return "corequisite" in x.leaf && x.leaf.corequisite==true;
+		else return !x.vs.some(y=>!isCoReq(y));
+	};
+
+	const coreqs: PreReqs[]=[], reqs: PreReqs[]=[];
+	if (prereqs.type=="and") {
+		for (const req of prereqs.vs) {
+			(isCoReq(req) ? coreqs : reqs).push(req);
+		}
+	} else if (prereqs.type=="leaf" && isCoReq(prereqs)) {
+		coreqs.push(prereqs);
+	} else {
+		reqs.push(prereqs);
+	}
+	
+	const reqArr = (title: string, reqs: PreReqs[]) => reqs.length ? <>
+		<Text v="md" className="mb-4" >{title}</Text>
+		<ShowMore className="mb-4" >
+			<Prereqs prereqs={{type: "and", vs: reqs}} />
+		</ShowMore>
+	</> : "";
+
+	return <>
+		{reqArr("Corequisites", coreqs)}
+		{reqArr("Prerequisites", reqs)}
+	</>;
+}
+
 function CourseDetail(cid: CourseId) {
-	useAPI<void, number>("view", { data: cid.id });
+	useAPIResponse<void, number>("view", { data: cid.id });
 
 	const latest = latestTerm(cid.course)!;
-	const [term, setTerm] = searchState<Term>(latest, (p) => p.get("term") as Term|null,
+	const [term, setTerm] = useSearchState<Term>(latest, (p) => p.get("term") as Term|null,
 		(x)=> x==latest ? null : new URLSearchParams([["term",x]]))
 
 	const course = cid.course;
@@ -90,26 +126,29 @@ function CourseDetail(cid: CourseId) {
 	const [instructorSearch, setInstructorSearch] = useState("");
 
 	const small = useSmall(cid);
-	const instructors = useMemo(()=>small.termInstructors[term] ?? [], [term]);
-	const allInstructors = useMemo(()=>allCourseInstructors(cid.course, term), [term]);
+	const instructors = useMemo(()=>small.termInstructors[term] ?? [], [small.termInstructors, term]);
 	const instructorToTerm = useMemo(()=> new Map<string, Term>([
 		...sectionsByTerm(cid.course).flatMap(([secTerm,secs])=>
 			secs.flatMap(sec=>sec.instructors.map(i=>[i.name, secTerm] satisfies [string, Term]))),
 		...cid.course.sections[term].flatMap(sec=>sec.instructors.map(i=>[i.name, term] satisfies [string, Term]))
-	]), [term]);
+	]), [cid.course, term]);
+	const allInstructors = useMemo(()=>allCourseInstructors(cid.course, term), [cid.course, term]);
 
-	const searchInstructors = useDebounce(() => {
+	const searchInstructors = useDebounce(useCallback(() => {
 		const v = simp(instructorSearch);
 		return allInstructors.filter(x => simp(x.name).includes(v))
 			.map((v): [CourseInstructor, Term]=>[v, instructorToTerm.get(v.name)!]);
-	}, 100, [term, instructorSearch]);
+	}, [instructorSearch, allInstructors, instructorToTerm]), 100);
 
 	const [section, setSection] = useState<Section|null>(null);
 	const app = useContext(AppCtx);
 
 	const smallCalendar = useMemo(()=>calendarDays(course, term).length<=3, [course,term]);
 	//memo so object reference is stable, otherwise calendar might rerender too often!
-	const calSections = useMemo(()=>course.sections[term].map((x):[SmallCourse, Section]=>[small,x]), [course,term]);
+	const calSections = useMemo(()=>
+		course.sections[term].map((x):[SmallCourse, Section]=>[small,x]),
+	[course.sections, small, term]);
+
 	const attachmentsTerm = (Object.entries(course?.attachments ?? {}) as [Term, Attachment[]][])
 		.sort(([a],[b]) => termIdx(b)-termIdx(a));
 
@@ -118,10 +157,10 @@ function CourseDetail(cid: CourseId) {
 	const statProps = {search:instructorSearch, setSearch:setInstructorSearch, searchName: "instructors"};
 
 	const gradesForTerm = useMemo(()=>
-		mergeGrades(Object.values(course.instructor).map(x=>x[term] ?? emptyInstructorGrade)), [term]);
+		mergeGrades(Object.values(course.instructor).map(x=>x[term] ?? emptyInstructorGrade)), [course.instructor, term]);
 
 	const hasGrades = allInstructors.some(x=>course.instructor[x.name]!==undefined);
-	type GradeInstructorOption = ({type:"instructor"}&CourseInstructor)|typeof averageInstructor;
+	type GradeInstructorOption = ({type:"instructor", term: Term}&CourseInstructor)|typeof averageInstructor;
 	const [selectedInstructors, setSelInstructors] = useState<GradeInstructorOption[]>(
 		hasGrades ? [averageInstructor] : []
 	);
@@ -132,18 +171,25 @@ function CourseDetail(cid: CourseId) {
 				mergeGrades(Object.values(course.instructor).flatMap(x=>Object.values(x)))]
 			: [x.name,course.instructor[x.name]==undefined ? emptyInstructorGrade
 				: mergeGrades(Object.values(course.instructor[x.name]))]
-		), [selectedInstructors]);
+		), [course.instructor, selectedInstructors]);
 
 	const gradeInstructors: GradeInstructorOption[] = useMemo(()=>
-		[averageInstructor, ...allInstructors.map((x): GradeInstructorOption=>
-			({type: "instructor", ...x}))], []);
+		[averageInstructor, ...allInstructors.map((x): GradeInstructorOption=>{
+			const t = instructorToTerm.get(x.name)!;
+			return {type: "instructor", ...x, term: t};
+		}).sort((a,b) => {
+			return (a.type=="avg" ? 0 : ((a.name in course.instructor ? 0 : 2) + (a.term==term ? 0 : 1)))
+				- (b.type=="avg" ? 0 : ((b.name in course.instructor ? 0 : 2) + (b.term==term ? 0 : 1)));
+		})], [allInstructors, course.instructor, instructorToTerm, term]);
 
 	return <SelectionContext.Provider value={{
 		selTerm(term) {
 			if (term in course.sections) setTerm(term);
 			else app.open({type: "error", name: "Term not available",
 				msg: "We don't have data for this semester"})
-		}, selSection:setSection, section
+		}, selSection:setSection, deselectSection(section) {
+			setSection(s=>s==section ? null : s);
+		}, section
 	}} >
 		<MainLayout left={<>
 			<div className="flex flex-col gap-4 -mt-3 mb-1">
@@ -193,13 +239,9 @@ function CourseDetail(cid: CourseId) {
 			<Text v="dim" className="mt-1 mb-3" >Course {course.subject} {course.course} from Purdue University - West Lafayette.</Text>
 
 			{/* Prerequisites */}
-			{course.prereqs=="failed" ? <Text v="err" >Failed to parse prerequisites. Please use the <Anchor href={catalog} >catalog</Anchor>.</Text>
-				: (course.prereqs!="none" && <>
-						<Text v="md" className="mb-4" >Prerequisites</Text>
-						<ShowMore className="mb-4" >
-							<Prereqs prereqs={course.prereqs} />
-						</ShowMore>
-					</>)}
+			{course.prereqs=="failed"
+				? <Text v="err" >Failed to parse prerequisites. Please use the <Anchor href={catalog} >catalog</Anchor>.</Text>
+				: (course.prereqs!="none" && <CoursePrereqs prereqs={course.prereqs} />)}
 
 			<Restrictions restrictions={course.restrictions} />
 
@@ -227,7 +269,7 @@ function CourseDetail(cid: CourseId) {
 									return <LinkButton key={i} className={cls} icon={icon} href={attach.href} >{inner}</LinkButton>
 								else return <Button className={cls} icon={icon} key={i} onClick={()=>{
 									app.open({type: "other", name: "Secured resource", modal: <>
-										<p>To access this resource, login and then look up the course in Purdue's Course Insights.</p>
+										<p>To access this resource, login and then look up the course in Purdue{"'"}s Course Insights.</p>
 									</>, actions: [
 										{name: "Continue to Course Insights", status: "primary", act(ctx) {
 											window.open("https://sswis.mypurdue.purdue.edu/CourseInsights/", "_blank");
@@ -248,7 +290,7 @@ function CourseDetail(cid: CourseId) {
 			{
 				key: "GPA", title: "GPA",
 				body: <WrapStat title="GPA by professor" {...statProps} >
-					<InstructorGradeView xs={searchInstructors} type="gpa" cid={cid} term={term} />
+					<GPAView xs={searchInstructors} cid={cid} term={term} />
 				</WrapStat>
 			},
 			{
@@ -260,7 +302,7 @@ function CourseDetail(cid: CourseId) {
 			{
 				key: "rmp", title: "Rating",
 				body: <WrapStat title="RateMyProfessor ratings" {...statProps} >
-					<InstructorGradeView xs={searchInstructors} type="rmp" cid={cid} term={term} />
+					<RMPView xs={searchInstructors} cid={cid} term={term} />
 				</WrapStat>
 			},
 			{
@@ -269,12 +311,14 @@ function CourseDetail(cid: CourseId) {
 					<Select isMulti options={gradeInstructors}
 						placeholder="Select instructors"
 						value={selectedInstructors}
-						getOptionLabel={x => x.type=="avg" ? "Average" : x.name}
+						getOptionLabel={
+							x=>x.type=="avg" ? "Average" : x.term==term ? x.name : `${x.name} (${formatTerm(x.term)})`
+						}
 						getOptionValue={x=>x.type=="avg" ? "" : x.name}
 						onChange={(x: MultiValue<GradeInstructorOption>)=>
 							setSelInstructors(x as GradeInstructorOption[])}
 						isOptionDisabled={(x: GradeInstructorOption) =>
-							(x.type=="avg" && !hasGrades) || (x.type!="avg" && course.instructor[x.name]==undefined)}
+							(x.type=="avg" && !hasGrades) || (x.type!="avg" && !(x.name in course.instructor))}
 						{...selectProps<GradeInstructorOption,true>()}
 					/>
 

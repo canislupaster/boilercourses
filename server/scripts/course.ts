@@ -20,10 +20,10 @@ import {
   termIdx,
   toInstructorGrade,
   validDays
-} from "../../shared/types";
-import {DBAttribute, DBCourse, DBSchedType, DBSubject} from "./db";
-import {deepEquals, getHTML, logArray, ords, postHTML, tableToObject} from "./fetch";
-import {Grades} from "./grades";
+} from "../../shared/types.ts";
+import {DBAttribute, DBCourse, DBSchedType, DBSubject} from "./db.ts";
+import {deepEquals, getHTML, logArray, ords, postHTML, tableToObject} from "./fetch.ts";
+import {Grades} from "./grades.ts";
 
 type Expr<T, Op extends string> =
 	{type: "leaf", leaf: T}
@@ -116,7 +116,7 @@ function reduceExpr<T,Op extends string,X>(
 	else return reduce(reduceExpr(c.a,map,reduce), reduceExpr(c.b,map,reduce), c.op);
 };
 
-function parsePreReqs(txt: string, concurrent: boolean=false) {
+function parsePreReqs(txt: string, corequisite: boolean) {
 	const parseAtom = (s: string): [PreReq, string] => {
 		const m2 = s.match(/^(ALEKS Math Assessment|SAT Mathematics|ACT Math|SATR Math|FL Placement - \w+)\s+(\d+)/);
 		if (m2!=null) return [{
@@ -134,7 +134,8 @@ function parsePreReqs(txt: string, concurrent: boolean=false) {
 			level: m[1]==undefined ? null : m[1] as Level,
 			course: m[3],
 			grade: m[4]==undefined ? null : m[4] as Grade,
-			concurrent: concurrent || m[5]!==undefined,
+			corequisite: corequisite ? true : undefined,
+			concurrent: m[5]!==undefined,
 			minCredits: null, minGPA: null
 		}, s.slice(m[0].length)];
 	};
@@ -685,8 +686,8 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 			//i havent seen a case where prereqs isn't filled with garbage when gen reqs exists
 			if (isNewer) {
 				if (genReqStrs.length==0) {
-					for (const [prereq, concurrent] of preReqStrs) {
-						addReqs(prereq, () => parsePreReqs(prereq, concurrent));
+					for (const [prereq, isCorequisite] of preReqStrs) {
+						addReqs(prereq, () => parsePreReqs(prereq, isCorequisite));
 					}
 				}
 

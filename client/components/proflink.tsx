@@ -6,7 +6,7 @@ import { CourseInstructor, formatTerm, InstructorGrade, InstructorId, mergeGrade
 import { AppTooltip, SelectionContext, StyleClasses, useMd, useGpaColor } from "./clientutil";
 import { SectionLink } from "./sectionlink";
 import { Anchor, capitalize, Chip, chipColorKeys, firstLast, Loading, shitHash, Text } from "./util";
-import { useAPI, useCourse } from "./wrapper";
+import { useAPIResponse, useCourse } from "./wrapper";
 
 export const CircProg = ({cssColor,...props}: CircularProgressProps&{cssColor?: string}) =>
 	<StyleClasses f={(r)=> <CircularProgress ref={r}
@@ -18,7 +18,7 @@ export const CircProg = ({cssColor,...props}: CircularProgressProps&{cssColor?: 
 			value: `text-2xl font-semibold textColor`,
 		}}
 		strokeWidth={3} size="lg" showValueLabel={true}
-		aria-label="professor statistic" {...props}
+		aria-label="Statistic" {...props}
 	/>} classStyles={{
 		strokeColor: {stroke: cssColor},
 		strokeColorTransparent: {stroke: cssColor, strokeOpacity: "10%"},
@@ -100,7 +100,7 @@ function ProfSectionList({secs, course, term}: {secs: Section[], course: SmallCo
 }
 
 function ProfData({x, course, term}: {x: CourseInstructor, course: SmallCourse, term: Term}) {
-	const data = useAPI<InstructorId, string>("profbyname", {data: x.name, handleErr(e) {
+	const data = useAPIResponse<InstructorId, string>("profbyname", {data: x.name, handleErr(e) {
 		if (e.error=="notFound") return null;
 	}})?.res ?? null;
 

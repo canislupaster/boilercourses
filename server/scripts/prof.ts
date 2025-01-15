@@ -1,9 +1,8 @@
 import {Knex} from "knex";
-import {Instructor, normalizeName, RMPInfo} from "../../shared/types";
-import {deepEquals, fetchDispatcher, logArray, postHTML} from "./fetch";
-import {DBInstructor} from "./db";
-import {Grades} from "./grades";
-import {Element} from "cheerio";
+import {Instructor, normalizeName, RMPInfo} from "../../shared/types.ts";
+import {deepEquals, fetchDispatcher, logArray, postHTML} from "./fetch.ts";
+import {DBInstructor} from "./db.ts";
+import {Grades} from "./grades.ts";
 
 async function RMPGraphQL<T>(query: string, variables: object) {
 	return await fetchDispatcher<T>({
@@ -119,7 +118,7 @@ export async function updateInstructors({instructors,grades,knex}:{
 
 		const lis = search("#results li").toArray();
 		const li = lis
-			.map((x):[string,Element]=>[search(x).find(".cn-name").first().text().trim(),x])
+			.map((x):[string,typeof lis[0]]=>[search(x).find(".cn-name").first().text().trim(),x])
 			.find(x=>normalizeName(x[0])==nname);
 		
 		if (li!==undefined) {

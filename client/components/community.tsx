@@ -9,7 +9,7 @@ import { SmallCourse } from "../../shared/types";
 import { CourseLink } from "./card";
 import { Alert, AppTooltip, Dropdown } from "./clientutil";
 import { Anchor, bgColor, Button, Chip, containerDefault, IconButton, Loading, Text, Textarea, textColor } from "./util";
-import { AppCtx, callAPI, ModalAction, ModalActions, ModalCtx, redirectToSignIn } from "./wrapper";
+import { AppCtx, useAPI, ModalAction, ModalActions, ModalCtx, useSignInRedirect } from "./wrapper";
 
 type PostSortBy = "ratingAsc" | "ratingDesc" | "newest" | "mostHelpful";
 
@@ -55,7 +55,7 @@ function SafeLink({href, icon, children}: {href?: string, icon?: React.ReactNode
 
 	return <Anchor onClick={() => {
 		app.open({type: "other", name: "Follow link?", modal: <>
-			<p>This link hasn't been checked by BoilerCourses and <b>may be unsafe</b>.</p>
+			<p>This link hasn{"'"}t been checked by BoilerCourses and <b>may be unsafe</b>.</p>
 			<p>Continue to <Anchor target="_blank" href={href} >{href}</Anchor>?</p>
 		</>});
 	}} className="items-start" >{icon}{children}</Anchor>;
@@ -71,6 +71,7 @@ function Blockquote({children}: {children?: React.ReactNode}) {
 	return <blockquote className="pl-4 border-l-3 border-l-zinc-200 dark:border-l-zinc-400 py-2 [&>p]:whitespace-pre-wrap" >{children}</blockquote>;
 }
 
+// eslint-disable-next-line react/display-name
 const titleComponent = (ord: number) => ({children}: {children: React.ReactNode}) => {
 	switch (ord) {
 		case 1: return <h1 className="font-extrabold text-2xl" >{children}</h1>;
@@ -96,7 +97,8 @@ export function TimeSince({t}: {t: string}) {
 }
 
 export const PostRefreshHook = createContext<null | (()=>void)>(null);
-const refreshPosts = () => {
+
+const useRefreshPosts = () => {
 	const ctx = useContext(PostRefreshHook);
 	return () => ctx?.();
 };
@@ -104,10 +106,11 @@ const refreshPosts = () => {
 function PostCreator({postLimit, add: add2, setAdd: setAdd2}: {
 	postLimit: number, add: AddPost, setAdd: (x: AddPost)=>void
 }) {
-	const make = callAPI<void, AddPost>("posts/submit", "redirect");
+	const make = useAPI<void, AddPost>("posts/submit", "redirect");
 	const [triedSubmit, setTriedSubmit] = useState(false);
 
-	//needs to keep track of own state, otherwise passed thru modal which is illegal...
+	// updates propagate back to modal creator, but updates from creator dont come back here bc again my modal system is broken
+	// and im too poor to create a real modal component that portals to the right place...
 	const [add, setAdd3] = useState(add2);
 	const setAdd = (add: AddPost) => {
 		setAdd2(add); setAdd3(add);
@@ -119,7 +122,7 @@ function PostCreator({postLimit, add: add2, setAdd: setAdd2}: {
 
 	const formRef = useRef<HTMLFormElement>(null);
 	const textAreaRef = useRef<HTMLTextAreaElement>(null);
-	const refresh = refreshPosts();
+	const refresh = useRefreshPosts();
 
 	return <form ref={formRef} onSubmit={(ev) => {
 		ev.preventDefault();
@@ -168,12 +171,16 @@ function PostCreator({postLimit, add: add2, setAdd: setAdd2}: {
 	</form>;
 }
 
-function createPost(x: AddPost) {
-	const del = callAPI<void, number>("posts/delete", "redirect");
+function useCreatePost(x: AddPost) {
+	const del = useAPI<void, number>("posts/delete", "redirect");
 	const app = useContext(AppCtx);
 
 	const ctx = useContext(PostRefreshHook);
 	const [add, setAdd] = useState<AddPost>(x);
+
+	//when post is edited elsewhere, need to update post id
+	//however i dont want to overwrite post in editor
+	useEffect(()=>setAdd(a=>({...a, edit: x.edit})), [x.edit]);
 
 	//this is so terrible!
 	return (postLimit: number) => {
@@ -210,15 +217,15 @@ const postToAddPost = (post: EditPost, course: number): AddPost => ({
 function PostEditButton({post, course, postLimit}: {
 	post: EditPost, course: number, postLimit: number
 }) {
-	const edit = createPost(postToAddPost(post,course));
+	const edit = useCreatePost(postToAddPost(post,course));
 	return <IconButton icon={<IconEdit/>} onClick={()=>edit(postLimit)} />;
 }
 
 function BanModal({user}: {user: number}) {
-	const ban = callAPI<void, {id: number, removePosts: boolean, banned: boolean}>("ban", "redirect");
+	const ban = useAPI<void, {id: number, removePosts: boolean, banned: boolean}>("ban", "redirect");
 	const [removePosts, setRemovePosts] = useState(false);
 	const modal = useContext(ModalCtx)!;
-	const refresh = refreshPosts();
+	const refresh = useRefreshPosts();
 
 	return <>
 		<Checkbox isSelected={removePosts} onChange={ev=>setRemovePosts(ev.target.checked)} >
@@ -239,18 +246,18 @@ function BanModal({user}: {user: number}) {
 
 function AdminUserPopup({user}: {user: UserData}) {
 	const app = useContext(AppCtx);
-	const data = callAPI<UserData, number>("userdata", "redirect");
-	const v = data.current?.res ?? user;
-	useEffect(()=>data.run({data: user.id}), []);
+	const {run, current, loading} = useAPI<UserData, number>("userdata", "redirect");
+	const v = current?.res ?? user;
+	useEffect(()=>run({data: user.id}), [run, user.id]);
 
-	const ban = callAPI<void, {id: number, banned: boolean}>("ban", "redirect");
+	const ban = useAPI<void, {id: number, banned: boolean}>("ban", "redirect");
 	const ctx = useContext(PostRefreshHook);
 
 	return <div className="p-3 flex flex-col gap-2" >
 		{[["User id:" ,v.id],
 			["Name:", v.name],
 			["Email:", v.email]]
-			.map(([a,b]) => <div className="flex flex-row justify-between items-center gap-3" >
+			.map(([a,b]) => <div key={a} className="flex flex-row justify-between items-center gap-3" >
 				<b>{a}</b> {b}
 			</div>)}
 		<p>
@@ -258,18 +265,18 @@ function AdminUserPopup({user}: {user: UserData}) {
 			{v.admin && <Chip color="green" >Admin</Chip>}
 		</p>
 
-		<Button disabled={ban.loading || data.loading} className={bgColor.red} onClick={()=>{
+		<Button disabled={ban.loading || loading} className={bgColor.red} onClick={()=>{
 			if (!v.banned) app.open({
 				type: "other",
 				name: "Ban options",
 				modal: <PostRefreshHook.Provider value={() => {
-					data.run({data: user.id});
+					run({data: user.id});
 					ctx?.();
 				}} ><BanModal user={v.id} /></PostRefreshHook.Provider>
 			})
 			else {
 				ban.run({data: {id: v.id, banned: false}, refresh() {
-					data.run({data: user.id});
+					run({data: user.id});
 					ctx?.();
 				}});
 			}
@@ -290,8 +297,8 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 	post: Post, editButton?: React.ReactNode, adminPost?: AdminPost
 	deletePost?: ()=>void, dismissReports?: ()=>void, yours?: boolean
 }) {
-	const vote = callAPI<void, {id: number, vote: boolean}>("posts/vote", "redirect");
-	const report = callAPI<{alreadyReported: boolean}, number>("posts/report", "redirect");
+	const vote = useAPI<void, {id: number, vote: boolean}>("posts/vote", "redirect");
+	const report = useAPI<{alreadyReported: boolean}, number>("posts/report", "redirect");
 
 	const [voted, setVoted] = useState(post.voted);
 	const app = useContext(AppCtx);
@@ -383,9 +390,9 @@ export function PostCard({post, adminPost, editButton, deletePost, dismissReport
 }
 
 function CreatePostButton({postLimit, course, post}: {postLimit: number, course: number, post?: EditPost}) {
-	const create = createPost(post ? postToAddPost(post, course) : {text: "", rating: null, course, edit: null, showName: false});
-	const make = callAPI<void, AddPost>("posts/submit", "redirect");
-	const del = callAPI<void, number>("posts/delete", "redirect");
+	const create = useCreatePost(post ? postToAddPost(post, course) : {text: "", rating: null, course, edit: null, showName: false});
+	const make = useAPI<void, AddPost>("posts/submit", "redirect");
+	const del = useAPI<void, number>("posts/delete", "redirect");
 	const ctx = useContext(PostRefreshHook);
 
 	const ratingPost = (x: number): AddPost => ({
@@ -415,14 +422,13 @@ function CreatePostButton({postLimit, course, post}: {postLimit: number, course:
 export function Community({course}: {course: SmallCourse}) {
 	const [sortBy, setSortBy] = useState<PostSortBy>("mostHelpful");
 
-	const postsReq = callAPI<PostData, CoursePostsReq>("posts/course", "maybe");
-	const posts = postsReq.current;
-	const refresh = () => postsReq.run({data: {course: course.id, sortBy}});
+	const {run, current: posts} = useAPI<PostData, CoursePostsReq>("posts/course", "maybe");
+	const refresh = () => run({data: {course: course.id, sortBy}});
 
-	const redir = redirectToSignIn();
+	const redir = useSignInRedirect();
 	const app = useContext(AppCtx);
 
-	useEffect(refresh, [sortBy, app.hasAuth]);
+	useEffect(refresh, [sortBy, app.hasAuth, run, course.id]);
 
 	return <div className={twMerge("flex items-stretch flex-col gap-2 p-5 pt-2", containerDefault, bgColor.secondary)} ><PostRefreshHook.Provider value={refresh} >
 		<div className="flex flex-col items-center gap-3 md:flex-row justify-between" >

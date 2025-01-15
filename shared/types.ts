@@ -16,7 +16,8 @@ export type PreReq = (
   minCredits: number|null,
   minGPA: number|null,
   grade: Grade|null,
-  concurrent: boolean
+  concurrent: boolean,
+  corequisite?: boolean
 } | {
   type: "range",
   what: string,

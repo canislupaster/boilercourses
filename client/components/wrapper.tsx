@@ -4,7 +4,7 @@ import { Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@nextu
 import { NextUIProvider } from "@nextui-org/system";
 import { usePathname, useRouter } from "next/navigation";
 import Script from "next/script";
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Collapse } from "react-collapse";
 import { createPortal } from "react-dom";
 import { twMerge } from "tailwind-merge";
@@ -46,21 +46,22 @@ export function isAuthSet() {
 
 export type AuthErr = ServerResponse<unknown>&{status: "error", error: "unauthorized"|"sessionExpire"};
 
-export function redirectToSignIn() {
+export function useSignInRedirect() {
 	const router = useRouter();
 	const app = useContext(AppCtx);
-	return (err?: AuthErr, back?: string) => {
-		app.forward(back);
+	const forward = app.forward;
+	return useCallback((err?: AuthErr, back?: string) => {
+		forward(back);
 		window.localStorage.setItem("signIn", JSON.stringify({err, redirect: window.location.href}));
 		router.push("/signin");
-	};
+	}, [router, forward]);
 }
 
 export type Theme = "dark"|"light";
 
 export type AppCtx = {
 	open: (m: AppModal) => void,
-	popupCount: number, incPopupCount: ()=>void,
+	popupCount: number, incPopupCount: ()=>number,
 	forward: (back?: string)=>void, back: ()=>void,
 	goto: (to: string)=>void,
 	info: ServerInfo,
@@ -94,12 +95,12 @@ function getBodyKey<T,R>(endpoint: string, x: APIOptions<T,R>) {
 
 type APIAuth = "redirect"|"maybe"|"unset";
 
-export function callAPI<R,T=null>(endpoint: string, auth?: APIAuth) {
-	const c = useContext(AppCtx);
+export function useAPI<R,T=null>(endpoint: string, auth?: APIAuth) {
+	const {open: openModal, setHasAuth} = useContext(AppCtx);
 	const i = useRef(0);
-	const redir = auth ? redirectToSignIn() : null;
+	const redir = useSignInRedirect();
 
-	const run = async (body: string, k: string,
+	const run = useCallback(async (body: string, k: string,
 		{data, method, handleErr, noCache}: APIOptions<T,R>, rerun: ()=>void) => {
 
 		let cacheBad = cache[k]==undefined || noCache || auth;
@@ -125,9 +126,9 @@ export function callAPI<R,T=null>(endpoint: string, auth?: APIAuth) {
 			} else if (auth=="unset") {
 				return null;
 			} else if (auth=="redirect") {
-				c.open({type: "other", name: "You need to login to access this feature",
+				openModal({type: "other", name: "You need to login to access this feature",
 					actions: [
-						{name: "Continue to sign in", status: "primary", act() {redir!();}}
+						{name: "Continue to sign in", status: "primary", act() {redir();}}
 					]
 				});
 
@@ -154,13 +155,13 @@ export function callAPI<R,T=null>(endpoint: string, auth?: APIAuth) {
 			if (auth && (resp.error=="unauthorized" || resp.error=="sessionExpire") && recover!==null) {
 				if (auth=="unset") {
 					setAuth(null);
-					c.setHasAuth(false);
+					setHasAuth(false);
 				} else {
-					redir!({...resp, error: resp.error});
+					redir({...resp, error: resp.error});
 				}
 			} else if (recover!==null) {
 				console.error(resp);
-				c.open({
+				openModal({
 					type: "error", name: errorName(resp.error),
 					msg: resp.message ?? "Error performing API request.", retry: rerun
 				});
@@ -170,48 +171,48 @@ export function callAPI<R,T=null>(endpoint: string, auth?: APIAuth) {
 		} else {
 			return {res: resp.result, endpoint, req: data};
 		}
-	};
+	}, [openModal, setHasAuth, auth, endpoint, redir]);
 
 	const [v, setV] = useState<APICallResult<T,R>|null>(null);
 	const [loading, setLoading] = useState(false);
 
+	const reallyRun = useCallback((x: APIOptions<T,R> = {})=>{
+		const [body, k] = getBodyKey(endpoint, x);
+
+		const oi = ++i.current;
+		setLoading(true);
+
+		run(body, k, x, ()=>reallyRun(x)).then((res) => {
+			if (i.current==oi) {
+				x.cb?.(res);
+				setLoading(false);
+
+				if (res!=null) {
+					setV(res);
+					x.refresh?.(res);
+				}
+			}
+		}).catch((e) => {
+			console.error(`Fetching ${endpoint}: ${e}`);
+
+			openModal({
+				type: "error", name: "Error reaching API",
+				msg: `Fetch error: ${e instanceof Error ? e.message : e}. Try refreshing?`,
+				retry: ()=>reallyRun(x)
+			});
+		});
+	}, [endpoint, openModal, run]);
+
 	return {
-		call(x: APIOptions<T,R> ={}) {
-			const [body, k] = getBodyKey(endpoint, x);
-
-			const attempt = () => {
-				const oi = ++i.current;
-				setLoading(true);
-
-				run(body, k, x, attempt).then((res) => {
-					if (i.current==oi) {
-						x.cb?.(res);
-						setLoading(false);
-
-						if (res!=null) {
-							setV(res);
-							x.refresh?.(res);
-						}
-					}
-				}).catch((e) => {
-					console.error(`Fetching ${endpoint}: ${e}`);
-
-					c.open({
-						type: "error", name: "Error reaching API",
-						msg: `Fetch error: ${e instanceof Error ? e.message : e}. Try refreshing?`, retry: attempt
-					});
-				});
-			};
-
-			return {attempt, k};
-		},
-		run(x: APIOptions<T,R> ={}) {
-			this.call(x).attempt();
-		},
-		clearCache(x: APIOptions<T,R> ={}) {
+		run: reallyRun,
+		clear: useCallback(()=>{
+			setLoading(false);
+			setV(null);
+		}, []),
+		clearCache: useCallback((x: APIOptions<T,R> ={})=>{
 			const [,k] = getBodyKey(endpoint, x);
 			delete cache[k];
-		},
+		}, [endpoint]),
 		current: v,
 		loading
 	};
@@ -224,35 +225,51 @@ export function setAPI<R,T=null>(endpoint: string, {data,method,result}: {
 	cache[`${method ?? "POST"} ${endpoint}\n${JSON.stringify(data)}`] = Promise.resolve(r);
 }
 
-export function useAPI<R,T=null>(endpoint: string, {
+export function useAPIResponse<R,T=null>(endpoint: string, {
 	auth, debounceMs, ...x
-}: APIOptions<T,R>&{auth?: APIAuth, debounceMs?: number} = {}) {
-	const api = callAPI<R,T>(endpoint, auth);
-	const y = api.call(x);
+}: APIOptions<T,R>&{auth?: APIAuth, debounceMs?: number, disabled?: boolean} = {}) {
+	const {run, clear, current, loading} = useAPI<R,T>(endpoint, auth);
+
+	const k = getBodyKey(endpoint, x)[1];
+	const [lastK, setLastK] = useState(k);
+	const [curOpts, setCurOpts] = useState(x);
+	useEffect(()=>{
+		if (k!=lastK) {
+			setCurOpts(x);
+			setLastK(k);
+		}
+	}, [k,x,lastK]);
 
 	const [latest, setLatest] = useState(false);
 	useEffect(()=>{
+		if (curOpts.disabled) {
+			clear();
+			return;
+		}
+
 		if (debounceMs) {
 			setLatest(false);
 
 			const tm = setTimeout(()=>{
-				y.attempt();
+				run(curOpts);
 				setLatest(true);
 			}, debounceMs);
 
 			return () => clearTimeout(tm);
 		} else {
-			y.attempt();
+			run(curOpts);
 			setLatest(true);
 		}
-	}, [y.k, debounceMs]);
+	}, [clear, curOpts, debounceMs, run]);
 
-	return api.current ? {...api.current, loading: !latest || api.loading} : null;
+	return useMemo(()=>
+		current ? {...current, loading: !latest || loading} : null,
+	[current,latest,loading]);
 }
 
 export const useInfo = (): ServerInfo => useContext(AppCtx).info;
 export const useCourse = (id: number): CourseId|null =>
-	useAPI<CourseId,number>("course", {data:id})?.res ?? null;
+	useAPIResponse<CourseId,number>("course", {data:id})?.res ?? null;
 
 export const ModalCtx = createContext<ModalCtxType|null>(null);
 
@@ -268,11 +285,12 @@ function ModalContentInner({closeAll, close, x}: {x: AppModal&{type: "other"}, c
 	const [ld, setLd] = useState<boolean>(false);
 	const extraRef = useRef<HTMLDivElement>(null);
 
-	const ctx: ModalCtxType = {
+	const setLoading = useCallback((x?: boolean)=>setLd(x===undefined || x===true), [setLd]);
+	const ctx: ModalCtxType = useMemo(()=>({
 		extraActions: extra,
 		closeModal: close,
-		setLoading: (x?: boolean)=>setLd(x===undefined || x===true)
-	};
+		setLoading
+	}), [extra, close, setLoading]);
 
 	useEffect(()=>setExtra(extraRef.current), [x]);
 
@@ -346,13 +364,13 @@ const defaultModalState: ModalState = {
 	active: [], visible: {error: false, other: false}
 };
 
-export function AppWrapper({children, className, info}: {children: React.ReactNode, className?: string, info: ServerInfo}) {
+export function AppWrapper({children, className, info}: {
+	children: React.ReactNode, className?: string, info: ServerInfo
+}) {
 	//😒
 	const [modals, setModals] = useState<ModalState>(defaultModalState);
 	const activeNormals = modals.active.filter(x=>x.type=="other");
 	const activeErrors = modals.active.filter(x=>x.type=="error");
-
-	const [count, setCount] = useState(0);
 
 	const [backUrls, setBackUrls] = useState<Back[]>([]);
 	const [restoreScroll, setRestoreScroll] = useState<number|undefined>();
@@ -360,13 +378,13 @@ export function AppWrapper({children, className, info}: {children: React.ReactNo
 
 	const [theme, setTheme] = useState<Theme>("dark");
 
-	const updateTheme = ()=>{
+	const isDark = useMediaQuery("(prefers-color-scheme: dark)");
+	const updateTheme = useCallback(()=>{
 		const t: Theme = (window.localStorage.getItem("theme") as Theme) ?? (isDark ? "dark" : "light");
 		setTheme(t);
-	};
+	}, [setTheme, isDark]);
 
-	const isDark = useMediaQuery("(prefers-color-scheme: dark)");
-	useEffect(updateTheme, [isDark]);
+	useEffect(updateTheme, [updateTheme]);
 
 	useEffect(()=>{
 		const html = document.getElementsByTagName("html")[0];
@@ -379,55 +397,76 @@ export function AppWrapper({children, className, info}: {children: React.ReactNo
 	const [hasAuth, setHasAuth] = useState<boolean|null>(null);
 	useEffect(()=>setHasAuth(isAuthSet()), []);
 
-	const appCtx: AppCtx = {
-		restoreScroll() {
-			if (restoreScroll) {
-				window.scrollTo({top: restoreScroll, behavior: "instant"});
-				setRestoreScroll(undefined);
-			}
-		},
-		open: (m) => {
-			setCount(x=>x+1);
-			setModals(modals => {
-				if (!modals.visible[m.type]) return {
-					active: [...modals.active.filter(x=>x.type!=m.type), m],
-					visible: {...modals.visible, [m.type]: true}
-				};
-				else return {active: [...modals.active, m], visible: modals.visible};
-			});
-		},
-		popupCount: count,
-		incPopupCount: () => setCount(x=>x+1),
-		forward(back) {
-			setBackUrls([...backUrls, {
-				url: back ? new URL(back, window.location.href).href : window.location.href,
-				scrollPos: back ? undefined : window.scrollY
-			}]);
-			setRestoreScroll(undefined);
-			setModals(defaultModalState);
-			setCount(x=>x+1);
-		},
-		goto(to) {
-			this.forward();
-			router.push(to);
-		},
-		back() {
-			let i=backUrls.length;
-			while (i>0 && new URL(backUrls[i-1].url).pathname==path) i--;
+	const popupCountRef = useRef(0);
+	const [count, setCount] = useState(0);
 
-			if (i==0) router.push("/");
-			else {
-				const nb = backUrls.slice(0,i-1);
-				router.push(backUrls[i-1].url);
-				setRestoreScroll(backUrls[i-1].scrollPos);
-				setBackUrls(nb);
-			}
-		}, info, theme, setTheme(x) {
-			window.localStorage.setItem("theme", x);
-			updateTheme();
-		},
+	const openModal = useCallback((m: AppModal) => {
+		setCount(x=>x+1);
+		setModals(modals => {
+			if (!modals.visible[m.type]) return {
+				active: [...modals.active.filter(x=>x.type!=m.type), m],
+				visible: {...modals.visible, [m.type]: true}
+			};
+			else return {active: [...modals.active, m], visible: modals.visible};
+		});
+	}, []);
+
+	const forward = useCallback((back?: string)=>{
+		setBackUrls(backUrls=>[...backUrls, {
+			url: back ? new URL(back, window.location.href).href : window.location.href,
+			scrollPos: back ? undefined : window.scrollY
+		}]);
+		setRestoreScroll(undefined);
+		setModals(defaultModalState);
+		setCount(++popupCountRef.current);
+	}, [setBackUrls, setRestoreScroll, setModals, setCount]);
+
+	const incPopupCount = useCallback(()=>{
+		const count = ++popupCountRef.current;
+		setCount(count);
+		return count;
+	}, []);
+
+	const goto = useCallback((to: string) => { forward(); router.push(to); }, [forward, router]);
+
+	const goBack = useCallback(() => {
+		let i=backUrls.length;
+		while (i>0 && new URL(backUrls[i-1].url).pathname==path) i--;
+
+		if (i==0) router.push("/");
+		else {
+			const nb = backUrls.slice(0,i-1);
+			router.push(backUrls[i-1].url);
+			setRestoreScroll(backUrls[i-1].scrollPos);
+			setBackUrls(nb);
+		}
+	}, [backUrls, setBackUrls, setRestoreScroll, router, path]);
+
+	const doRestoreScroll = useCallback(()=>{
+		if (restoreScroll) {
+			window.scrollTo({top: restoreScroll, behavior: "instant"});
+			setRestoreScroll(undefined);
+		}
+	}, [restoreScroll, setRestoreScroll]);
+
+	const doSetTheme = useCallback((x: Theme) => {
+		window.localStorage.setItem("theme", x);
+		updateTheme();
+	}, [updateTheme])
+
+	const appCtx: AppCtx = useMemo(()=>({
+		restoreScroll: doRestoreScroll,
+		open: openModal,
+		popupCount: count,
+		incPopupCount, forward, goto,
+		back: goBack, info, theme,
+		setTheme: doSetTheme,
 		hasAuth, setHasAuth
-	};
+	}), [
+		count, doRestoreScroll, forward,
+		goBack, goto, hasAuth, incPopupCount,
+		info, openModal, theme, doSetTheme
+	]);
 
 	let m = <></>;
 	const closeModal = (x: AppModal) => setModals(modals=>{

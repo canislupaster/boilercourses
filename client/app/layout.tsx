@@ -43,7 +43,7 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default catchAPIError(async ({ children, }: { children: React.ReactNode }) => {
+export default async function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${chivo.variable} font-body ${textColor.default} dark:bg-neutral-950 bg-neutral-100`} >
       <head>
@@ -58,10 +58,12 @@ export default catchAPIError(async ({ children, }: { children: React.ReactNode }
         {goatCounter && <GoatCounter goatCounter={goatCounter} />}
       </head>
       <body>
-        <AppWrapper info={await getInfo()} >
-          {children}
-        </AppWrapper>
+        {await catchAPIError(async ()=>
+          <AppWrapper info={await getInfo()} >
+            {children}
+          </AppWrapper>
+        )()}
       </body>
     </html>
   )
-});
+}

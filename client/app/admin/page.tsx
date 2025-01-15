@@ -1,12 +1,12 @@
 "use client"
 
-import { Alert, BackButton, searchState, TermSelect } from "@/components/clientutil";
+import { Alert, BackButton, useSearchState, TermSelect } from "@/components/clientutil";
 import { PostCard, PostCardAdminUser, PostRefreshHook } from "@/components/community";
 import { Button, ButtonPopover, containerDefault, Input, Loading, Text } from "@/components/util";
-import { AppCtx, callAPI, isAuthSet, redirectToSignIn } from "@/components/wrapper";
+import { AppCtx, useAPI, isAuthSet, useSignInRedirect } from "@/components/wrapper";
 import { Checkbox } from "@nextui-org/checkbox";
 import { Pagination } from "@nextui-org/pagination";
-import { useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import { AdminPost, UserData } from "../../../shared/posts";
 import { latestTermofTerms, Term } from "../../../shared/types";
 
@@ -20,7 +20,7 @@ type ScrapeStatus = {
 };
 
 function AdminPosts() {
-	const [req, setReq] = searchState<ListRequest>({reported: false, new: true, page: 0}, (parm) => {
+	const [req, setReq] = useSearchState<ListRequest>({reported: false, new: true, page: 0}, (parm) => {
 		const pg = parm.get("page");
 		return {reported: parm.get("reported")!=null, new: parm.get("new")!=null,
 			page: pg==null ? 0 : Number.parseInt(pg)-1}
@@ -32,38 +32,39 @@ function AdminPosts() {
 		return new URLSearchParams(parms);
 	});
 
-	const postsAPI = callAPI<{posts: AdminPost[], npage: number}, ListRequest>("posts/admin/list", "redirect");
-	const refresh = () => postsAPI.run({ data: req });
-	useEffect(()=>refresh(), [req]);
+	const {run, current} = useAPI<{posts: AdminPost[], npage: number}, ListRequest>("posts/admin/list", "redirect");
+	const refresh = useCallback(() => run({ data: req }), [req, run]);
+	useEffect(()=>refresh(), [refresh]);
 
-	const posts = postsAPI.current?.res;
+	const posts = current?.res;
 
-	const reindex = callAPI("admin/reindex", "redirect");
-	const scrape = callAPI<void, {term: Term|null, type: "unitime"|"catalog"}>("admin/scrape", "redirect");
-	const logout = callAPI("logout", "redirect");
-	const admins = callAPI<UserData[]>("admins", "redirect")
+	const reindex = useAPI("admin/reindex", "redirect");
+	const scrape = useAPI<void, {term: Term|null, type: "unitime"|"catalog"}>("admin/scrape", "redirect");
+	const logout = useAPI("logout", "redirect");
+	const {run: adminRun, current: admins} = useAPI<UserData[]>("admins", "redirect")
 
 	//pretty bad way to chain requests
 	//(only fetch once posts has succeeded)
 	//i need an actual state management solution...
+	const cont = current!=null;
 	useEffect(()=>{
-		if (postsAPI.current!=null) admins.run()
-	}, [postsAPI.current!=null]);
+		if (cont) adminRun()
+	}, [cont, adminRun]);
 
-	const status = callAPI<ScrapeStatus>("admin/status", "redirect");
+	const {run: statusRun, current: status} = useAPI<ScrapeStatus>("admin/status", "redirect");
 	useEffect(()=>{
-		status.run();
-	}, [scrape.current, reindex.current]);
+		statusRun();
+	}, [scrape.loading, reindex.loading, statusRun]);
 
 	const [adminInp, setAdminInp] = useState("");
-	const setAdmin = callAPI<void, {email: string, admin: boolean}>("setadmin", "redirect");
+	const setAdmin = useAPI<void, {email: string, admin: boolean}>("setadmin", "redirect");
 	
-	const del = callAPI<void, number>("posts/delete", "redirect");
-	const dismiss = callAPI<void, number[]>("posts/admin/dismissreports", "redirect");
-	const markRead = callAPI<void, number[]>("posts/admin/markread", "redirect");
+	const del = useAPI<void, number>("posts/delete", "redirect");
+	const dismiss = useAPI<void, number[]>("posts/admin/dismissreports", "redirect");
+	const markRead = useAPI<void, number[]>("posts/admin/markread", "redirect");
 
 	const runSetAdmin = (x: boolean) =>
-		setAdmin.run({data: {email: adminInp, admin: x}, refresh() { admins.run(); }});
+		setAdmin.run({data: {email: adminInp, admin: x}, refresh() { adminRun() }});
 
 	const app = useContext(AppCtx);
 	const terms = Object.keys(app.info.terms) as Term[];
@@ -71,7 +72,7 @@ function AdminPosts() {
 
 	if (posts==null) return <Loading/>;
 
-	const stat = status?.current?.res;
+	const stat = status?.res;
 	const lastScrape = stat?.lastScrape ? `Last scrape: ${new Date(stat.lastScrape).toLocaleString()}` : "";
 	const busy = stat?.status=="busy" || reindex.loading || scrape.loading;
 
@@ -111,8 +112,8 @@ function AdminPosts() {
 
 		<div>
 			<Text v="lg" className="mb-2" >Admins</Text>
-			{admins.current==null ? <Loading/> : <div className="flex flex-col gap-2" >
-				{admins.current.res.map(v => <div className={`p-3 ${containerDefault}`} >
+			{admins==null ? <Loading/> : <div className="flex flex-col gap-2" >
+				{admins.res.map(v => <div key={v.id} className={`p-3 ${containerDefault}`} >
 					<PostCardAdminUser user={v} />
 				</div>)}
 			</div>}
@@ -147,7 +148,7 @@ function AdminPosts() {
 			Mark page as read
 		</Button>}
 		{posts.npage>0 && <div className="w-full flex flex-col items-center" >
-			<Pagination total={posts.npage} initialPage={(postsAPI.current?.req?.page ?? 0)+1} onChange={
+			<Pagination total={posts.npage} initialPage={(current?.req?.page ?? 0)+1} onChange={
 				(page) => setReq({...req, page})
 			} />
 		</div>}
@@ -156,11 +157,11 @@ function AdminPosts() {
 
 export default function Admin() {
 	const [ld, setLd]=useState(true);
-	const redir = redirectToSignIn();
+	const redir = useSignInRedirect();
 	useEffect(()=>{
 		if (isAuthSet()) setLd(false);
 		else redir(undefined, "/");
-	}, [ld]);
+	}, [ld, redir]);
 
 	if (ld) return <Loading/>;
 	return <div className="flex flex-col items-center" >

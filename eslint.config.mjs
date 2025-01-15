@@ -1,7 +1,7 @@
 import globals from "globals";
 import pluginJs from "@eslint/js";
-import tseslint from "typescript-eslint";
 import pluginReact from "eslint-plugin-react";
+import tseslint from "typescript-eslint";
 import { FlatCompat } from "@eslint/eslintrc";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -15,6 +15,7 @@ const compat = new FlatCompat({
 
 const commonRules = {
   "react/prop-types": "off",
+  "react/react-in-jsx-scope": "off",
   "@typescript-eslint/ban-ts-comment": "off",
   "@typescript-eslint/no-unused-vars": [
     "warn",
@@ -30,21 +31,18 @@ const common = {rules: commonRules};
 
 export default [
   ...tseslint.config({
-    files: ["client/app/*.{ts,tsx,js,jsx}", "shared/**/*.ts"],
+    files: ["client/**/*.{ts,tsx,js,jsx}", "shared/**/*.ts"],
     extends: [
+      pluginReact.configs.flat.recommended,
+      ...compat.extends("plugin:react-hooks/recommended"),
       pluginJs.configs.recommended,
-      pluginReact.configs.flat["jsx-runtime"],
       ...tseslint.configs.recommendedTypeChecked,
       ...compat.extends("plugin:@next/next/recommended"),
       common
     ],
     settings: {
-      react: {
-        version: "18"
-      },
-      next: {
-        rootDir: "client"
-      }
+      next: { rootDir: "client" },
+      react: { version: "detect" }
     },
     languageOptions: {
       globals: {...globals.browser, ...globals.node},
