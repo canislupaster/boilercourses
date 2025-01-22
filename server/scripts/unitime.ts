@@ -181,7 +181,7 @@ await pg.getByText("Log In").click();
 await pg.locator("#username").fill(secret.username);
 await pg.locator("#password").fill(secret.password);
 
-const cdp = await pg.context().newCDPSession(pg);
+const cdp = await ctx.newCDPSession(pg);
 await cdp.send("WebAuthn.enable", {enableUI: false});
 
 const auth = await cdp.send("WebAuthn.addVirtualAuthenticator", {
@@ -266,6 +266,7 @@ for (const t of activeTerms) {
 
 console.log("exiting");
 
+await cdp.detach();
 await pg.close();
 await ctx.close();
 await browser.close();
