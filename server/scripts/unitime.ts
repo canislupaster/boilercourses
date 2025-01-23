@@ -179,6 +179,8 @@ await pg.goto("https://timetable.mypurdue.purdue.edu/Timetabling/main.action");
 await pg.getByText("Log In").click();
 
 await pg.locator("#username").fill(secret.username);
+//should not be necessary but there's something wrong with my server('s container's chromium) or something. works fine locally and used to work idfk
+await pg.waitForTimeout(1000);
 await pg.locator("#password").fill(secret.password);
 
 const cdp = await ctx.newCDPSession(pg);

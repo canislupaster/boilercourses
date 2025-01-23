@@ -1,6 +1,6 @@
-FROM node:22.9-alpine3.19 AS nodejs
+FROM node:23.6-alpine3.20 AS nodejs
 
-FROM eclipse-temurin:23-alpine AS base
+FROM eclipse-temurin:23-alpine-3.20 AS base
 
 COPY --from=nodejs /usr/lib /usr/lib/
 COPY --from=nodejs /usr/local/lib /usr/local/lib/
