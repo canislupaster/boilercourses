@@ -5,7 +5,6 @@ import { Calendar, calendarDays } from "@/components/calendar";
 import { CourseChips, GPAIndicator } from "@/components/card";
 import { Alert, BarsStat, NameSemGPA, useSearchState, SelectionContext, ShowMore, simp, TermSelect, useDebounce, useMd, WrapStat } from "@/components/clientutil";
 import { Community } from "@/components/community";
-import Graph from "@/components/graph";
 import { InstructorList } from "@/components/instructorlist";
 import { MainLayout } from "@/components/mainlayout";
 import { Prereqs } from "@/components/prereqs";
@@ -21,6 +20,7 @@ import Select, { MultiValue } from "react-select";
 import { allCourseInstructors, Attachment, CourseId, CourseInstructor, creditStr, emptyInstructorGrade, formatTerm, InstructorGrade, latestTerm, mergeGrades, PreReqs, RMPInfo, Section, sectionsByTerm, SmallCourse, Term, termIdx, toSmallCourse, trimCourseNum } from "../../../../shared/types";
 import boilerexams from "../../../public/boilerexams-icon.png";
 import boilerexamsCourses from "../../boilerexamsCourses.json";
+import { EnrollmentChart, Graph } from "@/components/graph";
 
 const useSmall = (cid: CourseId) => useMemo(()=>toSmallCourse(cid), [cid]);
 
@@ -102,9 +102,9 @@ function CoursePrereqs({prereqs}: {prereqs: PreReqs}) {
 	}
 	
 	const reqArr = (title: string, reqs: PreReqs[]) => reqs.length ? <>
-		<Text v="md" className="mb-4" >{title}</Text>
-		<ShowMore className="mb-4" >
-			<Prereqs prereqs={{type: "and", vs: reqs}} />
+		<Text v="md" className="mb-2" >{title}</Text>
+		<ShowMore className="mb-2" >
+			<Prereqs prereqs={reqs.length==1 ? reqs[0] : {type: "and", vs: reqs}} />
 		</ShowMore>
 	</> : "";
 
@@ -122,6 +122,7 @@ function CourseDetail(cid: CourseId) {
 		(x)=> x==latest ? null : new URLSearchParams([["term",x]]))
 
 	const course = cid.course;
+	const subjNum = `${course.subject} ${trimCourseNum(course.course)}`;
 
 	const [instructorSearch, setInstructorSearch] = useState("");
 
@@ -182,6 +183,18 @@ function CourseDetail(cid: CourseId) {
 				- (b.type=="avg" ? 0 : ((b.name in course.instructor ? 0 : 2) + (b.term==term ? 0 : 1)));
 		})], [allInstructors, course.instructor, instructorToTerm, term]);
 
+	let learningOutcomes: React.ReactNode|undefined;
+	if (Array.isArray(course.learningOutcomes)) {
+		learningOutcomes=<div className="flex flex-col gap-2 mb-1" >
+			{course.learningOutcomes.map((m,i)=><p key={i} >
+				<Text className={`p-2 py-1 rounded-full ${bgColor.secondary} text-center mr-2`} v="smbold" >{i+1}</Text>
+				{m}
+			</p>)}
+		</div>;
+	} else if (course.learningOutcomes) {
+		learningOutcomes=<p className="mb-2" >{course.learningOutcomes}</p>;
+	}
+
 	return <SelectionContext.Provider value={{
 		selTerm(term) {
 			if (term in course.sections) setTerm(term);
@@ -217,8 +230,7 @@ function CourseDetail(cid: CourseId) {
 				}
 
 				<RedditButton keywords={[
-						`${course.subject}${trimCourseNum(course.course)}`,
-						...instructors.map(x => `"${firstLast(x.name)}"`)
+						subjNum, ...instructors.map(x => `"${firstLast(x.name)}"`)
 					]} />
 
 				<CatalogLinkButton href={catalog} />
@@ -236,7 +248,13 @@ function CourseDetail(cid: CourseId) {
 
 			{/* Description */}
 			<Text v="sm" className="mt-1 mb-3" >{course.description}</Text>
-			<Text v="dim" className="mt-1 mb-3" >Course {course.subject} {course.course} from Purdue University - West Lafayette.</Text>
+
+			{learningOutcomes!=undefined && <Text v="bold" className="mb-1" >
+				Learning Outcomes
+			</Text>}
+			{learningOutcomes}
+
+			<Text v="dim" className="mt-1 mb-3" >Course {subjNum} from Purdue University - West Lafayette.</Text>
 
 			{/* Prerequisites */}
 			{course.prereqs=="failed"
@@ -246,8 +264,8 @@ function CourseDetail(cid: CourseId) {
 			<Restrictions restrictions={course.restrictions} />
 
 			{attachmentsTerm.length>0 && <>
-				<Text v="md" className="mt-2" >Attachments</Text>
-				<div className={`p-2 flex flex-col gap-2 ${containerDefault} overflow-y-auto max-h-[8rem] md:max-h-[15rem]`} >
+				<Text v="md" className="mt-2 mb-1" >Attachments</Text>
+				<div className={`p-2 flex flex-col gap-2 ${containerDefault} overflow-y-auto max-h-[8rem] md:max-h-[15rem] mb-1`} >
 					{attachmentsTerm.map(([t, attachments]) => <React.Fragment key={t} >
 						<Text v="bold" >{formatTerm(t)}</Text>
 						<div className="flex flex-row gap-2 flex-wrap" >
@@ -322,7 +340,13 @@ function CourseDetail(cid: CourseId) {
 						{...selectProps<GradeInstructorOption,true>()}
 					/>
 
-					<Graph title="Average grades by instructor" grades={graphGrades} />
+					<Graph title={`Average grades by instructor for ${subjNum}`} grades={graphGrades} />
+				</>
+			},
+			{
+				key: "enrollment", title: "Enrollment",
+				body: <>
+					<EnrollmentChart course={cid} term={term} />
 				</>
 			}
 		]} bottom={<>
@@ -331,7 +355,7 @@ function CourseDetail(cid: CourseId) {
 			<Community course={small} />
 			<SimilarCourses id={cid.id} />
 		</>} title={<>
-			{course.subject} {trimCourseNum(course.course)}: {course.name}
+			{subjNum}: {course.name}
 		</>} extraButtons={
 			<CourseNotificationButton course={cid} />
 		} />

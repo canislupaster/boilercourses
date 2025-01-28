@@ -252,6 +252,7 @@ object Schema {
         val sections: Map<String, List<Section>>,
         val lastUpdated: String,
         val description: String,
+        val learningOutcomes: JsonElement?=null,
         val credits: Credits,
         val attributes: List<String>,
         val prereqs: JsonElement,

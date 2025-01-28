@@ -1,4 +1,4 @@
-import { CircularProgress, CircularProgressProps } from "@nextui-org/progress";
+import { CircularProgress, CircularProgressProps } from "@heroui/progress";
 import { useContext } from "react";
 import { Collapse } from "react-collapse";
 import { twMerge } from "tailwind-merge";

@@ -310,7 +310,7 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 
 	await knex<DBSubject>("subject").insert(subjects).onConflict("abbr").merge();
 	await knex<DBAttribute>("attribute").insert(courseAttributes).onConflict("id").merge();
-	await knex<DBSchedType>("scheduleType").insert(scheduleTypes.map(x=>({name: x})))
+	await knex<DBSchedType>("schedule_type").insert(scheduleTypes.map(x=>({name: x})))
 		.onConflict("name").ignore();
 
 	if (subjectArg!=undefined) {
@@ -554,29 +554,35 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 			"May be offered at any of the following campuses:","Learning Outcomes:",
 			"Repeatable for Additional Credit:","Restrictions:","Prerequisites:","General Requirements:",
 			"Corequisites:","Required Materials:","May be offered at any campus except the following:"
-		];
+		] as const;
 
 		//ignored if general requirements is used instead
 		const preReqStrs: [string,boolean][] = [];
 		const genReqStrs: string[] = [];
+		let learningOutcomes: string|string[]|undefined;
 		for (const b of bits) {
 			try {
-				if (b.heading!==undefined && headings.includes(b.heading)) {
+				if (b.heading!==undefined && (headings as Readonly<string[]>).includes(b.heading)) {
 					which="none";
 
-					if (b.heading=="General Requirements:") {
+					const head = b.heading as typeof headings[number];
+
+					if (head=="Learning Outcomes:") {
+						const points = [...b.txt.matchAll(/\d+\.\s*(.+?)\s*(?=\d+\.|$)/g)];
+						learningOutcomes=points.length>0 ? points.map(x=>x[1]) : b.txt.trim();
+					} else if (head=="General Requirements:") {
 						which="requirements";
 						genReqStrs.push("");
-					} else if (b.heading=="Restrictions:") {
+					} else if (head=="Restrictions:") {
 						which="restrictions";
-					} else if (b.heading=="Course Attributes:") {
+					} else if (head=="Course Attributes:") {
 						attributes.push(...b.txt.split(",").map(x => x.trim()).map(x => {
 							const v = courseAttributeMap.get(x);
 							return v ?? x;
 						}));
-					} else if (b.heading=="Prerequisites:") {
+					} else if (head=="Prerequisites:") {
 						preReqStrs.push([b.txt, false]);
-					} else if (b.heading=="Corequisites:") {
+					} else if (head=="Corequisites:") {
 						preReqStrs.push([b.txt, true]);
 					}
 				} else if (b.heading!==undefined) {
@@ -720,6 +726,7 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 				name, subject, course,
 				instructor: instructorOut,
 				description: bits[0].txt,
+				learningOutcomes,
 				restrictions, credits,
 				sections: {
 					//sections must be sorted to be deeply compared to old course

@@ -164,6 +164,8 @@ export type Course = {
   lastUpdated: string,
 
   description: string,
+  learningOutcomes?: string|string[],
+
   credits: {type: "range", min: number, max: number}|{type: "fixed", values: number[]},
   attributes: string[],
   prereqs: PreReqs | "failed" | "none", //may fail to parse

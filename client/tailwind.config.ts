@@ -1,4 +1,4 @@
-import { nextui } from "@nextui-org/theme"
+import { heroui } from "@heroui/react"
 import plugin from "tailwindcss/plugin"
 import { Config } from "tailwindcss/types/config"
 
@@ -6,7 +6,7 @@ const config: Config = {
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./node_modules/@nextui-org/theme/dist/components/(checkbox|modal|pagination|popover|progress|slider|spinner|tabs|button|ripple).js"
+    "./node_modules/@heroui/theme/dist/components/(checkbox|modal|pagination|popover|progress|slider|spinner|tabs|button|ripple).js"
   ],
   darkMode: ["selector", "&:is(.dark *, .dark)"],
   theme: {
@@ -36,7 +36,7 @@ const config: Config = {
     "bg-purple-600 border-purple-300",
     "bg-[#64919b] border-[#67cce0]"
   ],
-  plugins: [nextui({
+  plugins: [heroui({
     layout: {
       disabledOpacity: "1.0"
     }

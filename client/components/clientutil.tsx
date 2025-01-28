@@ -1,9 +1,9 @@
 "use client"
 
-import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/popover";
-import { Progress } from "@nextui-org/progress";
-import { Tooltip, TooltipPlacement } from "@nextui-org/tooltip";
-import { IconArrowLeft, IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp, IconFilterFilled, IconInfoCircle, IconInfoTriangleFilled } from "@tabler/icons-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@heroui/popover";
+import { Progress } from "@heroui/progress";
+import { Tooltip, TooltipPlacement } from "@heroui/tooltip";
+import { IconArrowLeft, IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp, IconFilter, IconInfoCircle, IconInfoTriangleFilled } from "@tabler/icons-react";
 import Link, { LinkProps } from "next/link";
 import React, { HTMLAttributes, PointerEvent, useContext, useEffect, useRef, useState } from "react";
 import { Collapse } from "react-collapse";
@@ -64,6 +64,7 @@ export function useGpaColor() {
 	const isDark = useContext(AppCtx).theme=="dark";
 	return (gpa: number|null): string|undefined => {
 		if (gpa==null) return undefined;
+		gpa = Math.min(Math.max(gpa, 0), 4);
 		return isDark
 			? `hsl(${13+(107-13)*Math.pow(gpa,2.5)/Math.pow(4.0,2.5)}, 68%, 42%)`
 			: `hsl(${13+(107-13)*Math.pow(gpa,2.5)/Math.pow(4.0,2.5)}, 75%, 60%)`;
@@ -82,7 +83,10 @@ export function useDebounce<T>(f: ()=>T, debounceMs: number): T {
 export const IsInTooltipContext = React.createContext(false);
 
 //opens in modal if already in tooltip...
-export function AppTooltip({content, children, placement, className, onChange, ...props}: {content: React.ReactNode, placement?: TooltipPlacement, onChange?: (x: boolean)=>void}&Omit<HTMLAttributes<HTMLDivElement>,"content">) {
+export function AppTooltip({content, children, placement, className, onChange, ...props}: {
+	content: React.ReactNode, placement?: TooltipPlacement, onChange?: (x: boolean)=>void
+}&Omit<HTMLAttributes<HTMLDivElement>,"content">) {
+
 	const {open: openModal, incPopupCount, popupCount} = useContext(AppCtx);
 	const [open, setOpen] = useState(false);
 	const [reallyOpen, setReallyOpen] = useState<number|null>(null);
@@ -328,7 +332,7 @@ export function NameSemGPA<T>({vs,lhs}: {
 export function WrapStat({search, setSearch, title, children, searchName}: {search: string, setSearch: (x:string)=>void, title: string, children: React.ReactNode, searchName: string}) {
 	const md = useMd();
 	return <>
-		<Input icon={<IconFilterFilled/>} placeholder={`Filter ${searchName}...`}
+		<Input icon={<IconFilter/>} placeholder={`Filter ${searchName}...`}
 			value={search} onChange={v => setSearch(v.target.value)} />
 		<Text v="md" className="mt-2 mb-1" >{title}</Text>
 		{md ? <Collapse isOpened >

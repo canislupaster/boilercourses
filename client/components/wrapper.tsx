@@ -1,7 +1,7 @@
 "use client"
 
-import { Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@nextui-org/modal";
-import { NextUIProvider } from "@nextui-org/system";
+import { Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/modal";
+import { HeroUIProvider } from "@heroui/system";
 import { usePathname, useRouter } from "next/navigation";
 import Script from "next/script";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -517,12 +517,12 @@ export function AppWrapper({children, className, info}: {
 		</Modal></>;
 	}
 
-  return (<NextUIProvider>
+  return (<HeroUIProvider>
 		<AppCtx.Provider value={appCtx} >
 			{m}
-			<div id="parent" className={twMerge("flex flex-col container mx-auto p-4 lg:px-14 lg:pt-9 max-w-screen-xl h-dvh", className)}>
+			<div id="parent" className={twMerge("flex flex-col container mx-auto p-4 lg:px-14 lg:pt-9 max-w-screen-xl", className)}>
 				{children}
 			</div>
 		</AppCtx.Provider>
-  </NextUIProvider>);
+  </HeroUIProvider>);
 }

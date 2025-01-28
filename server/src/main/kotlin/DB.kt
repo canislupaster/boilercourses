@@ -162,8 +162,17 @@ class DB(env: Environment) {
         val name = text("name")
     }
 
-    object ScheduleType: Table("scheduleType") {
+    object ScheduleType: Table("schedule_type") {
         val name = text("name")
+    }
+
+    object SectionEnrollment : Table("section_enrollment") {
+        val id = integer("id").autoIncrement()
+        val course = integer("course").references(DB.Course.id)
+        val crn = integer("crn")
+        val time = timestamp("time")
+        val term = text("term")
+        val enrollment = integer("enrollment")
     }
 
     suspend fun<T> query(block: suspend Transaction.() -> T): T =
@@ -231,6 +240,55 @@ class DB(env: Environment) {
         if (Course.update({ Course.id eq id }) {
             it[Course.views] = Course.views+1
         }==0) throw APIErrTy.NotFound.err()
+    }
+
+    @Serializable
+    data class ChartPoint(
+        val enrollment: Int,
+        @Serializable(with=InstantSerializer::class)
+        val time: Instant
+    )
+
+    @Serializable
+    data class SectionChart(
+        val crn: Int,
+        val counts: List<ChartPoint>,
+        val dropRate: Double
+    )
+
+    @Serializable
+    data class ChartData(
+        val sections: List<SectionChart>,
+        val dropRate: Double
+    )
+
+    suspend fun getChartData(course: Int, term: String): ChartData {
+        val records = query {
+            DB.SectionEnrollment.select(DB.SectionEnrollment.time, DB.SectionEnrollment.enrollment, DB.SectionEnrollment.crn)
+                .where {
+                    (DB.SectionEnrollment.term eq term) and (DB.SectionEnrollment.course eq course)
+                }
+                .orderBy(DB.SectionEnrollment.id to SortOrder.DESC_NULLS_LAST)
+                .toList()
+        }
+
+        return records.groupBy { it[DB.SectionEnrollment.crn] }.map {
+            val (_, add, drop) = it.value.fold(Triple(0,0,0)) { acc, v ->
+                val enrollment = v[DB.SectionEnrollment.enrollment]
+                val diff = enrollment-acc.first
+                if (diff>0) Triple(enrollment, acc.second+diff, acc.third)
+                else Triple(enrollment, acc.second, acc.third-diff)
+            }
+
+            Triple(add, drop, SectionChart(
+                it.key,
+                it.value.map { v->ChartPoint(v[DB.SectionEnrollment.enrollment], v[DB.SectionEnrollment.time]) },
+                if (add<=0) 0.0 else drop.toDouble()/add.toDouble()
+            ))
+        }.let { data->
+            val (add, drop) = data.sumOf { it.first } to data.sumOf { it.second }
+            DB.ChartData(data.map {it.third}, if (add<=0) 0.0 else drop.toDouble()/add.toDouble())
+        }
     }
 
     data class DBInstructor(val id: Int, val data: Schema.Instructor, val rmp: Schema.RMPInfo?, val courseIds: List<Int>)
@@ -339,7 +397,7 @@ class DB(env: Environment) {
                 it[email]=newEmail
                 it[name]=newName
                 //sketchy!!! :)
-                if (newEmail==adminEmail) it[admin]=true
+                if (adminEmail!=null && newEmail==adminEmail) it[admin]=true
             }.first()
 
             Session.update({Session.id eq sesId}) { it[user] = u[User.id] }

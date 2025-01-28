@@ -42,6 +42,15 @@ export type DBProperty = {
 	name: string, value: string
 };
 
+export type DBSectionEnrollment = {
+	id: number,
+	course: number,
+	crn: number,
+	time: number,
+	term: Term,
+	enrollment: number
+};
+
 export function loadDB(values: {db?: string}) {
 	if (values.db==undefined) {
 		console.error("no database");

@@ -4,7 +4,7 @@ import { decodeQueryToSearchState, encodeSearchState, Search, SearchState } from
 import { Calendar } from "@/components/calendar";
 import { CourseLink } from "@/components/card";
 import { BarsStat, NameSemGPA, useSearchState, SelectionContext, simp, TermSelect, WrapStat } from "@/components/clientutil";
-import Graph from "@/components/graph";
+import { Graph } from "@/components/graph";
 import { MainLayout } from "@/components/mainlayout";
 import { Meters } from "@/components/proflink";
 import { abbr, Anchor, capitalize, RedditButton, selectProps, Text, textColor } from "@/components/util";

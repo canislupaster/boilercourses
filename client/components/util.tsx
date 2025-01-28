@@ -1,5 +1,5 @@
-import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/popover";
-import { Spinner, SpinnerProps } from "@nextui-org/spinner";
+import { Popover, PopoverContent, PopoverTrigger } from "@heroui/popover";
+import { Spinner, SpinnerProps } from "@heroui/spinner";
 import { IconChevronDown } from "@tabler/icons-react";
 import Image from "next/image";
 import { LinkProps } from "next/link";

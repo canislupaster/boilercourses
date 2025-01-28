@@ -1,4 +1,4 @@
-import { Checkbox } from "@nextui-org/checkbox";
+import { Checkbox } from "@heroui/checkbox";
 import { Icon, IconArrowsSort, IconEdit, IconFlag2, IconPhoto, IconStar, IconStarFilled, IconThumbUp, IconThumbUpFilled, IconTrash, IconUserCircle, IconX } from "@tabler/icons-react";
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import Markdown, { Components } from "react-markdown";

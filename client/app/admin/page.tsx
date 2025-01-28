@@ -4,8 +4,8 @@ import { Alert, BackButton, useSearchState, TermSelect } from "@/components/clie
 import { PostCard, PostCardAdminUser, PostRefreshHook } from "@/components/community";
 import { Button, ButtonPopover, containerDefault, Input, Loading, Text } from "@/components/util";
 import { AppCtx, useAPI, isAuthSet, useSignInRedirect } from "@/components/wrapper";
-import { Checkbox } from "@nextui-org/checkbox";
-import { Pagination } from "@nextui-org/pagination";
+import { Checkbox } from "@heroui/checkbox";
+import { Pagination } from "@heroui/pagination";
 import { useCallback, useContext, useEffect, useState } from "react";
 import { AdminPost, UserData } from "../../../shared/posts";
 import { latestTermofTerms, Term } from "../../../shared/types";

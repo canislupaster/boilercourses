@@ -24,9 +24,9 @@ export function MainLayout({left, right, rightTabs, bottom, title, extraButtons}
 
 				{left}
 			</div>
-			<div className="flex flex-col flex-grow max-w-full gap-4" >
-				<div className="flex flex-col" >
-					<div className="flex flex-row justify-between gap-2 mb-2" >
+			<div className="flex flex-col flex-grow max-w-full gap-4 lg:max-w-[50dvw]" >
+				<div className="flex flex-col items-stretch" >
+					<div className="flex flex-row justify-between gap-2 mb-2 max-w-full items-start" >
 						<div className="flex flex-row gap-2 items-center text-nowrap max-w-full overflow-x-auto" >
 							{rightTabs.map(({key,title})=>
 								<Button key={key} className={key==cur ? `border-blue-500 ${bgColor.hover}` : ""}

@@ -195,6 +195,13 @@ suspend fun main(args: Array<String>) = coroutineScope {
                 ctx.resp(db.getRMPs(ctx.json<List<String>>()))
             }
 
+            @Serializable
+            data class ChartRequest(val course: Int, val term: String)
+            post("/chart") {
+                val req = ctx.json<ChartRequest>()
+                ctx.resp(db.getChartData(req.course, req.term))
+            }
+
             post("/login") {
                 loginRateLimit.check(ctx.remoteAddress)
 

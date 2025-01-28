@@ -2,7 +2,7 @@ import {parseArgs} from "node:util";
 import {devices} from "playwright";
 import {chromium} from "playwright-extra";
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import {DBAvailabilityNotification, DBCourse, DBProperty, DBTerm, loadDB} from "./db.ts";
+import {DBAvailabilityNotification, DBCourse, DBProperty, DBSectionEnrollment, DBTerm, loadDB} from "./db.ts";
 import {readFile, rm} from "node:fs/promises";
 import {createDecipheriv} from "node:crypto";
 import Papa from "papaparse";
@@ -87,6 +87,9 @@ async function handleCSV(term: Term, path: string) {
 
 	console.log(`updating courses with ${sectionData.size} sections`);
 
+	let enrollmentsChanged = 0, availabilitiesSatisfied=0;
+	const scrapeTime = Date.now();
+
 	await knex.transaction(async trx => {
 		const courses = (await trx<DBCourse>("course").select()).map(c=>{
 			return {...c, parsed: JSON.parse(c.data) as Course};
@@ -108,35 +111,59 @@ async function handleCSV(term: Term, path: string) {
 			if (!s.courses.has(`${c.subject} ${c.course}`))
 				throw new Error("mismatched CRN");
 
-			const v = c.parsed.sections[term];
-
-			const sec = v.find(sec=>sec.crn==s.crn);
-			if (sec==undefined
-				|| (deepEquals(sec.seats, s.seats) && deepEquals(sec.room, s.room)))
-				continue;
-
-			sec.seats = s.seats;
-			sec.room = s.room;
-
-			changedCourses.set(c.id, c.parsed);
-
-			if (s.seats!=undefined)
-				await trx<DBAvailabilityNotification>("availability_notification")
-					.where({course: c.id, sent:false, term, crn: s.crn})
+			if (s.seats!=undefined) {
+				availabilitiesSatisfied+=await trx<DBAvailabilityNotification>("availability_notification")
+					.where({course: c.id, sent: false, term, crn: s.crn})
 					.andWhere("threshold", "<=", s.seats.left)
 					.update({satisfied: true});
+
+				// technically i only need to compare with old section
+				// however this is more robust and i want to populate the table even if nothing changed
+				const lastRecords = await trx<DBSectionEnrollment>("section_enrollment")
+					.where({ course: c.id, crn: s.crn, term })
+					.orderBy("id", "desc")
+					.limit(2);
+				
+				if (lastRecords.length<2 || lastRecords[0].enrollment!=s.seats.used
+					|| lastRecords[0].enrollment!=lastRecords[1].enrollment) {
+
+					enrollmentsChanged++;
+					await trx<DBSectionEnrollment>("section_enrollment")
+						.insert({
+							course: c.id, crn: s.crn, term,
+							time: scrapeTime, enrollment: s.seats.used
+						});
+				} else {
+					await trx<DBSectionEnrollment>("section_enrollment")
+						.update({time: scrapeTime}).where({id: lastRecords[0].id});
+				}
+			}
+
+			const oldCourseSections = c.parsed.sections[term];
+
+			const oldSection = oldCourseSections.find(sec=>sec.crn==s.crn);
+			if (oldSection==undefined
+				|| (deepEquals(oldSection.seats, s.seats) && deepEquals(oldSection.room, s.room)))
+				continue;
+
+			oldSection.seats = s.seats;
+			oldSection.room = s.room;
+
+			changedCourses.set(c.id, c.parsed);
 		}
 
 		for (const [cid, c] of changedCourses.entries()) {
 			await trx<DBCourse>("course").update({data: JSON.stringify(c)}).where({id: cid});
 			const left = c.sections[term].map(x=>x.seats ? x.seats.left : 0).reduce((a,b)=>a+b);
 
-			await trx<DBAvailabilityNotification>("availability_notification")
+			availabilitiesSatisfied+=await trx<DBAvailabilityNotification>("availability_notification")
 				.where({course: cid, sent:false, term, crn: null})
 				.andWhere("threshold", "<=", left)
 				.update({satisfied: true});
 		}
 	});
+
+	console.log(`${enrollmentsChanged} enrollments changed, ${availabilitiesSatisfied} availabilities satisfied`);
 }
 
 let secretJSON: string;
