@@ -8,5 +8,10 @@
 		"type": "deadline",
 		"end": 1731621600, "title": "Course Request Forms are due soon",
 		"message": "Remember to submit your CRFs by Nov. 14th at 5 pm!"
+	},
+	{
+		"type": "deadline",
+		"end": 1744750800, "title": "Course Request Forms are due soon",
+		"message": "Remember to submit your CRFs by Apr. 15th at 5 pm!"
 	}
 ]
