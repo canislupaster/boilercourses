@@ -169,9 +169,6 @@ export function ButtonPopover({children, className, title, desc}: {children: Rea
 	</Popover>;
 }
 
-export const abbr = (s: string, len: number=300) =>
-	s.length > len ? `${s.substring(0, len-3)}...` : s;
-
 const selectStyle: ClassNamesConfig<unknown,boolean> = {
 	control: (state) => `flex flex-row gap-4 px-3 py-1.5 dark:bg-zinc-800 bg-zinc-200 items-center border-2 text-zinc-800 dark:text-white rounded-lg hover:cursor-pointer ${state.menuIsOpen ? "dark:border-blue-500 border-blue-400" : "dark:border-zinc-600 border-zinc-300"}`,
 	menuList: () => "border-2 border-zinc-300 dark:border-zinc-700 rounded-lg bg-zinc-100 dark:bg-black mt-1 flex flex-col items-stretch",
@@ -262,3 +259,8 @@ export const Divider = ({className}: {className?: string}) =>
 // 	>
 // 	{props.children}
 // </Select>
+
+export const metadataKeywords = [
+	'Purdue', 'Purdue University', 'Purdue Courses', 'Purdue Catalog',
+	'Self-service', 'Boiler', 'Course', 'Class', 'Schedule', 'Registration'
+];

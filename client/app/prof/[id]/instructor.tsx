@@ -7,11 +7,11 @@ import { BarsStat, NameSemGPA, useSearchState, SelectionContext, simp, TermSelec
 import { Graph } from "@/components/graph";
 import { MainLayout } from "@/components/mainlayout";
 import { Meters } from "@/components/proflink";
-import { abbr, Anchor, capitalize, RedditButton, selectProps, Text, textColor } from "@/components/util";
+import { Anchor, capitalize, RedditButton, selectProps, Text, textColor } from "@/components/util";
 import { AppCtx, setAPI } from "@/components/wrapper";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { MultiValue, default as Select } from "react-select";
-import { CourseId, emptyInstructorGrade, formatTerm, InstructorGrade, InstructorId, latestTermofTerms, mergeGrades, Section, SmallCourse, Term, termIdx, toInstructorGrade, toSmallCourse, trimCourseNum } from "../../../../shared/types";
+import { CourseId, emptyInstructorGrade, formatTerm, InstructorGrade, InstructorId, latestTermofTerms, mergeGrades, Section, SmallCourse, Term, termIdx, toInstructorGrade, toSmallCourse, trimCourseNum, abbr } from "../../../../shared/types";
 
 export function Instructor({instructor}: {instructor: InstructorId}) {
 	useEffect(() => {
@@ -108,7 +108,7 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 		termSecs.map(x=>[smallCourses.get(x[0].id)!,x[2]]), [smallCourses, termSecs]);
 
 	const cal = calSecs.length>0 && <>
-		<TermSelect term={term} setTerm={setTerm} terms={allTerms} label="Schedule for" />
+		<TermSelect term={term} setTerm={t=>setTerm(t!)} terms={allTerms} label="Schedule for" />
 		<Calendar sections={calSecs} term={term} />
 	</>;
 

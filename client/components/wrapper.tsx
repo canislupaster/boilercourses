@@ -427,7 +427,10 @@ export function AppWrapper({children, className, info}: {
 		return count;
 	}, []);
 
-	const goto = useCallback((to: string) => { forward(); router.push(to); }, [forward, router]);
+	const goto = useCallback((to: string) => {
+		forward();
+		router.push(to);
+	}, [forward, router]);
 
 	const goBack = useCallback(() => {
 		let i=backUrls.length;

@@ -1,4 +1,4 @@
-import { textColor } from "@/components/util";
+import { metadataKeywords, textColor } from "@/components/util";
 import { AppWrapper, GoatCounter } from "@/components/wrapper";
 import { Metadata } from "next";
 import { Chivo, Inter } from 'next/font/google';
@@ -6,6 +6,7 @@ import React from "react";
 import banner from "../public/banner.png";
 import { catchAPIError, getInfo } from "./server";
 import "./style.css";
+import { commaNum } from "../../shared/types";
 
 const chivo = Chivo({ subsets: ['latin'], display: 'swap', variable: "--chivo" });
 const inter = Inter({ subsets: ['latin'], display: 'swap', variable: "--inter" });
@@ -18,18 +19,17 @@ const goatCounter = process.env.NEXT_PUBLIC_GOAT_COUNTER!==undefined && process.
 
 export async function generateMetadata(): Promise<Metadata> {
   const info = await getInfo();
-  const desc = `BoilerCourses - a refreshing Purdue course catalog with ${info.nCourses} courses and ${info.nInstructor} instructors. Find geneds, grades, prerequisites, schedules, insightful reviews, comments, and more.`
+  const desc = `BoilerCourses - a refreshing Purdue course catalog with ${commaNum(info.nCourses)} courses and ${commaNum(info.nInstructor)} instructors. View grades, prerequisites, schedules, reviews and more.`
   const title = "BoilerCourses, Purdue's cooler course catalog";
 
   return {
     metadataBase: new URL(url),
     alternates: { canonical: "/" },
-    title: "BoilerCourses", description: desc,
+    title: "BoilerCourses",
+    description: desc,
+    keywords: metadataKeywords,
+    applicationName: "BoilerCourses",
     icons: { icon: "/icon-color.png" },
-    keywords: [ 'Purdue', 'Purdue University', 'Purdue Courses', 'BoilerCourses', 'Boiler Courses',
-      'Boiler', 'Courses', 'BoilerCourses', "Boiler.Courses", 'Boiler Course', "Class", "Course", 'Catalog', 'Catalogue', "Boiler Classes", "BoilerClasses", "Classes",
-      'Purdue Course Search', 'Purdue Course Catalog', 'Boilermakers', "Self-service", "Schedule",
-      "Semester", "Calendar", "Review", "Rating", "Professor", "Grade", "Information" ],
     openGraph: {
       url: "/", type: "website",
       title, description: desc,

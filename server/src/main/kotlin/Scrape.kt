@@ -155,8 +155,8 @@ class Scrape(val log: Logger, db: DB, val env: Environment, val courses: Courses
                 val req = ctx.json<ScrapeRequest>()
 
                 withTryLock {
-                    log.info("scraping ${scrape[req.type]!!.name}, term ${req.term} at admin request")
-                    scrape(scrape[req.type]!!, req.term?.let {listOf(it)})
+                    log.info("scraping ${scrape[req.type]!!.name}, term ${req.term ?: "default"} at admin request")
+                    scrape(scrape[req.type]!!, req.term?.let {listOf(it)} ?: defaultTerms)
                     log.info("reindexing after scrape")
                     reload()
                 }

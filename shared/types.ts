@@ -387,3 +387,15 @@ export function minutesInDay(t: string) {
 	return 60*(Number.parseInt(m[1])%12)+Number.parseInt(m[2])+(m[3]=="pm" ? 12*60 : 0);
 }
 
+export const abbr = (s: string, len: number=300) =>
+	s.length > len ? `${s.substring(0, len-3)}...` : s;
+
+export function commaNum(x: number) {
+  const s = [...x.toString()];
+  const o = [];
+  while (s.length>3) {
+    o.push(s.splice(-3).join(""));
+  }
+  o.push(s);
+  return o.reverse().join(",");
+}

@@ -345,20 +345,26 @@ export function WrapStat({search, setSearch, title, children, searchName}: {sear
 	</>;
 }
 
-export function TermSelect({term, terms, setTerm, label, noUpdated}: {
-	term: Term, terms: Term[], setTerm: (t:Term)=>void, label?: string, noUpdated?: boolean
+export function TermSelect({term, terms, setTerm, label, noUpdated, optional}: {
+	term: Term|null, terms: Term[],
+	setTerm: (t: Term|null)=>void,
+	label?: string, noUpdated?: boolean,
+	optional?: boolean
 }) {
 	const info = useInfo();
 	return <div className="flex flex-wrap flex-row items-center gap-3 text-sm" >
 		{label} <Select
-			options={terms.map((x):[number,Term]=>[termIdx(x), x])
-				.sort((a,b)=>b[0]-a[0])
-				.map(([,x]) => ({label: formatTerm(x), value: x}))}
-			value={{label: formatTerm(term), value: term}}
-			onChange={(x: SingleValue<{label: string, value: Term}>) => setTerm(x!.value)}
-			{...selectProps<{label:string,value:Term},false>()}
+			options={[
+				...optional ? [{label: "Default", value: null}] : [],
+				...terms.map((x):[number,Term]=>[termIdx(x), x])
+					.sort((a,b)=>b[0]-a[0])
+					.map(([,x]) => ({label: formatTerm(x), value: x}))
+			]}
+			value={{label: term ? formatTerm(term) : "Default", value: term}}
+			onChange={(x: SingleValue<{label: string, value: Term|null}>) => setTerm(x!.value)}
+			{...selectProps<{label:string,value:Term|null},false>()}
 		/>
-		{!noUpdated && <span className="text-gray-400" >
+		{!noUpdated && term && <span className="text-gray-400" >
 			last updated {new Date(info.terms[term]!.lastUpdated).toLocaleDateString()}
 		</span>}
 	</div>;

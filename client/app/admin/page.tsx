@@ -8,7 +8,7 @@ import { Checkbox } from "@heroui/checkbox";
 import { Pagination } from "@heroui/pagination";
 import { useCallback, useContext, useEffect, useState } from "react";
 import { AdminPost, UserData } from "../../../shared/posts";
-import { latestTermofTerms, Term } from "../../../shared/types";
+import { Term } from "../../../shared/types";
 
 type ListRequest = {
 	reported: boolean, new: boolean, page: number
@@ -68,7 +68,7 @@ function AdminPosts() {
 
 	const app = useContext(AppCtx);
 	const terms = Object.keys(app.info.terms) as Term[];
-	const [term, setTerm] = useState<Term|null>(latestTermofTerms(terms));
+	const [term, setTerm] = useState<Term|null>(null);
 
 	if (posts==null) return <Loading/>;
 
@@ -90,9 +90,9 @@ function AdminPosts() {
 			</Button>
 		</div>
 
-		{term && <div className="flex flex-col gap-1 my-2" >
+		<div className="flex flex-col gap-1 my-2" >
 			<Text v="lg" >Scrape term</Text>
-			<TermSelect term={term} setTerm={setTerm} terms={terms} />
+			<TermSelect term={term} setTerm={setTerm} terms={terms} optional />
 			<div className="flex flex-row flex-wrap gap-2" >
 				<Button disabled={busy}
 					onClick={()=>scrape.run({data: {term, type: "unitime"}})} >
@@ -103,7 +103,7 @@ function AdminPosts() {
 					Scrape catalog
 				</Button>
 			</div>
-		</div>}
+		</div>
 
 		{stat==null ? <Loading/> :
 			stat.status=="busy" ? <Alert txt="Currently scraping" />

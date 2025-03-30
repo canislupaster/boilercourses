@@ -112,6 +112,8 @@ function SearchResults({api, page, terms, filtering, setPage, searchInput}: {
 		
 		let cur: number|null=null;
 		const cb = (ev: KeyboardEvent) => {
+			if (ev.ctrlKey || ev.altKey || ev.metaKey) return;
+
 			const navKeys = ["ArrowUp", "ArrowDown", "Tab"];
 
 			if (ev.target==searchInput.current && navKeys.includes(ev.key)) {

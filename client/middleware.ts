@@ -6,6 +6,7 @@ const cspHeader = `
 	script-src 'self' 'nonce-?' 'strict-dynamic';
 	style-src 'self' 'unsafe-inline';
 	img-src 'self' blob: data:;
+	connect-src 'self' https://login.microsoftonline.com;
 	font-src 'self';
 	object-src 'none';
 	base-uri 'self';

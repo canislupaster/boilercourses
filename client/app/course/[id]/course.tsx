@@ -11,13 +11,13 @@ import { Prereqs } from "@/components/prereqs";
 import { ProfLink } from "@/components/proflink";
 import { Restrictions } from "@/components/restrictions";
 import { SimilarCourses } from "@/components/similar";
-import { abbr, Anchor, bgColor, Button, CatalogLinkButton, containerDefault, Divider, firstLast, LinkButton, Loading, RedditButton, selectProps, Text } from "@/components/util";
+import { Anchor, bgColor, Button, CatalogLinkButton, containerDefault, Divider, firstLast, LinkButton, Loading, RedditButton, selectProps, Text } from "@/components/util";
 import { AppCtx, setAPI, useAPIResponse, useInfo } from "@/components/wrapper";
 import { IconPaperclip, IconWorld } from "@tabler/icons-react";
 import Image from "next/image";
 import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import Select, { MultiValue } from "react-select";
-import { allCourseInstructors, Attachment, CourseId, CourseInstructor, creditStr, emptyInstructorGrade, formatTerm, InstructorGrade, latestTerm, mergeGrades, PreReqs, RMPInfo, Section, sectionsByTerm, SmallCourse, Term, termIdx, toSmallCourse, trimCourseNum } from "../../../../shared/types";
+import { allCourseInstructors, Attachment, CourseId, CourseInstructor, creditStr, emptyInstructorGrade, formatTerm, InstructorGrade, latestTerm, mergeGrades, PreReqs, RMPInfo, Section, sectionsByTerm, SmallCourse, Term, termIdx, toSmallCourse, trimCourseNum, abbr } from "../../../../shared/types";
 import boilerexams from "../../../public/boilerexams-icon.png";
 import boilerexamsCourses from "../../boilerexamsCourses.json";
 import { EnrollmentChart, Graph } from "@/components/graph";
@@ -215,7 +215,8 @@ function CourseDetail(cid: CourseId) {
 					<CourseChips course={small} />
 				</div>
 				
-				<TermSelect term={term} setTerm={setTerm} terms={Object.keys(course.sections) as Term[]} label="Data from" />
+				<TermSelect term={term} setTerm={(t)=>setTerm(t!)}
+					terms={Object.keys(course.sections) as Term[]} label="Data from" />
 
 				{term!=latest && <Alert txt={`Most course data, except for sections and instructors, is from ${formatTerm(latest)}. Fall back to the catalog for exact data from an older term.`} title="Note" />}
 

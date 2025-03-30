@@ -93,7 +93,7 @@ function Landing({setSearch}: {setSearch: (s: string) => void}) {
 				<input
 					id="landingSearch"
 					type="text" autoFocus
-					placeholder="I want to take a class about..."
+					placeholder="Discover a course at Purdue"
 					onChange={(e) => setSearch(e.target.value) }
 					className={`${textColor.contrast} text-lg md:text-xl bg-transparent w-full max-w-72 md:max-w-none pb-2 border-b-2 focus:outline-none focus:border-blue-500 transition duration-300`}
 				/>

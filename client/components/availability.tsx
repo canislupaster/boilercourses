@@ -69,7 +69,8 @@ function NotificationCreator({course, section, fixTerm, update}: {
 		}</Text>
 
 		{fixTerm==undefined ? 
-			<TermSelect term={term} terms={terms} setTerm={setTerm} label="Be notified for" noUpdated />
+			<TermSelect term={term} terms={terms} setTerm={t=>setTerm(t!)}
+				label="Be notified for" noUpdated />
 		: <Text>
 			You will be notified for openings in <b>{formatTerm(term)}</b>.
 		</Text>}

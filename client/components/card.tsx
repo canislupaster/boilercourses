@@ -1,10 +1,10 @@
 import { twMerge } from "tailwind-merge";
-import { CourseId, creditStr, formatTerm, InstructorGrade, latestTermofTerms, SmallCourse, Term, toSmallCourse, trimCourseNum } from "../../shared/types";
+import { CourseId, creditStr, formatTerm, InstructorGrade, latestTermofTerms, SmallCourse, Term, toSmallCourse, trimCourseNum, abbr } from "../../shared/types";
 import attributeToGenEd from "../app/attributeToGenEd.json";
-import { AppTooltip, useGpaColor, useMd } from "./clientutil";
+import { AppLink, AppTooltip, useGpaColor, useMd } from "./clientutil";
 import { Stars } from "./community";
 import { InstructorList } from "./instructorlist";
-import { abbr, Anchor, bgColor, borderColor, Chip, containerDefault, Divider, Loading, Text, textColor } from "./util";
+import { Anchor, bgColor, borderColor, Chip, containerDefault, Divider, Loading, Text, textColor } from "./util";
 import { AppCtx, useAPIResponse } from "./wrapper";
 import { IconEye } from "@tabler/icons-react";
 import { useContext } from "react";
@@ -60,7 +60,11 @@ export function Card({ course, type, term: optTerm, className, extra, score, sel
 
       <InstructorList className="z-10" whomst={course.termInstructors[term]} term={term} course={course} />
 
-      <button onClick={()=>app.goto(url)} className={`border-none outline-none absolute left-0 right-0 top-0 bottom-0 hover:bg-cyan-800/5 dark:hover:bg-cyan-100/5 transition ${selected ? "bg-cyan-800/10" : "bg-transparent"}`} ></button>
+      <AppLink href={url} className={
+        `border-none outline-none absolute left-0 right-0 top-0 bottom-0 hover:bg-cyan-800/5 dark:hover:bg-cyan-100/5 transition ${
+          selected ? "bg-cyan-800/10" : "bg-transparent"
+        }`
+      } />
     </div>;
   } else {
     const body = <>
@@ -80,12 +84,12 @@ export function Card({ course, type, term: optTerm, className, extra, score, sel
       </Text>
 
       {/* higher z index for selectability */}
-      {course.termInstructors[term].length>0 && <div className="flex flex-wrap flex-row lg:text-sm text-sm gap-x-1 items-center gap-y-0.5 mb-2 z-10 mt-2" >
+      {course.termInstructors[term].length>0 && <div className="flex flex-wrap flex-row lg:text-sm text-sm gap-x-1 items-center gap-y-0.5 z-10 mt-2" >
         <Text v="smbold">Taught by</Text>
         <InstructorList short className="my-2 contents" whomst={course.termInstructors[term]} term={term} course={course} />
       </div>}
 
-      <div className="flex flex-row flex-wrap gap-1" ><CourseChips course={course} /></div>
+      <div className="flex flex-row flex-wrap gap-1 mt-2" ><CourseChips course={course} /></div>
     </>;
 
     if (type=="frameless") return <>
@@ -102,7 +106,7 @@ export function Card({ course, type, term: optTerm, className, extra, score, sel
 
       {body}
 
-      <button onClick={()=>app.goto(url)} className="bg-transparent border-none outline-none absolute left-0 right-0 top-0 bottom-0" ></button>
+      <AppLink href={url} className="bg-transparent border-none outline-none absolute left-0 right-0 top-0 bottom-0" />
     </div>;
   }
 };

@@ -1,10 +1,10 @@
 import { IconFilter } from "@tabler/icons-react";
 import React, { useCallback, useContext, useState } from "react";
 import { twMerge } from "tailwind-merge";
-import { Course, minutesInDay, scheduleAbbr, Section, SmallCourse, Term, validDays } from "../../shared/types";
+import { Course, minutesInDay, scheduleAbbr, Section, SmallCourse, Term, validDays, abbr } from "../../shared/types";
 import { SelectionContext, ShowMore, simp, useDebounce } from "./clientutil";
 import { SectionLink } from "./sectionlink";
-import { abbr, bgColor, borderColor, containerDefault, Divider, Input, Text, textColor } from "./util";
+import { bgColor, borderColor, containerDefault, Divider, Input, Text, textColor } from "./util";
 
 export function calendarDays(course: Course, term: Term) {
 	const secs = course.sections[term];
