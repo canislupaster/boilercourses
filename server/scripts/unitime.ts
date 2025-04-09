@@ -261,17 +261,13 @@ if (positionals.length==0) {
 	activeTerms.push(latest);
 }
 
-let init=false;
 for (const t of activeTerms) {
 	if (t==null) continue;
-
-	if (init)
-		await pg.goto("https://timetable.mypurdue.purdue.edu/Timetabling/main.action", {waitUntil: "load"});
-	init=true;
-
 	console.log(`downloading timetable for ${formatTerm(t.id)}`);
 
 	const timeout = 1000*60*15;
+
+	await pg.reload();
 	const dl = pg.waitForEvent("download", { timeout });
 
 	await pg.evaluate((termName)=>{
@@ -281,13 +277,13 @@ for (const t of activeTerms) {
 	await pg.click("#xd", { timeout });
 	
 	const path = await (await dl).path();
-	console.log(`reading room schedule from ${path}`);
+	console.log(`reading room schedule from ${path} (${(await dl).suggestedFilename()})`);
 
 	try {
 		await handleCSV(t.id, path);
 	} finally {
 		console.log(`removing ${path}`);
-		await rm(path);
+		await (await dl).delete();
 	}
 
 	console.log(`done with ${formatTerm(t.id)}`);

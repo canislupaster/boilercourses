@@ -464,222 +464,232 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 
 	const courseIds: number[] = [];
 
-	const courses = await logArray(courseArr, async ([subject,course]) => {
-		//https://selfservice.mypurdue.purdue.edu/prod/bwckctlg.p_disp_course_detail?cat_term_in=202510&subj_code_in=MA&crse_numb_in=66400
-		const res = await getHTML(`https://selfservice.mypurdue.purdue.edu/prod/bwckctlg.p_disp_course_detail`, {
-			"cat_term_in": termId,
-			"subj_code_in": subject,
-			"crse_numb_in": course.toString()
-		});
+	const courses = await knex.transaction(async trans => {
+		const pcourses = (await trans<DBCourse>("course").select()).map(v=>({
+			...v, c: JSON.parse(v.data) as Course,
+			// if filtering by subject, mark other courses as found
+			found: subjectArg!=undefined ? v.subject!=subjectArg : false
+		}));
 
-		const name = res(".nttitle").first().text().split(" - ")[1].trim();
+		const pcourseBySubjCourseName = new Map(
+			pcourses.map(v=>[[v.subject, v.course, v.name].join("\n"), v])
+		);
 
-		const td = res("div.pagebodydiv table.datadisplaytable[width=\"100%\"] td.ntdefault");
-		const bits: {
-			heading?: string,
-			txt: string
-		}[] = [];
+		const ret = await logArray(courseArr, async ([subject,course]) => {
+			//https://selfservice.mypurdue.purdue.edu/prod/bwckctlg.p_disp_course_detail?cat_term_in=202510&subj_code_in=MA&crse_numb_in=66400
+			const res = await getHTML(`https://selfservice.mypurdue.purdue.edu/prod/bwckctlg.p_disp_course_detail`, {
+				"cat_term_in": termId,
+				"subj_code_in": subject,
+				"crse_numb_in": course.toString()
+			});
 
-		for (const child of td.contents()) {
-			const txt = res(child).text();
+			const name = res(".nttitle").first().text().split(" - ")[1].trim();
 
-			if (txt.trim().length==0) {
-				if (bits.length>0 && bits[bits.length-1].txt.length>0 && res(child).is("br")) {
-					bits.push({txt: ""});
+			const td = res("div.pagebodydiv table.datadisplaytable[width=\"100%\"] td.ntdefault");
+			const bits: {
+				heading?: string,
+				txt: string
+			}[] = [];
+
+			for (const child of td.contents()) {
+				const txt = res(child).text();
+
+				if (txt.trim().length==0) {
+					if (bits.length>0 && bits[bits.length-1].txt.length>0 && res(child).is("br")) {
+						bits.push({txt: ""});
+					}
+				} else if (child.nodeType==1 && res(child).is("span.fieldlabeltext")) {
+					bits.push({txt: "", heading: txt.trim()});
+				} else if (bits.length>0) {
+					const l = bits[bits.length-1];
+					if (l.txt.length>0) l.txt+=`\n${txt}`;
+					else l.txt=txt;
+				} else {
+					bits.push({txt});
 				}
-			} else if (child.nodeType==1 && res(child).is("span.fieldlabeltext")) {
-				bits.push({txt: "", heading: txt.trim()});
-			} else if (bits.length>0) {
-				const l = bits[bits.length-1];
-				if (l.txt.length>0) l.txt+=`\n${txt}`;
-				else l.txt=txt;
-			} else {
-				bits.push({txt});
 			}
-		}
 
-		bits[0].txt=bits[0].txt.trim();
-		const match = bits[0].txt.match(/^Credit Hours: [\d.]+(\s*\w+\s*[\d.]+)?.\s*/);
-		if (match!=null) {
-			bits[0].txt=bits[0].txt.slice(match[0].length);
-		}
+			bits[0].txt=bits[0].txt.trim();
+			const match = bits[0].txt.match(/^Credit Hours: [\d.]+(\s*\w+\s*[\d.]+)?.\s*/);
+			if (match!=null) {
+				bits[0].txt=bits[0].txt.slice(match[0].length);
+			}
 
-		const end = " Credit hours";
-		bits[1].txt=bits[1].txt.trim();
-		assert(bits[1].txt.endsWith(end), "doesn't end with credit hours");
-		bits[1].txt=bits[1].txt.slice(0,bits[1].txt.length-end.length);
+			const end = " Credit hours";
+			bits[1].txt=bits[1].txt.trim();
+			assert(bits[1].txt.endsWith(end), "doesn't end with credit hours");
+			bits[1].txt=bits[1].txt.slice(0,bits[1].txt.length-end.length);
 
-		const expr = parseExpr(bits[1].txt, {
-			operators: ["TO", "OR"],
-			precedence: [1,1],
-			type: "atom",
-			parseAtom: (credits) => {
-				const m = credits.match(/^[\d.]+/)![0];
-				return [{value: Number.parseInt(m)}, credits.slice(m.length)];
-			},
-			left: "(", right: ")"
-		})[0]!;
+			const expr = parseExpr(bits[1].txt, {
+				operators: ["TO", "OR"],
+				precedence: [1,1],
+				type: "atom",
+				parseAtom: (credits) => {
+					const m = credits.match(/^[\d.]+/)![0];
+					return [{value: Number.parseInt(m)}, credits.slice(m.length)];
+				},
+				left: "(", right: ")"
+			})[0]!;
 
-		let credits: Course["credits"];
+			let credits: Course["credits"];
 
-		if (expr.type=="op" && expr.op=="TO") {
-			credits={
-				type: "range",
-				min: reduceExpr(expr, x=>x.value, (a,b,) => Math.min(a,b)),
-				max: reduceExpr(expr, x=>x.value, (a,b,) => Math.max(a,b))
-			};
-		} else {
-			credits={
-				type: "fixed",
-				values: reduceExpr(expr, x=>[x.value], (a,b,c) => {
-					if (c=="OR") return [...a, ...b];
-					else {
-						const out: number[] = [], top = Math.max(...b);
-						for (let i=Math.min(...a); i<=top; i++) out.push(i);
-						return out;
+			if (expr.type=="op" && expr.op=="TO") {
+				credits={
+					type: "range",
+					min: reduceExpr(expr, x=>x.value, (a,b,) => Math.min(a,b)),
+					max: reduceExpr(expr, x=>x.value, (a,b,) => Math.max(a,b))
+				};
+			} else {
+				credits={
+					type: "fixed",
+					values: reduceExpr(expr, x=>[x.value], (a,b,c) => {
+						if (c=="OR") return [...a, ...b];
+						else {
+							const out: number[] = [], top = Math.max(...b);
+							for (let i=Math.min(...a); i<=top; i++) out.push(i);
+							return out;
+						}
+					}),
+				};
+			}
+
+			let reqs: Course["prereqs"] = "none";
+			const restrictions: Course["restrictions"] = [];
+			const attributes: string[] = [];
+
+			let which: "none"|"restrictions"|"requirements" = "none";
+			let curRestrictionTy: Pick<Restriction, "exclusive"|"type">|null = null;
+
+			const headings = [
+				"Levels:","Schedule Types:","Offered By:","Department:","Course Attributes:",
+				"May be offered at any of the following campuses:","Learning Outcomes:",
+				"Repeatable for Additional Credit:","Restrictions:","Prerequisites:","General Requirements:",
+				"Corequisites:","Required Materials:","May be offered at any campus except the following:"
+			] as const;
+
+			//ignored if general requirements is used instead
+			const preReqStrs: [string,boolean][] = [];
+			const genReqStrs: string[] = [];
+			let learningOutcomes: string|string[]|undefined;
+			for (const b of bits) {
+				try {
+					if (b.heading!==undefined && (headings as Readonly<string[]>).includes(b.heading)) {
+						which="none";
+
+						const head = b.heading as typeof headings[number];
+
+						if (head=="Learning Outcomes:") {
+							const points = [...b.txt.matchAll(/\d+\.\s*(.+?)\s*(?=\d+\.|$)/g)];
+							learningOutcomes=points.length>0 ? points.map(x=>x[1]) : b.txt.trim();
+						} else if (head=="General Requirements:") {
+							which="requirements";
+							genReqStrs.push("");
+						} else if (head=="Restrictions:") {
+							which="restrictions";
+						} else if (head=="Course Attributes:") {
+							attributes.push(...b.txt.split(",").map(x => x.trim()).map(x => {
+								const v = courseAttributeMap.get(x);
+								return v ?? x;
+							}));
+						} else if (head=="Prerequisites:") {
+							preReqStrs.push([b.txt, false]);
+						} else if (head=="Corequisites:") {
+							preReqStrs.push([b.txt, true]);
+						}
+					} else if (b.heading!==undefined) {
+						b.txt = `${b.heading}\n${b.txt}`;
 					}
-				}),
-			};
-		}
 
-		let reqs: Course["prereqs"] = "none";
-		const restrictions: Course["restrictions"] = [];
-		const attributes: string[] = [];
+					if (which=="restrictions") {
+						//preserve indentation for below lmao
+						b.txt=b.txt.trimIfStarts("\n").trimEnd();
+						const bTrim = b.txt.trimStart();
 
-		let which: "none"|"restrictions"|"requirements" = "none";
-		let curRestrictionTy: Pick<Restriction, "exclusive"|"type">|null = null;
+						if (bTrim.length!=b.txt.length) {
+							if (curRestrictionTy==null) continue;
+							const {type, exclusive} = curRestrictionTy;
 
-		const headings = [
-			"Levels:","Schedule Types:","Offered By:","Department:","Course Attributes:",
-			"May be offered at any of the following campuses:","Learning Outcomes:",
-			"Repeatable for Additional Credit:","Restrictions:","Prerequisites:","General Requirements:",
-			"Corequisites:","Required Materials:","May be offered at any campus except the following:"
-		] as const;
+							switch (type) {
+								case "level":
+								case "class": {
+									if (levels.includes(bTrim)) {
+										restrictions.push({type: "level",exclusive,level: bTrim as Level});
+										break;
+									}
 
-		//ignored if general requirements is used instead
-		const preReqStrs: [string,boolean][] = [];
-		const genReqStrs: string[] = [];
-		let learningOutcomes: string|string[]|undefined;
-		for (const b of bits) {
-			try {
-				if (b.heading!==undefined && (headings as Readonly<string[]>).includes(b.heading)) {
-					which="none";
+									const m = bTrim.match(/^(Junior|Sophomore|Freshman|Senior):? (\d+)(?: - (\d+)|\+) hours$|^Professional (\w+) Year$/);
+									
+									if (m==null)
+										throw new Error("invalid classification or level, (which are parsed as one due to the abomination that is AAE 571)");
 
-					const head = b.heading as typeof headings[number];
+									if (m[4]===undefined) restrictions.push({type: "class",exclusive,
+										class: m[1] as "Sophomore" | "Junior" | "Freshman" | "Senior",
+										minCredit: Number.parseInt(m[2]),
+										maxCredit: m[3]==undefined ? null : Number.parseInt(m[3])
+									});
+									else restrictions.push({type: "class",exclusive,
+										class: "Professional", year: ords.indexOf(m[4].toLowerCase())+1
+									});
 
-					if (head=="Learning Outcomes:") {
-						const points = [...b.txt.matchAll(/\d+\.\s*(.+?)\s*(?=\d+\.|$)/g)];
-						learningOutcomes=points.length>0 ? points.map(x=>x[1]) : b.txt.trim();
-					} else if (head=="General Requirements:") {
-						which="requirements";
-						genReqStrs.push("");
-					} else if (head=="Restrictions:") {
-						which="restrictions";
-					} else if (head=="Course Attributes:") {
-						attributes.push(...b.txt.split(",").map(x => x.trim()).map(x => {
-							const v = courseAttributeMap.get(x);
-							return v ?? x;
-						}));
-					} else if (head=="Prerequisites:") {
-						preReqStrs.push([b.txt, false]);
-					} else if (head=="Corequisites:") {
-						preReqStrs.push([b.txt, true]);
-					}
-				} else if (b.heading!==undefined) {
-					b.txt = `${b.heading}\n${b.txt}`;
-				}
-
-				if (which=="restrictions") {
-					//preserve indentation for below lmao
-					b.txt=b.txt.trimIfStarts("\n").trimEnd();
-					const bTrim = b.txt.trimStart();
-
-					if (bTrim.length!=b.txt.length) {
-						if (curRestrictionTy==null) continue;
-						const {type, exclusive} = curRestrictionTy;
-
-						switch (type) {
-							case "level":
-							case "class": {
-								if (levels.includes(bTrim)) {
-									restrictions.push({type: "level",exclusive,level: bTrim as Level});
 									break;
 								}
-
-								const m = bTrim.match(/^(Junior|Sophomore|Freshman|Senior):? (\d+)(?: - (\d+)|\+) hours$|^Professional (\w+) Year$/);
-								
-								if (m==null)
-									throw new Error("invalid classification or level, (which are parsed as one due to the abomination that is AAE 571)");
-
-								if (m[4]===undefined) restrictions.push({type: "class",exclusive,
-									class: m[1] as "Sophomore" | "Junior" | "Freshman" | "Senior",
-									minCredit: Number.parseInt(m[2]),
-									maxCredit: m[3]==undefined ? null : Number.parseInt(m[3])
-								});
-								else restrictions.push({type: "class",exclusive,
-									class: "Professional", year: ords.indexOf(m[4].toLowerCase())+1
-								});
-
-								break;
+								case "cohort": restrictions.push({type,exclusive,cohort: bTrim}); break;
+								case "college": restrictions.push({type,exclusive,college: bTrim}); break;
+								case "degree": restrictions.push({type,exclusive,degree: bTrim}); break;
+								case "major": restrictions.push({type,exclusive,major: bTrim}); break;
+								case "program": restrictions.push({type,exclusive,program: bTrim}); break;
 							}
-							case "cohort": restrictions.push({type,exclusive,cohort: bTrim}); break;
-							case "college": restrictions.push({type,exclusive,college: bTrim}); break;
-							case "degree": restrictions.push({type,exclusive,degree: bTrim}); break;
-							case "major": restrictions.push({type,exclusive,major: bTrim}); break;
-							case "program": restrictions.push({type,exclusive,program: bTrim}); break;
+						} else if (bTrim.length>0) {
+							const tyMap = {
+								"level": ["Levels"],
+								"major": ["Majors"],
+								"degree": ["Degrees"],
+								"program": ["Concentrations", "Fields of Study (Major, Minor,  or Concentration)", "Programs"],
+								"class": ["Classifications"],
+								"cohort": ["Cohorts"],
+								"college": ["Colleges"]
+							};
+
+							if (b.txt.endsWith(":")) b.txt=b.txt.slice(0,b.txt.length-1);
+							const ty = Object.entries(tyMap).find(([,v]) => v.find(x => b.txt.endsWith(x))!==undefined);
+
+							if (ty!==undefined) curRestrictionTy = {
+								exclusive: b.txt.startsWith("May not be"),
+								type: ty[0] as Restriction["type"]
+							};
+							else curRestrictionTy=null;
 						}
-					} else if (bTrim.length>0) {
-						const tyMap = {
-							"level": ["Levels"],
-							"major": ["Majors"],
-							"degree": ["Degrees"],
-							"program": ["Concentrations", "Fields of Study (Major, Minor,  or Concentration)", "Programs"],
-							"class": ["Classifications"],
-							"cohort": ["Cohorts"],
-							"college": ["Colleges"]
-						};
-
-						if (b.txt.endsWith(":")) b.txt=b.txt.slice(0,b.txt.length-1);
-						const ty = Object.entries(tyMap).find(([,v]) => v.find(x => b.txt.endsWith(x))!==undefined);
-
-						if (ty!==undefined) curRestrictionTy = {
-							exclusive: b.txt.startsWith("May not be"),
-							type: ty[0] as Restriction["type"]
-						};
-						else curRestrictionTy=null;
+					} else if (which=="requirements") {
+						genReqStrs[genReqStrs.length-1]+=` ${b.txt}`;
 					}
-				} else if (which=="requirements") {
-					genReqStrs[genReqStrs.length-1]+=` ${b.txt}`;
+				} catch (e) {
+					console.error(`error parsing ${subject} ${course}: ${e as Error}\nline: ${b.txt}`)
 				}
-			} catch (e) {
-				console.error(`error parsing ${subject} ${course}: ${e as Error}\nline: ${b.txt}`)
 			}
-		}
 
-		const addReqs = (txt: string, f: () => PreReqExpr|null) => {
-			if (reqs=="failed") return;
+			const addReqs = (txt: string, f: () => PreReqExpr|null) => {
+				if (reqs=="failed") return;
 
-			try {
-				const newreqs = f();
-				if (newreqs==null) return;
-				const flat = flattenPreReqs(newreqs);
+				try {
+					const newreqs = f();
+					if (newreqs==null) return;
+					const flat = flattenPreReqs(newreqs);
 
-				if (reqs=="none") reqs=flat;
-				else reqs={type: "and", vs: [
-					...(reqs.type=="and" ? reqs.vs : [reqs]),
-					...(flat.type=="and" ? flat.vs : [flat])
-				]};
-			} catch (e) {
-				reqs="failed";
-				console.error(`error parsing prerequisites for ${subject} ${course}: ${e as Error}\npart: ${txt}`);
-			}
-		};
+					if (reqs=="none") reqs=flat;
+					else reqs={type: "and", vs: [
+						...(reqs.type=="and" ? reqs.vs : [reqs]),
+						...(flat.type=="and" ? flat.vs : [flat])
+					]};
+				} catch (e) {
+					reqs="failed";
+					console.error(`error parsing prerequisites for ${subject} ${course}: ${e as Error}\npart: ${txt}`);
+				}
+			};
 
-		const info = courseNames.get(subject)!.get(course)!;
+			const info = courseNames.get(subject)!.get(course)!;
 
-		await knex.transaction(async trans => {
-			const pcourseRow = await trans<DBCourse>("course").where({subject, course, name}).first();
-			const pcourse: Course|undefined = pcourseRow==undefined ? undefined : JSON.parse(pcourseRow.data) as Course;
+			const pcourseRow = pcourseBySubjCourseName.get([subject,course,name].join("\n"));
+			const pcourse: Course|undefined = pcourseRow==undefined ? undefined : pcourseRow.c;
 
 			const newInstructors = new Set(info.sections.flatMap(x => x.instructors).map(x => x.name));
 			const instructorSet = newInstructors.union(
@@ -743,10 +753,11 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 					subject, course, name,
 					data: JSON.stringify({
 						...toMerge, lastUpdated: new Date().toISOString()
-					})
+					} satisfies Course)
 				}, "id"))[0].id;
 			} else {
 				id=pcourseRow!.id;
+				pcourseRow!.found=true;
 
 				const out = {
 					...isNewer ? toMerge : pcourse,
@@ -786,15 +797,33 @@ export async function updateCourses({term: t,termId,grades,knex,subjectArg}:{
 					...out,
 					lastUpdated: deepEquals(stripSeatsGrades(toMerge), stripSeatsGrades(pcourse))
 						? pcourse.lastUpdated : new Date().toISOString()
-				});
+				} satisfies Course);
 
 				await trans<DBCourse>("course").where("id", pcourseRow!.id).update({ data });
 			};
 
 			courseIds.push(id);
 			for (const i of newInstructors) allInstructors.push([i,id]);
-		});
-	}, ([course, sub]) => `${sub} ${course}`);
+		}, ([course, sub]) => `${sub} ${course}`);
+		
+		const toDelete = pcourses.filter(p=>!p.found && t in p.c.sections);
+		const oldNumCourses = pcourses.filter(p=>t in p.c.sections).length;
+		if (toDelete.length > Math.max(10, 0.05*oldNumCourses)) {
+			throw new Error(`${toDelete.length} of ${oldNumCourses} weren't found / are going to be deleted -- cancelling...`);
+		}
+
+		console.log(`deleting ${toDelete.length} courses from ${formatTerm(t)}`);
+		for (const pcourse of toDelete) {
+			if (!pcourse.found && t in pcourse.c.sections) {
+				delete pcourse.c.sections[t];
+				await trans<DBCourse>("course").where("id", pcourse.id).update({
+					data: JSON.stringify(pcourse.c satisfies Course)
+				});
+			}
+		}
+
+		return ret;
+	});
 
 	console.log(`done (${courses.reduce((y,x) => (x.status=="fulfilled" ? 1 : 0)+y,0)}/${courses.length} successful)`);
 
