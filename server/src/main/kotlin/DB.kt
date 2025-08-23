@@ -211,11 +211,13 @@ class DB(env: Environment) {
             .select(Course.id, Course.data, Course.views, agg[ratingCount], agg[avgRating])
                 .where { (Course.subject eq sub) and (Course.course eq num) }
                 .map { toCourseId(it) }
+                .filter { it.course.sections.isNotEmpty() }
     }
 
     suspend fun allCourses() = query {
         courseWithRating.select(Course.id, Course.data, Course.views, agg[avgRating], agg[ratingCount])
             .map { toCourseId(it) }
+            .filter { it.course.sections.isNotEmpty() } // empty courses may be created when sections are removed from catalog
     }
 
     suspend fun allPostContent() = query {
@@ -268,7 +270,7 @@ class DB(env: Environment) {
                 .where {
                     (DB.SectionEnrollment.term eq term) and (DB.SectionEnrollment.course eq course)
                 }
-                .orderBy(DB.SectionEnrollment.id to SortOrder.DESC_NULLS_LAST)
+                .orderBy(DB.SectionEnrollment.id to SortOrder.ASC_NULLS_LAST)
                 .toList()
         }
 

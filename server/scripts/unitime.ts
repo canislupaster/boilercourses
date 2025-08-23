@@ -1,14 +1,14 @@
-import {parseArgs} from "node:util";
-import {devices} from "playwright";
-import {chromium} from "playwright-extra";
+import { parseArgs } from "node:util";
+import { devices } from "playwright";
+import { chromium } from "playwright-extra";
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import {DBAvailabilityNotification, DBCourse, DBProperty, DBSectionEnrollment, DBTerm, loadDB} from "./db.ts";
-import {readFile, rm} from "node:fs/promises";
-import {createDecipheriv} from "node:crypto";
+import { DBAvailabilityNotification, DBCourse, DBProperty, DBSectionEnrollment, DBTerm, loadDB } from "./db.ts";
+import { readFile } from "node:fs/promises";
+import { createDecipheriv } from "node:crypto";
 import Papa from "papaparse";
-import {Course, formatTerm, Seats, Term, termIdx} from "../../shared/types.ts";
-import {deepEquals} from "./fetch.ts";
-import {exit} from "node:process";
+import { Course, formatTerm, Seats, Term, termIdx } from "../../shared/types.ts";
+import { deepEquals } from "./fetch.ts";
+import { exit } from "node:process";
 
 const {values, positionals} = parseArgs({
 	options: {
@@ -35,6 +35,7 @@ type CSVRecord = {
 };
 
 type SectionData = {
+	name: string,
 	room: string[],
 	seats?: Seats,
 	courses: Set<string>,
@@ -74,13 +75,18 @@ async function handleCSV(term: Term, path: string) {
 				: {used: enrollment, left: limit - enrollment};
 
 			if (seats==undefined && secData.seats!=undefined) continue;
-			if (seats!=undefined && secData.seats!=undefined
-				&& (seats.left!=secData.seats.left || seats.used!=secData.seats.used))
-				throw new Error("inconsistent enrollment count");
+			if (seats!=undefined
+				&& secData.seats!=undefined && (seats.left!=secData.seats.left || seats.used!=secData.seats.used)) {
+				const tot = Math.min(seats.left+seats.used, secData.seats.left+secData.seats.used);
+				seats.left = Math.min(seats.left, secData.seats.left);
+				seats.used = tot - seats.left;
+
+				console.warn(`inconsistent enrollment counts, using minimum (CRN ${crn} / ${rec["Name"]} vs ${secData["name"]}, ${seats.left} / ${seats.left+seats.used} free)`);
+			}
 
 			sectionData.set(crn, {
 				room: [...secData.room ?? [], rec.Location],
-				seats, crn, courses
+				seats, crn, courses, name: rec["Name"]
 			});
 		}
 	}
@@ -186,6 +192,10 @@ if (signCount!=undefined) {
 	if (isNaN(secret.signCount)) throw new Error("NaN sign count");
 }
 
+await knex<DBProperty>("properties")
+	.insert({name: "sign_count", value: (secret.signCount+1).toString()})
+	.onConflict("name").merge();
+
 console.log("starting browser");
 
 const browser = await chromium.use(StealthPlugin()).launch({
@@ -230,11 +240,6 @@ console.log("logging in");
 await pg.getByRole("button", {name: "Log In"}).click();
 console.log("waiting for unitime");
 await pg.waitForURL("https://timetable.mypurdue.purdue.edu/Timetabling/main.action", {waitUntil: "load"});
-
-await knex<DBProperty>("properties")
-	.insert({name: "sign_count", value: (secret.signCount+1).toString()})
-	.onConflict("name").merge();
-
 console.log("...and we're in.");
 
 const terms = await knex<DBTerm>("term").select("*");

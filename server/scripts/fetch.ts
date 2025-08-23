@@ -187,11 +187,12 @@ export function logArray<T, R>(x: T[], y: (x:T) => Promise<R>, name: (x:T,i:numb
 	});
 }
 
-//like isdeepstrictequals but epsilon for floating point
-//also treats undefined as not a property
+// like isdeepstrictequals but epsilon for floating point
+// also treats undefined as not a property if it is in an object
+// (like json stringify)
 export function deepEquals(x: unknown, y: unknown) {
 	switch (typeof x) {
-		case "undefined": return true;
+		case "undefined":
 		case "bigint":
 		case "string":
 		case "boolean":

@@ -185,7 +185,7 @@ function EnrollmentChartInner({course, term, data}: {
 
 		return x!=null && <p className="mb-2" >
 			Approximately <Text v="bold" style={{backgroundColor: col}} className="rounded-md p-1" >
-				{(x*100).toFixed(2)}%
+				{Math.round(x*1e4)/1e2}%
 			</Text> of students dropped this {sec ? "section" : "course"}
 		</p>;
 	}
@@ -195,12 +195,16 @@ function EnrollmentChartInner({course, term, data}: {
 	return <>
 		<motion.div inert className={`absolute left-0 top-0 dark:bg-zinc-900/75 bg-zinc-150/75 rounded-md p-1 max-w-80 z-50`}
 			style={{x: tooltipX, y: tooltipY, opacity: tooltipOpacity}} >
-			{tooltip && <SectionLinkPopup course={smallCourse} term={term} section={tooltip.section ?? undefined} >
-				<Text v="bold" >
-					{tooltip.enrollment} enrolled at {new Date(tooltip.time).toLocaleString()}
+			{tooltip && <SectionLinkPopup course={smallCourse} term={term} section={tooltip.section ?? undefined} noEnrollment >
+				<Text className="mb-1" >
+					<Text v="bold" className={`${bgColor.sky} rounded-md p-1`} >
+					{tooltip.enrollment}</Text> enrolled at{" "}
+					{new Date(tooltip.time).toLocaleString(undefined, {
+						timeStyle: "short", dateStyle: "short"
+					})}
 				</Text>
 
-				{tooltipDropNote}
+				{stacked && tooltipDropNote}
 			</SectionLinkPopup>}
 		</motion.div>
 
@@ -219,7 +223,7 @@ function EnrollmentChartInner({course, term, data}: {
 					maintainAspectRatio: false,
 					elements: {
 						line: {
-							tension: 0.5
+							tension: 0.0
 						}
 					},
 					plugins: {

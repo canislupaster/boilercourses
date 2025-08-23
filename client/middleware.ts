@@ -1,18 +1,21 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const cspHeader = `
+const goatCounter = process.env.NEXT_PUBLIC_GOAT_COUNTER;
+const cspHeader = process.env.NODE_ENV=="development" ? "" : `
 	default-src 'self';
 	script-src 'self' 'nonce-?' 'strict-dynamic';
 	style-src 'self' 'unsafe-inline';
 	img-src 'self' blob: data:;
-	connect-src 'self' https://login.microsoftonline.com;
+	connect-src 'self' https://login.microsoftonline.com${
+		goatCounter ? ` https://${goatCounter}.goatcounter.com` : ""
+	};
 	font-src 'self';
 	object-src 'none';
 	base-uri 'self';
 	form-action 'self';
 	frame-ancestors 'none';
-	${process.env.NODE_ENV=="development" ? "" : "upgrade-insecure-requests;" /* allow API reqs when no HTTPS */}
+	upgrade-insecure-requests;
 `.replaceAll(/\s{2,}/g, ' ').trim();
  
 export function middleware(request: NextRequest) {

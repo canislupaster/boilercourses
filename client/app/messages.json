@@ -1,17 +1,15 @@
 [
 	{
-		"type": "normal",
-		"start": 1731027626, "end": 1731107338,
-		"message": "Sorry about yesterday's outage, my server died. To make things up, I made a couple additions. Thanks for using BoilerCourses."
+		"type": "deadline",
+		"end": 1748663999,
+		"title": "Open registration ends for continuing undergraduates",
+		"message": "All registration/schedule changes will be paused for continuing undergraduates at the end of May, and resume on July 28th"
 	},
 	{
 		"type": "deadline",
-		"end": 1731621600, "title": "Course Request Forms are due soon",
-		"message": "Remember to submit your CRFs by Nov. 14th at 5 pm!"
-	},
-	{
-		"type": "deadline",
-		"end": 1744750800, "title": "Course Request Forms are due soon",
-		"message": "Remember to submit your CRFs by Apr. 15th at 5 pm!"
+		"start": 1748664000,
+		"end": 1753675200,
+		"title": "Open registration begins",
+		"message": "Registration will open for all students on July 28th"
 	}
 ]

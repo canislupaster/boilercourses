@@ -392,10 +392,8 @@ export const abbr = (s: string, len: number=300) =>
 
 export function commaNum(x: number) {
   const s = [...x.toString()];
-  const o = [];
-  while (s.length>3) {
-    o.push(s.splice(-3).join(""));
+  for (let i=(s.length+2)%3 + 1; i<s.length; i+=4) {
+    s.splice(i, 0, ",");
   }
-  o.push(s);
-  return o.reverse().join(",");
+  return s.join("");
 }

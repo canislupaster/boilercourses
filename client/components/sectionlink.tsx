@@ -11,8 +11,9 @@ export type SectionLinkProps = {
 	term: Term, course: SmallCourse, children: React.ReactNode, section: Section, className?: string
 };
 
-export function SectionLinkPopup({course, section, term, children}: {
-	course: SmallCourse, section?: Section, term: Term, children?: React.ReactNode
+export function SectionLinkPopup({course, section, term, children, noEnrollment}: {
+	course: SmallCourse, section?: Section, term: Term,
+	children?: React.ReactNode, noEnrollment?: boolean
 }) {
 	const byTimes = new Map<string,Day[]>();
 
@@ -52,7 +53,7 @@ export function SectionLinkPopup({course, section, term, children}: {
 					{section.room.join(", ")}
 				</p>}
 
-				{section.seats && <p>
+				{!noEnrollment && section.seats && <p>
 					<Text v="smbold" className="mr-2" >Enrollment:</Text>
 					{section.seats.used}/{section.seats.left+section.seats.used}
 				</p>}
