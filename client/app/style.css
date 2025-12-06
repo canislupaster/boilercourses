@@ -1,6 +1,18 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@plugin './heroui.ts';
+@source '../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}';
+
+@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant theme (&:is(.dark *,.light *));
+@custom-variant enabled (&:not(:disabled));
+
+@theme {
+  --font-body: "Inter", sans-serif;
+  --font-display: "Chivo", sans-serif;
+  --color-zinc-150: #f0f0f2;
+  --color-zinc-850: #1e1e21;
+  --breakpoint-xs: 350px;
+}
 
 .ReactCollapse--collapse {
   transition: height 500ms;

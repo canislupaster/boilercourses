@@ -3,7 +3,7 @@
 import { CourseNotificationButton } from "@/components/availability";
 import { Calendar, calendarDays } from "@/components/calendar";
 import { CourseChips, GPAIndicator } from "@/components/card";
-import { Alert, BarsStat, NameSemGPA, useSearchState, SelectionContext, ShowMore, simp, TermSelect, useDebounce, useMd, WrapStat } from "@/components/clientutil";
+import { Alert, BarsStat, NameSemGPA, useSearchState, SelectionContext, ShowMore, simp, TermSelect, useDebounce, useMd, WrapStat, SelectId } from "@/components/clientutil";
 import { Community } from "@/components/community";
 import { InstructorList } from "@/components/instructorlist";
 import { MainLayout } from "@/components/mainlayout";
@@ -16,7 +16,7 @@ import { AppCtx, setAPI, useAPIResponse, useInfo } from "@/components/wrapper";
 import { IconPaperclip, IconWorld } from "@tabler/icons-react";
 import Image from "next/image";
 import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import Select, { MultiValue } from "react-select";
+import { MultiValue } from "react-select";
 import { allCourseInstructors, Attachment, CourseId, CourseInstructor, creditStr, emptyInstructorGrade, formatTerm, InstructorGrade, latestTerm, mergeGrades, PreReqs, RMPInfo, Section, sectionsByTerm, SmallCourse, Term, termIdx, toSmallCourse, trimCourseNum, abbr } from "../../../../shared/types";
 import boilerexams from "../../../public/boilerexams-icon.png";
 import boilerexamsCourses from "../../boilerexamsCourses.json";
@@ -266,7 +266,7 @@ function CourseDetail(cid: CourseId) {
 
 			{attachmentsTerm.length>0 && <>
 				<Text v="md" className="mt-2 mb-1" >Attachments</Text>
-				<div className={`p-2 flex flex-col gap-2 ${containerDefault} overflow-y-auto max-h-[8rem] md:max-h-[15rem] mb-1`} >
+				<div className={`p-2 flex flex-col gap-2 ${containerDefault} overflow-y-auto max-h-32 md:max-h-60 mb-1`} >
 					{attachmentsTerm.map(([t, attachments]) => <React.Fragment key={t} >
 						<Text v="bold" >{formatTerm(t)}</Text>
 						<div className="flex flex-row gap-2 flex-wrap" >
@@ -327,7 +327,7 @@ function CourseDetail(cid: CourseId) {
 			{
 				key: "grades", title: "Grade distribution",
 				body: <>
-					<Select isMulti options={gradeInstructors}
+					<SelectId isMulti options={gradeInstructors}
 						placeholder="Select instructors"
 						value={selectedInstructors}
 						getOptionLabel={

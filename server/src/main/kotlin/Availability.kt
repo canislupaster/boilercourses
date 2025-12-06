@@ -1,12 +1,6 @@
 package com.boilerclasses
 
 import com.boilerclasses.DB.Course.nullable
-import com.sendgrid.Method
-import com.sendgrid.Request
-import com.sendgrid.SendGrid
-import com.sendgrid.helpers.mail.Mail
-import com.sendgrid.helpers.mail.objects.Content
-import com.sendgrid.helpers.mail.objects.Email
 import io.jooby.Environment
 import io.jooby.MediaType
 import io.jooby.kt.HandlerContext
@@ -17,17 +11,36 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.slf4j.Logger
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.ses.SesClient
+import software.amazon.awssdk.services.ses.model.Body
+import software.amazon.awssdk.services.ses.model.Content
+import software.amazon.awssdk.services.ses.model.Destination
+import software.amazon.awssdk.services.ses.model.Message
 import java.net.URLEncoder
 import java.security.MessageDigest
+import kotlin.system.exitProcess
 
 const val USER_NOTIFICATION_LIMIT = 10
 const val USER_VERIFICATION_LIMIT = 5
 
 class Availability(val db: DB, val log: Logger, env: Environment, val courses: Courses, val auth: Auth) {
-    val sg = SendGrid(env.getProperty("sendGridKey"))
     var currentEmail: String? = null
     val send = env.getProperty("noSend")!="true"
     val root = env.getProperty("rootUrl")!!
+    val sesClient = SesClient.builder()
+        .region(Region.of(env.getProperty("aws.region")))
+        .credentialsProvider(
+            StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(
+                    env.getProperty("aws.accessKeyId"),
+                    env.getProperty("aws.secretAccessKey")
+                )
+            )
+        )
+        .build();
 
     private fun emailData(name: String, email: String): Pair<ResultRow,EmailData> {
         val db = db //otherwise shadowed by Transaction.db
@@ -42,28 +55,28 @@ class Availability(val db: DB, val log: Logger, env: Environment, val courses: C
         return row to EmailData(root, email, qparams, name)
     }
 
-    private suspend fun send(emailData: EmailData, subject: String, html: String) {
+    private suspend fun send(email: String, subject: String, html: String) {
         if (send) withContext(Dispatchers.IO) {
             for (retry in 1..3) try {
-                log.info("emailing ${emailData.email}")
+                log.info("emailing ${email}")
 
-                sg.api(Request().apply {
-                    method = Method.POST
-                    endpoint = "mail/send"
-                    body = Mail(
-                        Email("notify@boiler.courses"),
-                        subject, Email(emailData.email),
-                        Content("text/html", html)
-                    ).run {
-                        addHeader("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
-                        addHeader("List-Unsubscribe", "<${emailData.unsubscribe()}>")
-                        build()
-                    }
-                })
+                fun strContent(s: String) = Content.builder().charset("UTF-8").data(s).build()
+
+                val msg = Message.builder()
+                    .subject(strContent(subject))
+                    .body(Body.builder().html(strContent(html)).build())
+                    .build()
+
+                sesClient.sendEmail {
+                    it.message(msg)
+                        .destination(Destination.builder().toAddresses(email).build())
+                        .source("notify@notifications.boiler.courses")
+                        .build()
+                }
 
                 break
             } catch (e: IOException) {
-                log.error("failed to send email to ${emailData.email}: $e (retry $retry)")
+                log.error("failed to send email to ${email}: $e (retry $retry)")
             }
         }
         else currentEmail = html
@@ -137,7 +150,7 @@ class Availability(val db: DB, val log: Logger, env: Environment, val courses: C
                 val subject = if (v.size>=2) "Availability in $fst and ${v.size-1} other courses at Purdue"
                 else "Open spot in $fst at Purdue"
 
-                send(emailData, subject, email(data))
+                send(emailData.email, subject, email(data))
             } }.awaitAll()
         }
 
@@ -191,7 +204,7 @@ class Availability(val db: DB, val log: Logger, env: Environment, val courses: C
                             it[verification_count] = block[verification_count]+1
                         }
 
-                        send(emailData, "Verify your email", verifyEmail(VerifyEmailData(emailData)))
+                        send(emailData.email, "Verify your email", verifyEmail(VerifyEmailData(emailData)))
                     }
 
                     val id = DB.AvailabilityNotification.insertReturning(

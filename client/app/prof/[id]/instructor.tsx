@@ -3,14 +3,14 @@
 import { decodeQueryToSearchState, encodeSearchState, Search, SearchState } from "@/app/search";
 import { Calendar } from "@/components/calendar";
 import { CourseLink } from "@/components/card";
-import { BarsStat, NameSemGPA, useSearchState, SelectionContext, simp, TermSelect, WrapStat } from "@/components/clientutil";
+import { BarsStat, NameSemGPA, useSearchState, SelectionContext, simp, TermSelect, WrapStat, SelectId } from "@/components/clientutil";
 import { Graph } from "@/components/graph";
 import { MainLayout } from "@/components/mainlayout";
 import { Meters } from "@/components/proflink";
 import { Anchor, capitalize, RedditButton, selectProps, Text, textColor } from "@/components/util";
 import { AppCtx, setAPI } from "@/components/wrapper";
 import { useContext, useEffect, useMemo, useState } from "react";
-import { MultiValue, default as Select } from "react-select";
+import { MultiValue } from "react-select";
 import { CourseId, emptyInstructorGrade, formatTerm, InstructorGrade, InstructorId, latestTermofTerms, mergeGrades, Section, SmallCourse, Term, termIdx, toInstructorGrade, toSmallCourse, trimCourseNum, abbr } from "../../../../shared/types";
 
 export function Instructor({instructor}: {instructor: InstructorId}) {
@@ -164,7 +164,7 @@ export function Instructor({instructor}: {instructor: InstructorId}) {
 	}, {
 		title: "Grade distribution", key: "grades",
 		body: <>
-			<Select isMulti options={[{id: "avg"}, ...allCourses.map(x=>x[0])]}
+			<SelectId isMulti options={[{id: "avg"}, ...allCourses.map(x=>x[0])]}
 				value={selCourse} placeholder="Select courses"
 				getOptionLabel={(x: SelCourse) =>
 					x.id=="avg" ? "Average" : `${x.course.subject}${trimCourseNum(x.course.course)}`}

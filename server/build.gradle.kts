@@ -46,7 +46,8 @@ dependencies {
     implementation("com.auth0:java-jwt:4.4.0")
     implementation("com.auth0:jwks-rsa:0.22.1")
 
-    implementation("com.sendgrid:sendgrid-java:4.10.1")
+    implementation(platform("software.amazon.awssdk:bom:2.27.21"))
+    implementation("software.amazon.awssdk:ses")
 }
 
 kotlin {

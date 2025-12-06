@@ -450,7 +450,7 @@ export function Community({course}: {course: SmallCourse}) {
 		<div className="py-3 md:px-7">
 			{posts==null ? <div>
 				<Loading className="py-5" />
-			</div> : <div className="flex flex-col gap-2 overflow-y-auto max-h-96 md:max-h-[40rem] mb-5" >
+			</div> : <div className="flex flex-col gap-2 overflow-y-auto max-h-96 md:max-h-160 mb-5" >
 				{posts.res.edit?.text!=null && <PostCard
 					post={{...posts.res.edit, text: posts.res.edit.text}}
 					key={posts.res.edit.id} yours editButton={

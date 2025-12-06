@@ -18,11 +18,12 @@ export async function generateMetadata(
 
 	const shortCourseName = (x: CourseId) => `${x.course.subject} ${trimCourseNum(x.course.course)}`;
 
-	const sCourses = i.courses.map((x): [CourseId, Term]=>{
+	// i broke the db once so imma just filter to make sure the page doesn't break
+	const sCourses = i.courses.map((x): [CourseId, Term]|null=>{
 		const lastTerm = sectionsByTerm(x.course).find(([,sec])=>sec.some(s=>
-			s.instructors.some(i2=>i2.name==i.instructor.name)))![0];
-		return [x,lastTerm];
-	})
+			s.instructors.some(i2=>i2.name==i.instructor.name)))?.[0];
+		return lastTerm ? [x,lastTerm] : null;
+	}).filter(x=>x!=null)
 		.sort(([,v],[,y])=>termIdx(y)-termIdx(v))
 		.map((x)=>`${shortCourseName(x[0])} (${formatTerm(x[1])})`);
 

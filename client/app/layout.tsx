@@ -1,5 +1,5 @@
 import { metadataKeywords, textColor } from "@/components/util";
-import { AppWrapper, GoatCounter } from "@/components/wrapper";
+import { AppWrapper, GoatCounter, Theme } from "@/components/wrapper";
 import { Metadata } from "next";
 import { Chivo, Inter } from 'next/font/google';
 import React from "react";
@@ -7,6 +7,7 @@ import banner from "../public/banner.png";
 import { catchAPIError, getInfo } from "./server";
 import "./style.css";
 import { commaNum } from "../../shared/types";
+import { cookies } from "next/headers";
 
 const chivo = Chivo({ subsets: ['latin'], display: 'swap', variable: "--chivo" });
 const inter = Inter({ subsets: ['latin'], display: 'swap', variable: "--inter" });
@@ -44,8 +45,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Layout({ children }: { children: React.ReactNode }) {
+  const theme = (await cookies()).get("theme")?.value as Theme|undefined;
   return (
-    <html lang="en" className={`${inter.variable} ${chivo.variable} font-body ${textColor.default} dark:bg-neutral-950 bg-neutral-100`} >
+    <html lang="en" className={`${inter.variable} ${chivo.variable} font-body ${textColor.default} dark:bg-neutral-950 bg-neutral-100 ${theme==undefined ? "" : theme}`} >
       <head>
         <meta name='og:locality' content='West Lafayette' />
         <meta name='og:region' content='IN' />
@@ -59,7 +61,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
       </head>
       <body>
         {await catchAPIError(async ()=>
-          <AppWrapper info={await getInfo()} >
+          <AppWrapper info={await getInfo()} theme={theme} >
             {children}
           </AppWrapper>
         )()}

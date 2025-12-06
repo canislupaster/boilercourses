@@ -45,8 +45,8 @@ export const borderColor = {
 	defaultInteractive: "focus:outline-none border-zinc-300 hover:border-zinc-400 dark:border-zinc-600 dark:hover:border-zinc-500 disabled:bg-zinc-300 aria-expanded:border-blue-500 focus:border-blue-500 active:border-blue-500 dark:focus:border-blue-500 dark:active:border-blue-500 data-[selected=true]:border-blue-500 outline-none",
 };
 
-export const containerDefault = `${textColor.default} ${bgColor.default} ${borderColor.default} rounded-md border-1`;
-export const interactiveContainerDefault = `${textColor.default} ${bgColor.default} ${borderColor.defaultInteractive} border-1`;
+export const containerDefault = `${textColor.default} ${bgColor.default} ${borderColor.default} rounded-md border`;
+export const interactiveContainerDefault = `${textColor.default} ${bgColor.default} ${borderColor.defaultInteractive} border-[1.5px]`;
 
 export const Anchor: React.FC<(AnchorHTMLAttributes<HTMLAnchorElement>)&Partial<LinkProps>> = ({className,href,...props}) => {
 	const classN = twMerge(
@@ -191,7 +191,7 @@ export const selectProps = <T,Multi extends boolean>(): SelectProps<T,Multi> => 
 	unstyled: true, classNames: selectStyle as ClassNamesConfig<T,Multi>,
 	styles: {
 		menuPortal: infiniteZIndexHack, menu: infiniteZIndexHack
-	}
+	},
 });
 
 export const firstLast = (s: string) => {
@@ -250,16 +250,8 @@ export function Text({className, children, v, ...props}: HTMLAttributes<HTMLPara
 }
 
 export const Divider = ({className}: {className?: string}) =>
-	<div className={twMerge(`rounded w-px mx-1.5 h-4 self-center flex-shrink-0 ${bgColor.divider}`, className)} />;
+	<div className={twMerge(`rounded w-px mx-1.5 h-4 self-center shrink-0 ${bgColor.divider}`, className)} />;
 	
-// export const AppSelect = ({...props}: SelectProps) => <Select {...props}
-// 		classNames={{
-// 			trigger: twMerge("px-4 py-1.5 bg-zinc-900 border text-white rounded-xl border-zinc-900 hover:border-zinc-700 data-[hover=true]:bg-zinc-900 data-[open=true]:border-blue-500", props.classNames?.trigger)
-// 		}}
-// 	>
-// 	{props.children}
-// </Select>
-
 export const metadataKeywords = [
 	'Purdue', 'Purdue University', 'Purdue Courses', 'Purdue Catalog',
 	'Self-service', 'Boiler', 'Course', 'Class', 'Schedule', 'Registration'

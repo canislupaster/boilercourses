@@ -16,6 +16,11 @@ export type DBInstructor = {
 	data: string //Instructor (rmp is duplicated :/, but its fine)
 };
 
+export type DBCourseInstructor = {
+	course: number;
+	instructor: string;
+};
+
 export type DBTerm = {
 	id: Term,
 	purdue_id: string,

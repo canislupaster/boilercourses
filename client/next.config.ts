@@ -12,9 +12,7 @@ export default (phase: string): NextConfig => ({
     ]
     else return [];
   },
-  experimental: {
-    turbo: {
-      root: join(cwd(), "..")
-    }
+  turbopack: {
+    root: join(cwd(), "..")
   }
 });

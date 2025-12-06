@@ -60,6 +60,6 @@ export default [
       parserOptions: { projectService: true },
     }
   }, {
-    ignores: ["client/.next", "client/public/"]
+    ignores: ["client/.next", "client/public/", "client/next-env.d.ts"]
   })
 ];

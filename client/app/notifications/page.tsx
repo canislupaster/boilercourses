@@ -16,7 +16,7 @@ export default function NotificationPage() {
 	}, [hasAuth, redir]);
 
 	if (!hasAuth) return <Loading/>;
-	return <div className="flex flex-col gap-2 max-w-screen-sm w-full self-center">
+	return <div className="flex flex-col gap-2 max-w-(--breakpoint-sm) w-full self-center">
 		<LogoBar onClick={()=>{
 			router.push("/");
 		}} />

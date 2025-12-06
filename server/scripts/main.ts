@@ -5,7 +5,7 @@ import {formatTerm, Term, termIdx} from "../../shared/types.ts";
 import {getGrades, Grades} from "./grades.ts";
 import {readFile} from "node:fs/promises";
 import {updateCourses} from "./course.ts";
-import {DBInstructor, DBTerm, loadDB} from "./db.ts";
+import {DBCourseInstructor, DBInstructor, DBTerm, loadDB} from "./db.ts";
 import {updateInstructors} from "./prof.ts";
 import {addAttachments} from "./attachments.ts";
 
@@ -68,8 +68,10 @@ async function scrape(term: Term|null) {
 		}
 	}
 
-	if (term==undefined || termId==undefined)
-		throw new Error("term not found");
+	if (term==undefined || termId==undefined) {
+		console.error(`term ${term} not found, skipping`);
+		return;
+	}
 
 	await knex<DBTerm>("term").insert({
 		id: term,
@@ -91,9 +93,9 @@ async function scrape(term: Term|null) {
 	await updateInstructors({instructors: updatedInstructors, knex, grades});
 
 	console.log("updating references...");
+	await knex<DBCourseInstructor>("course_instructor").delete().whereIn("course", newCourseIds);
 	for (const [k,v] of courseInstructors) {
-		await knex("course_instructor").insert({course: v, instructor: k})
-			.onConflict(["course", "instructor"]).ignore();
+		await knex<DBCourseInstructor>("course_instructor").insert({course: v, instructor: k});
 	}
 
 	console.log(`done with ${formatTerm(term)}`);

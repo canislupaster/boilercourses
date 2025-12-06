@@ -1,5 +1,5 @@
 import { Card } from "@/components/card";
-import { Alert, MoreButton, simp } from "@/components/clientutil";
+import { Alert, MoreButton, SelectId, simp } from "@/components/clientutil";
 import { Footer } from "@/components/footer";
 import { LogoBar } from "@/components/logo";
 import { Button, ButtonPopover, Divider, IconButton, Loading, selectProps, Text, textColor } from "@/components/util";
@@ -10,7 +10,7 @@ import { Slider } from "@heroui/slider";
 import { IconArrowUp, IconFilterFilled, IconMoodLookDown, IconX } from "@tabler/icons-react";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Collapse } from 'react-collapse';
-import Select, { Props as SelectProps } from 'react-select';
+import { Props as SelectProps } from 'react-select';
 import { twMerge } from "tailwind-merge";
 import { formatTerm, latestTermofTerms, ServerSearch, Term, termIdx } from "../../shared/types";
 import attributeToGenEd from "./attributeToGenEd.json";
@@ -272,7 +272,7 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 			<Collapse isOpened={!filtersCollapsed} >
 				<div className="flex flex-col gap-2 w-full items-stretch" >
 					{/* 🤮 */}
-					<Select placeholder="Subject..." components={{Option: (props) =>
+					<SelectId placeholder="Subject..." components={{Option: (props) =>
 							<div className={twMerge(props.getClassNames("option", props), "flex flex-row items-stretch justify-start py-0")}
 								key={props.data.value} onClick={() => props.selectOption(props.data)} >
 								<span className="basis-14 shrink-0 py-2" >{props.data.abbr}</span>
@@ -297,12 +297,12 @@ export function Search({init, autoFocus, clearSearch, setSearchState, includeLog
 							...info.subjects.map(x=>({...x, v: true, value: x.abbr}))
 						])}
 					/>
-					<Select placeholder="Semester..."
+					<SelectId placeholder="Semester..."
 						{...multiSelectProps("terms", sortedTerms.map(x => ({
 							label: formatTerm(x.k), value: x.k
 						})))}
 						/>
-					<Select placeholder="Gen Ed..."
+					<SelectId placeholder="Gen Ed..."
 						{...multiSelectProps("attributes", Object.entries(attributeToGenEd).map(([k,v]) => ({
 							label: v, value: k
 						})))}

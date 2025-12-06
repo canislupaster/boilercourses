@@ -81,7 +81,7 @@ function Landing({setSearch}: {setSearch: (s: string) => void}) {
 					</Collapse>}
 				</div>
 			)}
-			<div className='flex flex-col items-center w-full md:w-auto my-2 !mt-[8dvh] gap-2 md:gap-6 md:my-4 lg:mb-6 relative'>
+			<div className='flex flex-col items-center w-full md:w-auto my-2 mt-[8dvh]! gap-2 md:gap-6 md:my-4 lg:mb-6 relative'>
 				<ButtonRow className="absolute top-0 right-0" />
 				<Logo onClick={() => setSearch("")} className='my-auto max-h-24 cursor-pointer w-auto' />
 				<LogoText onClick={() => setSearch("")} />

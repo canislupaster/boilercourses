@@ -13,7 +13,7 @@ function RestrictionCard({mid,pre,post,exclusive}: {mid:string,pre:string,post:s
 					{collapsed ? `...show more` : "Show less"}</Anchor>;
 
 	return <div className={`flex flex-row gap-2 p-2 first:rounded-t-xl last:rounded-b-xl ${exclusive ? bgColor.rose : bgColor.restriction}`} >
-		<span className="flex-shrink-0 mt-px" >
+		<span className="shrink-0 mt-px" >
 			{exclusive ? <IconBan size={20} /> : <IconCircleCheck size={20}/>}
 		</span>
 		<span>

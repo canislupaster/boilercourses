@@ -4,7 +4,7 @@ import { Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@herou
 import { HeroUIProvider } from "@heroui/system";
 import { usePathname, useRouter } from "next/navigation";
 import Script from "next/script";
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Collapse } from "react-collapse";
 import { createPortal } from "react-dom";
 import { twMerge } from "tailwind-merge";
@@ -364,8 +364,8 @@ const defaultModalState: ModalState = {
 	active: [], visible: {error: false, other: false}
 };
 
-export function AppWrapper({children, className, info}: {
-	children: React.ReactNode, className?: string, info: ServerInfo
+export function AppWrapper({children, className, info, theme: initTheme}: {
+	children: React.ReactNode, className?: string, info: ServerInfo, theme?: Theme
 }) {
 	//😒
 	const [modals, setModals] = useState<ModalState>(defaultModalState);
@@ -376,21 +376,24 @@ export function AppWrapper({children, className, info}: {
 	const [restoreScroll, setRestoreScroll] = useState<number|undefined>();
 	const router = useRouter();
 
-	const [theme, setTheme] = useState<Theme>("dark");
-
 	const isDark = useMediaQuery("(prefers-color-scheme: dark)");
-	const updateTheme = useCallback(()=>{
-		const t: Theme = (window.localStorage.getItem("theme") as Theme) ?? (isDark ? "dark" : "light");
-		setTheme(t);
-	}, [setTheme, isDark]);
+	const [themeOrNull, setTheme] = useState<Theme|null>(initTheme ?? null);
+	const theme = themeOrNull ?? "dark";
 
-	useEffect(updateTheme, [updateTheme]);
+	const doSetTheme = useCallback((x: Theme) => {
+		void window.cookieStore.set("theme", x);
+		setTheme(x);
+	}, [])
 
 	useEffect(()=>{
-		const html = document.getElementsByTagName("html")[0];
-		html.classList.add(theme);
-		return () => html.classList.remove(theme);
-	}, [theme]);
+		if (themeOrNull==null) {
+			doSetTheme(localStorage.getItem("theme") as Theme|null ?? (isDark ? "dark" : "light"));
+		} else {
+			const html = document.getElementsByTagName("html")[0];
+			html.classList.add(themeOrNull);
+			return () => html.classList.remove(themeOrNull);
+		}
+	}, [doSetTheme, isDark, themeOrNull]);
 
 	const path = usePathname();
 
@@ -451,11 +454,6 @@ export function AppWrapper({children, className, info}: {
 			setRestoreScroll(undefined);
 		}
 	}, [restoreScroll, setRestoreScroll]);
-
-	const doSetTheme = useCallback((x: Theme) => {
-		window.localStorage.setItem("theme", x);
-		updateTheme();
-	}, [updateTheme])
 
 	const appCtx: AppCtx = useMemo(()=>({
 		restoreScroll: doRestoreScroll,
@@ -523,7 +521,7 @@ export function AppWrapper({children, className, info}: {
   return (<HeroUIProvider>
 		<AppCtx.Provider value={appCtx} >
 			{m}
-			<div id="parent" className={twMerge("flex flex-col container mx-auto p-4 lg:px-14 lg:pt-9 max-w-screen-xl", className)}>
+			<div id="parent" className={twMerge("flex flex-col container mx-auto p-4 lg:px-14 lg:pt-9 max-w-(--breakpoint-xl)", className)}>
 				{children}
 			</div>
 		</AppCtx.Provider>

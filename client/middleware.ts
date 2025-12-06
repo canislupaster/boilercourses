@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 const goatCounter = process.env.NEXT_PUBLIC_GOAT_COUNTER;
 const cspHeader = process.env.NODE_ENV=="development" ? "" : `

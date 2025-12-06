@@ -5,7 +5,7 @@ import { Progress } from "@heroui/progress";
 import { Tooltip, TooltipPlacement } from "@heroui/tooltip";
 import { IconArrowLeft, IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp, IconFilter, IconInfoCircle, IconInfoTriangleFilled } from "@tabler/icons-react";
 import Link, { LinkProps } from "next/link";
-import React, { HTMLAttributes, PointerEvent, useContext, useEffect, useRef, useState } from "react";
+import React, { HTMLAttributes, PointerEvent, useContext, useEffect, useId, useRef, useState } from "react";
 import { Collapse } from "react-collapse";
 import { default as Select, SingleValue } from "react-select";
 import { twMerge } from "tailwind-merge";
@@ -237,7 +237,7 @@ export function BarsStat<T>({lhs,type,vs,className}: {
 			return [b,<React.Fragment key={j} >
 				{lhs(i, b)}
 				<div className="col-span-2 flex-row flex items-center" >
-					<span className={`h-0.5 border-b border-dotted flex-grow mx-2 ${borderColor.default}`} />
+					<span className={`h-0.5 border-b border-dotted grow mx-2 ${borderColor.default}`} />
 					<p className="col-span-2 my-auto ml-auto" >
 						No {type=="rmp" ? "rating" : "grades"} available
 					</p>
@@ -336,7 +336,7 @@ export function WrapStat({search, setSearch, title, children, searchName}: {sear
 			value={search} onChange={v => setSearch(v.target.value)} />
 		<Text v="md" className="mt-2 mb-1" >{title}</Text>
 		{md ? <Collapse isOpened >
-			<div className="max-h-[34rem] overflow-y-auto mb-2" >
+			<div className="max-h-136 overflow-y-auto mb-2" >
 				{children}
 			</div>
 		</Collapse> : <ShowMore maxh="34rem" className="mb-2" forceShowMore={search!=""} >
@@ -344,6 +344,11 @@ export function WrapStat({search, setSearch, title, children, searchName}: {sear
 		</ShowMore>}
 	</>;
 }
+
+export const SelectId: typeof Select = (props) => {
+	const id = useId();
+	return <Select instanceId={id} {...props} />;
+};
 
 export function TermSelect({term, terms, setTerm, label, noUpdated, optional}: {
 	term: Term|null, terms: Term[],
@@ -353,7 +358,7 @@ export function TermSelect({term, terms, setTerm, label, noUpdated, optional}: {
 }) {
 	const info = useInfo();
 	return <div className="flex flex-wrap flex-row items-center gap-3 text-sm" >
-		{label} <Select
+		{label} <SelectId
 			options={[
 				...optional ? [{label: "Default", value: null}] : [],
 				...terms.map((x):[number,Term]=>[termIdx(x), x])
@@ -375,7 +380,7 @@ export const simp = (x: string) => x.toLowerCase().replace(/[^a-z0-9\n]/g, "");
 
 export const Alert = ({title, txt, bad, className}: {title?: React.ReactNode, txt: React.ReactNode, bad?: boolean, className?: string}) =>
 	<div className={twMerge(`border ${bad ? `${bgColor.red} ${borderColor.red}` : `${bgColor.default} ${borderColor.default}`} p-2 px-4 rounded-md flex flex-row gap-2`, className)} >
-		<div className={`flex-shrink-0 ${title ? "mt-1" : ""}`} >
+		<div className={`shrink-0 ${title ? "mt-1" : ""}`} >
 			{bad ? <IconInfoTriangleFilled/> : <IconInfoCircle/>}
 		</div>
 		<div>
@@ -408,7 +413,7 @@ export function Dropdown({parts, trigger, onOpenChange}: {trigger?: React.ReactN
 				{parts.map((x,i) => {
 					if (x.type=="act")
 						return <Button key={x.key ?? i} disabled={x.disabled}
-							className={`m-0 dark:border-zinc-700 border-zinc-300 border-b-0.5 border-t-0.5 rounded-none first:rounded-t-md last:rounded-b-md dark:hover:bg-zinc-700 hover:bg-zinc-300 w-full ${
+							className={`m-0 dark:border-zinc-700 border-zinc-300 border-b border-t rounded-none first:rounded-t-md last:rounded-b-md dark:hover:bg-zinc-700 hover:bg-zinc-300 w-full ${
 								x.active ? "dark:bg-zinc-950 bg-zinc-200" : ""
 							}`}
 							onClick={() => {
@@ -476,7 +481,7 @@ export function ShowMore({children, className, maxh, forceShowMore, inContainer}
 				</div>}
 
 				{!expanded &&
-					<div className={`absolute bottom-0 h-14 max-h-full bg-gradient-to-b z-20 left-0 right-0 ${fadeGradient[inContainer ?? "default"]}`} />}
+					<div className={`absolute bottom-0 h-14 max-h-full bg-linear-to-b z-20 left-0 right-0 ${fadeGradient[inContainer ?? "default"]}`} />}
 			</div>
 
 			{showMore && <MoreButton act={()=>{
@@ -508,14 +513,14 @@ export function Carousel({items}: {items: React.ReactNode[]}) {
 	}, [])
 
 	return <div className="relative w-full" >
-		{scrollLR.l && <button className={`absolute left-0 w-20 ${fadeGradient.primary} bg-gradient-to-l flex flex-col justify-center items-start pl-2 h-full z-30 border-none outline-none group`}
+		{scrollLR.l && <button className={`absolute left-0 w-20 ${fadeGradient.primary} bg-linear-to-l flex flex-col justify-center items-start pl-2 h-full z-30 border-none outline-none group`}
 			onClick={()=>carouselRef.current!.scrollTo({
 				left: carouselRef.current!.scrollLeft-0.95*carouselRef.current!.clientWidth,
 				behavior: "smooth"
 			})} >
 			<IconChevronLeft size={35} className="group-hover:-translate-x-2 transition" />
 		</button>}
-		{scrollLR.r && <button className={`absolute right-0 w-20 ${fadeGradient.primary} bg-gradient-to-r flex flex-col justify-center items-end pr-2 h-full z-30 border-none outline-none group`}
+		{scrollLR.r && <button className={`absolute right-0 w-20 ${fadeGradient.primary} bg-linear-to-r flex flex-col justify-center items-end pr-2 h-full z-30 border-none outline-none group`}
 			onClick={()=>carouselRef.current!.scrollTo({
 				left: carouselRef.current!.scrollLeft+0.95*carouselRef.current!.clientWidth,
 				behavior: "smooth"
@@ -524,7 +529,7 @@ export function Carousel({items}: {items: React.ReactNode[]}) {
 		</button>}
 		<div className={`flex flex-row flex-nowrap overflow-x-auto w-full ${containerDefault} p-1 gap-2 md:p-3 md:gap-3`} ref={carouselRef} >
 			{items.map((it,i)=>
-				<div className={`flex-shrink-0 basis-96 ${bgColor.secondary} max-w-[80dvw]`} key={i} >
+				<div className={`shrink-0 basis-96 ${bgColor.secondary} max-w-[80dvw]`} key={i} >
 					{it}
 				</div>
 			)}

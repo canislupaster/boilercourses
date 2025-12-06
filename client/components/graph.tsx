@@ -1,14 +1,14 @@
 "use client"
 
 import { BarElement, CategoryScale, Chart as ChartJS, Filler, Legend, LinearScale, LineElement, PointElement, Title, Tooltip } from 'chart.js';
+import { motion, useSpring } from "framer-motion";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { Bar, Line } from 'react-chartjs-2';
 import { CourseId, Grade, gradeGPA, InstructorGrade, scheduleAbbr, Section, Term, toSmallCourse } from "../../shared/types";
+import { SelectionContext, useGpaColor } from "./clientutil";
+import { SectionLinkPopup } from "./sectionlink";
 import { Anchor, bgColor, Loading, Text } from "./util";
 import { AppCtx, useAPIResponse } from "./wrapper";
-import { SelectionContext, useGpaColor } from "./clientutil";
-import { motion, useSpring } from "framer-motion";
-import { SectionLinkPopup } from "./sectionlink";
 
 ChartJS.register(
 	CategoryScale,
@@ -66,19 +66,23 @@ export const Graph = ({grades, title}: { grades: [string, InstructorGrade][], ti
 						tooltip: {
 							callbacks: {
 								title(ctx) {return ctx.map(x=>x.dataset.label!);},
-								label(ctx) {return `${allLetterGrades[ctx.parsed.x]}: ${ctx.parsed.y.toFixed(0)}%`;}
+								label(ctx) {
+									return ctx.parsed.x!=null && ctx.parsed.y!=null ? `${allLetterGrades[ctx.parsed.x]}: ${ctx.parsed.y.toFixed(0)}%` : undefined;
+								}
 							},
 							intersect: false
 						},
 						title: {
 							display: true,
 							text: title,
-							color: label
+							color: label,
+							font: {size: 18}
 						},
 					},
 					scales: {
 						y: {
 							min: 0,
+							max: 100,
 							title: {
 								display: true,
 								text: '% of Students',
@@ -252,6 +256,8 @@ function EnrollmentChartInner({course, term, data}: {
 								}
 
 								const pt = ctx.tooltip.dataPoints[0];
+								if (pt.parsed.x==null || pt.parsed.y==null) return;
+
 								const newTip = {
 									section: "section" in pt.dataset ? pt.dataset.section as Section : null,
 									time: pt.parsed.x, enrollment: pt.parsed.y,

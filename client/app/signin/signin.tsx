@@ -53,7 +53,7 @@ function SignInMSAL({loggedIn, err}: {loggedIn: ()=>void, err?: AuthErr}) {
 			title={err.error=="sessionExpire" ? "Your session expired" : "That's off-limits for your account"}
 			txt={err.error=="sessionExpire" ? "You must sign in again" : "Try logging in with another account"} />}
 
-		<div className={`flex flex-col gap-2 max-w-96 border-1 p-5 px-10 rounded-lg ${borderColor.default}`} >
+		<div className={`flex flex-col gap-2 max-w-96 border p-5 px-10 rounded-lg ${borderColor.default}`} >
 			<BackButton noOffset />
 
 			<div className="flex flex-col w-full items-center" >

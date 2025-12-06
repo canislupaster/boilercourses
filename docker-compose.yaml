@@ -15,11 +15,13 @@ services:
       - UNITIME_INTERVAL=${UNITIME_INTERVAL-}
       - MSAL_CLIENT_ID=${MSAL_CLIENT_ID:?MSAL client id required}
       - MSAL_TENANT=${MSAL_TENANT:?MSAL tenant required}
-      - SENDGRID_KEY=${SENDGRID_KEY:?Sendgrid key is required}
       - ADMIN_EMAIL=${ADMIN_EMAIL-}
       - SERVER_PORT=8080
       - ROOT_URL=${ROOT_URL:?ROOT_URL is required}
       - DEFAULT_TERMS=${DEFAULT_TERMS-}
+      - AWS_REGION=${AWS_REGION:?AWS env variables are required}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:?AWS env variables are required}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:?AWS env variables are required}
     volumes:
       - type: bind
         source: ${DATA_SOURCE:?DATA_SOURCE is required}
