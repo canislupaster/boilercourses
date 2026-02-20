@@ -1,15 +1,56 @@
 [
 	{
 		"type": "deadline",
-		"end": 1748663999,
-		"title": "Open registration ends for continuing undergraduates",
-		"message": "All registration/schedule changes will be paused for continuing undergraduates at the end of May, and resume on July 28th"
+		"end": 1763676000,
+		"title": "Spring 2026 registration pause",
+		"message": "All registration/schedule changes pause on Nov 20, 2025 at 5:00 PM ET for schedule release; they resume Dec 8, 2025"
 	},
 	{
 		"type": "deadline",
-		"start": 1748664000,
-		"end": 1753675200,
-		"title": "Open registration begins",
-		"message": "Registration will open for all students on July 28th"
+		"end": 1765170000,
+		"title": "Spring 2026 registration closed",
+		"message": "Registration for all students reopens Dec 8, 2025"
+	},
+	{
+		"type": "normal",
+		"start": 1765170000,
+		"end": 1769403600,
+		"title": "Spring 2026 registration open",
+		"message": "Registration for all students reopened Dec 8, 2025"
+	},
+	{
+		"type": "deadline",
+		"start": 1769403600,
+		"end": 1776052800,
+		"title": "Fall 2026 CRF open",
+		"message": "Course Request Form opened for all undergraduate degree-seeking students on Jan 26, 2026"
+	},
+	{
+		"type": "deadline",
+		"start": 1776052800,
+		"end": 1777262400,
+		"title": "Fall 2026 registration opens",
+		"message": "Registration opens for all students except non-degree from Apr 27 - May 29."
+	},
+	{
+		"type": "deadline",
+		"start": 1777262400,
+		"end": 1780113599,
+		"title": "Fall 2026 registration open",
+		"message": "Registration is open for all students except non-degree from Apr 27 - May 29."
+	},
+	{
+		"type": "deadline",
+		"start": 1780113600,
+		"end": 1785124799,
+		"title": "Fall 2026 registration pause",
+		"message": "All registration/schedule changes for continuing undergraduates pause May 30, 2026 and remain closed through July 26, 2026"
+	},
+	{
+		"type": "deadline",
+		"start": 1785124800,
+		"end": 1792814399,
+		"title": "Fall 2026 open registration",
+		"message": "Registration for all students runs July 27, 2026 through Oct 23, 2026"
 	}
 ]

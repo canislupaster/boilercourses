@@ -1,13 +1,13 @@
-import {exit} from "node:process";
-import {parseArgs} from "node:util";
-import {addProxies, fetchDispatcher, getHTML} from "./fetch.ts";
-import {formatTerm, Term, termIdx} from "../../shared/types.ts";
-import {getGrades, Grades} from "./grades.ts";
-import {readFile} from "node:fs/promises";
-import {updateCourses} from "./course.ts";
-import {DBCourseInstructor, DBInstructor, DBTerm, loadDB} from "./db.ts";
-import {updateInstructors} from "./prof.ts";
-import {addAttachments} from "./attachments.ts";
+import { readFile } from "node:fs/promises";
+import { exit } from "node:process";
+import { parseArgs } from "node:util";
+import { formatTerm, Term, termIdx } from "../../shared/types.ts";
+import { addAttachments } from "./attachments.ts";
+import { updateCourses } from "./course.ts";
+import { DBCourse, DBInstructor, DBTerm, loadDB } from "./db.ts";
+import { addProxies, fetchDispatcher, getHTML } from "./fetch.ts";
+import { getGrades, Grades } from "./grades.ts";
+import { updateCourseInstructors, updateInstructors } from "./prof.ts";
 
 const {values, positionals} = parseArgs({
 	options: {
@@ -15,6 +15,7 @@ const {values, positionals} = parseArgs({
 		subject: { type: "string", short: "s" },
 		after: { type: "string" },
 		allInstructors: { type: "boolean", short: "a", default: false }, //update info for all professors, even those who don't appear in term's catalog
+		allCourses: { type: "boolean", default: false },
 		proxies: { type: "string", short: "p" },
 		grades: { type: "string", short: "g", default: "https://github.com/eduxstad/boiler-grades/raw/main/grades.xlsx" }
 	},
@@ -92,12 +93,6 @@ async function scrape(term: Term|null) {
 
 	await updateInstructors({instructors: updatedInstructors, knex, grades});
 
-	console.log("updating references...");
-	await knex<DBCourseInstructor>("course_instructor").delete().whereIn("course", newCourseIds);
-	for (const [k,v] of courseInstructors) {
-		await knex<DBCourseInstructor>("course_instructor").insert({course: v, instructor: k});
-	}
-
 	console.log(`done with ${formatTerm(term)}`);
 }
 
@@ -118,6 +113,12 @@ if (values.after!==undefined) {
 	await scrape(null);
 }
 
-await addAttachments(knex, [...courseIds.values()]);
+const courseIdArr = values.allCourses
+	? (await knex<DBCourse>("course").select("id")).map(v=>v.id)
+	: [...courseIds.values()];
+
+await addAttachments(knex, courseIdArr);
+await updateCourseInstructors(knex, courseIdArr);
+
 console.log("done, exiting");
 exit(0)

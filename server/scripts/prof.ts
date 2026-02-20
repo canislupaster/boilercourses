@@ -1,8 +1,8 @@
-import {Knex} from "knex";
-import {Instructor, normalizeName, RMPInfo} from "../../shared/types.ts";
-import {deepEquals, fetchDispatcher, logArray, postHTML} from "./fetch.ts";
-import {DBInstructor} from "./db.ts";
-import {Grades} from "./grades.ts";
+import { Knex } from "knex";
+import { Course, Instructor, normalizeName, RMPInfo } from "../../shared/types.ts";
+import { DBCourse, DBCourseInstructor, DBInstructor } from "./db.ts";
+import { deepEquals, fetchDispatcher, logArray, postHTML } from "./fetch.ts";
+import { Grades } from "./grades.ts";
 
 async function RMPGraphQL<T>(query: string, variables: object) {
 	return await fetchDispatcher<T>({
@@ -162,4 +162,16 @@ export async function updateInstructors({instructors,grades,knex}:{
 				}).onConflict("name").merge();
 		})
 	}, x => x);
+}
+
+export async function updateCourseInstructors(knex: Knex, courseIds: number[]) {
+	console.log("updating instructor references...");
+	await knex.transaction(async trans => {
+		await trans<DBCourseInstructor>("course_instructor").delete().whereIn("course", courseIds);
+		const courses = await trans<DBCourse>("course").select().whereIn("id", courseIds);
+		const coursesByInstructor = courses.flatMap(v=>
+				Object.keys((JSON.parse(v.data) as Course).instructor)
+					.map(instructor=>({instructor, course: v.id})));
+		await trans.batchInsert<DBCourseInstructor>("course_instructor", coursesByInstructor, 200);
+	});
 }

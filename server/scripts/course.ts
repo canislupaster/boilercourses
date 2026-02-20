@@ -1,29 +1,29 @@
-import {Knex} from "knex";
+import { Knex } from "knex";
 import assert from "node:assert";
 import {
-  Course,
-  CourseLikePreReq,
-  Day,
-  formatTerm,
-  Grade,
-  grades,
-  InstructorGrade,
-  Level,
-  levels,
-  mergeGrades,
-  normalizeName,
-  PreReq,
-  PreReqs,
-  Restriction,
-  Section,
-  Term,
-  termIdx,
-  toInstructorGrade,
-  validDays
+	Course,
+	CourseLikePreReq,
+	Day,
+	formatTerm,
+	Grade,
+	grades,
+	InstructorGrade,
+	Level,
+	levels,
+	mergeGrades,
+	normalizeName,
+	PreReq,
+	PreReqs,
+	Restriction,
+	Section,
+	Term,
+	termIdx,
+	toInstructorGrade,
+	validDays
 } from "../../shared/types.ts";
-import {DBAttribute, DBCourse, DBSchedType, DBSubject} from "./db.ts";
-import {deepEquals, getHTML, logArray, ords, postHTML, tableToObject} from "./fetch.ts";
-import {Grades} from "./grades.ts";
+import { DBAttribute, DBCourse, DBSchedType, DBSubject } from "./db.ts";
+import { deepEquals, getHTML, logArray, ords, postHTML, tableToObject } from "./fetch.ts";
+import { Grades } from "./grades.ts";
 
 type Expr<T, Op extends string> =
 	{type: "leaf", leaf: T}
